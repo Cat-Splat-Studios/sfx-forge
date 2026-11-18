@@ -1,0 +1,8 @@
+{
+  "name": "SfxDemo.Tests",
+  "references": [ "CatSplat.SfxForge", "SfxDemo", "UnityEngine.TestRunner" ],
+  "overrideReferences": true,
+  "precompiledReferences": [ "nunit.framework.dll" ],
+  "defineConstraints": [ "UNITY_INCLUDE_TESTS" ],
+  "autoReferenced": false
+}

@@ -1,0 +1,5 @@
+{
+  "name": "SfxDemo",
+  "references": [ "CatSplat.SfxForge" ],
+  "autoReferenced": true
+}

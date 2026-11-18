@@ -1,0 +1,5 @@
+{
+  "name": "SfxDemo.Editor",
+  "references": [ "CatSplat.SfxForge", "CatSplat.SfxForge.Editor", "SfxDemo" ],
+  "includePlatforms": [ "Editor" ]
+}

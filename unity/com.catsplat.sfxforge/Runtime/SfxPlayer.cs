@@ -9,7 +9,8 @@ namespace CatSplat.SfxForge
     /// <summary>
     /// Plays a preset in the game with the device's own engine – synthesized live, so the four "Live" values can move the
     /// sound while it plays (an engine hum following speed), exactly as telemetry does on the device. No device needed.
-    /// The sound is added to this object's AudioSource (not spatialized: for 3D one-shots bake a clip instead).
+    /// The sound is added to this object's AudioSource, which this component keeps running: leave its AudioClip empty.
+    /// Not spatialized: for 3D one-shots bake a clip instead.
     /// </summary>
     [AddComponentMenu("SFX Forge/SFX Player")]
     [RequireComponent(typeof(AudioSource))]
@@ -36,6 +37,7 @@ namespace CatSplat.SfxForge
         float[] mono = new float[2048];
         SfxMods current = SfxMods.None;
         SfxPatch lastPatch;
+        AudioSource source;
         volatile bool sounding;
         static bool warned;
 
@@ -55,6 +57,7 @@ namespace CatSplat.SfxForge
                 memory = Marshal.AllocHGlobal(voiceSize * voiceCount);
                 for (int i = 0; i < voiceSize * voiceCount; i += 4) Marshal.WriteInt32(memory, i, 0);
             }
+            source = GetComponent<AudioSource>();
             if (preset != null) lastPatch = preset.patch;
             if (playOnEnable) Play();
         }
@@ -71,6 +74,8 @@ namespace CatSplat.SfxForge
 
         void Update()
         {
+            // Unity only runs OnAudioFilterRead while the AudioSource plays (it does so without a clip, too)
+            if (source != null && memory != IntPtr.Zero && !source.isPlaying) source.Play();
             if (preset != null && sounding && !preset.patch.Equals(lastPatch))        // edited while it sounds: hear it
             {
                 lastPatch = preset.patch;
