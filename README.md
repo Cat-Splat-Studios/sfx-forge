@@ -34,10 +34,15 @@ sh build.sh
 
 Gives `build/sfx-forge.wasm` (drop it onto <https://play.thefirmwarehub.com/>) and `build/sfx-forge.zip` (drop it onto
 the VIBE FM VST window), then runs `vibe-check` and two test performances: `out/audio.wav`, screenshots,
-`out/midi.json`, and `out/daw/` (the sequencer following a DAW).
+`out/midi.json`, `out/daw/` (the sequencer following a DAW) and `out/guide/` (the tour).
 
 ## Playing it
 
+- **MENU** – the tour: SFX FORGE plays and names what it can do, a caption at a time (about 35 s: the sounds, shaping
+  one, MUTATE, notes, the song, its layers, cued patterns, the link). Any touch ends it; everything it changed is put
+  back. On the stage: the TOUR button.
+- **The display** – on the TONE, COLOR and FILTER pages it shows the selected sound itself: its whole shape from start
+  to end, and its wave (the first 10 ms). It redraws as the knobs turn. The other pages show what plays now.
 - **Pads** – 16 sounds: row 1 IMPACT, row 2 UI BLIP, row 3 SCI-FI FM, row 4 FOLEY. Pads 11 and 14 hold while pressed.
 - **Keys** – the selected sound as an instrument, in tune. **DATA** selects a sound.
 - **K1–K6** – pages TONE · COLOR · FILTER · LINK · SEQ · SONG; **encoders 1–4** are the four values shown (SHIFT: fast).

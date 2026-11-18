@@ -18,7 +18,7 @@ rm -rf "$SDK/sfx-forge" "$SDK/core"
 cp -r "$ROOT/sfx-forge" "$SDK/sfx-forge"; cp -r "$ROOT/core" "$SDK/core"
 (cd "$SDK" && sh tools/build.sh sfx-forge)
 rm -rf "$SDK/sfx-forge" "$SDK/core"
-mkdir -p "$ROOT/build" "$ROOT/out/daw"
+mkdir -p "$ROOT/build" "$ROOT/out/daw" "$ROOT/out/guide"
 cp "$SDK/build/sfx-forge.wasm" "$SDK/build/sfx-forge.json" "$ROOT/build/"
 [ -f "$SDK/build/sfx-forge.zip" ] && cp "$SDK/build/sfx-forge.zip" "$ROOT/build/"
 [ "$1" = "quick" ] && exit 0
@@ -28,3 +28,5 @@ node "$SDK/tools/wasmtest.mjs" "$ROOT/build/sfx-forge.wasm" "$ROOT/tests/tour.js
 node "$ROOT/tests/check.mjs" "$ROOT/out"
 node "$SDK/tools/wasmtest.mjs" "$ROOT/build/sfx-forge.wasm" "$ROOT/tests/daw.json" "$ROOT/out/daw"
 node "$ROOT/tests/check-daw.mjs" "$ROOT/out/daw"
+node "$SDK/tools/wasmtest.mjs" "$ROOT/build/sfx-forge.wasm" "$ROOT/tests/guide.json" "$ROOT/out/guide"
+node "$ROOT/tests/check-guide.mjs" "$ROOT/out/guide"
