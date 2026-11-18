@@ -103,6 +103,83 @@ static class Tests
             SfxWav.Write(Path.Combine(Path.GetTempPath(), "sfxforge-test.wav"), SfxNative.Bake(laser), 48000);
         }
 
+        // ---- music: the song the firmware sent (SEND on its SONG page), played here by the same player
+        if (File.Exists(midiFile) && SfxNative.Available)
+        {
+            var msgs = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(midiFile)).EnumerateArray()
+                .Select(e => e.GetProperty("bytes").EnumerateArray().Select(b => (byte)b.GetInt32()).ToArray()).ToList();
+            var song = new byte[SfxProtocol.SongBytes]; var sounds = new SfxPatch[16]; int next = -1, seen = 0; bool whole = false;
+            foreach (var msg in msgs.Skip(msgs.FindLastIndex(b => b[0] == 0xF0 && b[4] == SfxProtocol.Dump && b[5] == 0)))
+            {
+                if (SfxProtocol.TryParsePatch(msg, out int slot, out var patch)) { sounds[slot] = patch; seen |= 1 << slot; }
+                else if (SfxProtocol.TryTakeSongChunk(msg, song, ref next)) whole = true;
+            }
+            Ok(whole && seen == 0xFFFF, "the firmware's song arrives whole: 16 sounds and 13 pieces");
+            Ok(whole && SfxProtocol.BuildSong(song).SelectMany(c => c).SequenceEqual(msgs.Where(b => b[0] == 0xF0 && b[4] == SfxProtocol.SongChunk).SelectMany(c => c)), "and packs back to the same messages");
+
+            IntPtr pl = Marshal.AllocHGlobal(SfxNative.PlayerSize);
+            SfxNative.PlayerInit(pl, 48000f);
+            bool loaded = SfxNative.PlayerSetSong(pl, song);
+            for (int i = 0; i < 16; i++) loaded &= SfxNative.PlayerSetPatch(pl, i, sounds[i].Pack());
+            var wrong = (byte[])song.Clone(); wrong[0] = 9;
+            Ok(loaded && !SfxNative.PlayerSetSong(pl, wrong), "the native player takes the song (and refuses a broken one)");
+
+            float[] Play(float intensity, int blocks, Action<int> each = null)
+            {
+                var all = new float[blocks * 256]; var blk = new float[256]; var none = SfxMods.None;
+                SfxNative.PlayerSetLive(pl, ref none, intensity);
+                for (int b = 0; b < blocks; b++) { Array.Clear(blk, 0, 256); each?.Invoke(b); SfxNative.PlayerRender(pl, blk, 256); Array.Copy(blk, 0, all, b * 256, 256); }
+                return all;
+            }
+            double Rms(float[] a, double t0, double t1) { double s2 = 0; int i0 = (int)(t0 * 48000), i1 = (int)(t1 * 48000); for (int i = i0; i < i1; i++) s2 += a[i] * a[i]; return Math.Sqrt(s2 / (i1 - i0)); }
+
+            // at intensity 0: the same as the device played from 21.0 s of the test performance (one bar, with the step added there)
+            SfxNative.PlayerStart(pl, 0);
+            var low = Play(0f, 750);
+            string wav2 = Path.Combine(root, "out", "audio.wav");
+            if (File.Exists(wav2))
+            {
+                byte[] w = File.ReadAllBytes(wav2);
+                var dev = new float[(w.Length - 44) / 4];
+                for (int i = 0; i < dev.Length; i++) dev[i] = BitConverter.ToInt16(w, 44 + i * 4) / 32768f;
+                int at = 21 * 48000, n = 48000 * 2; double best = 0; int bestOff = 0;
+                for (int off = -64; off <= 512; off++)
+                {
+                    double ab = 0, aa = 0, bb = 0;
+                    for (int i = 0; i < n; i += 2) { double x = Math.Tanh(low[i]), y = dev[at + off + i]; ab += x * y; aa += x * x; bb += y * y; }
+                    double c = ab / Math.Sqrt(aa * bb + 1e-12);
+                    if (c > best) { best = c; bestOff = off; }
+                }
+                Ok(best > 0.98, $"the native player and the Vibe play the song alike (correlation {best:0.0000} over 2 s, offset {bestOff} samples)");
+            }
+            var st = new int[4]; SfxNative.PlayerState(pl, st);
+            Ok(st[0] == 1 && st[3] == 1 && st[2] == 1, $"after 4 s at 120 BPM it is in bar 2, on pattern B of the chain (bar {st[3] + 1}, pattern {(char)('A' + st[2])})");
+
+            // intensity brings the layers in; a cue changes the pattern on the bar line
+            SfxNative.PlayerStart(pl, 0);
+            var high = Play(1f, 375);
+            Ok(Rms(high, 0.26, 0.49) > Rms(low, 0.26, 0.49) * 2, $"intensity 1 plays more layers than intensity 0 ({Rms(low, 0.26, 0.49):0.000} -> {Rms(high, 0.26, 0.49):0.000} between two kicks)");
+            SfxNative.PlayerStart(pl, 0);
+            int changedAt = -1;
+            Play(1f, 600, b => { if (b == 100) SfxNative.PlayerCue(pl, 5); SfxNative.PlayerState(pl, st); if (st[2] == 5 && changedAt < 0) changedAt = b; });
+            Ok(changedAt > 372 && changedAt <= 377, $"a cue at 0.5 s changes the pattern on the bar line at 2.0 s (block {changedAt} of 256 samples)");
+            SfxNative.PlayerStop(pl);
+
+            // a sound as a note: A4 is 440 Hz whatever the sound's own FREQ says
+            for (int i = 0; i < 40; i++) Play(1f, 10);                               // let everything ring out
+            SfxNative.PlayerNoteOn(pl, 6, 1f, 69);
+            var tone = Play(1f, 60);
+            int cross = 0; for (int i = 2400; i < 9600; i++) if (tone[i - 1] < 0 && tone[i] >= 0) cross++;
+            Ok(Math.Abs(cross / 0.15 - 440) < 12, $"a sound played as the note A4 is in tune ({cross / 0.15:0} Hz)");
+            Marshal.FreeHGlobal(pl);
+
+            // the demo project's song: exactly what the firmware sent
+            var demo = new byte[16 * SfxPatch.Bytes + SfxProtocol.SongBytes];
+            for (int i = 0; i < 16; i++) sounds[i].Pack(demo, i * SfxPatch.Bytes);
+            song.CopyTo(demo, 16 * SfxPatch.Bytes);
+            File.WriteAllBytes(Path.Combine(root, "out", "demo-song.bytes"), demo);
+        }
+
         // ---- MIDI: what can be tried without a device
         string[] ins = MidiPorts.Inputs(), outs = MidiPorts.Outputs();
         Console.WriteLine("  ports in:  " + (ins.Length > 0 ? string.Join(", ", ins) : "(none)"));

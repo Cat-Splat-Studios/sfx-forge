@@ -17,6 +17,7 @@ namespace CatSplat.SfxForge.Editor
         readonly List<string> log = new List<string>();
         string[] inputs = new string[0], outputs = new string[0];
         string text = "";
+        SfxSong lastSong;
         Vector2 scroll;
         int padMode;
 
@@ -28,10 +29,20 @@ namespace CatSplat.SfxForge.Editor
             RefreshPorts();
             SfxLink.Shared.PatchReceived += OnPatch;
             SfxLink.Shared.MessageReceived += OnMessage;
+            SfxLink.Shared.SongReceived += OnSong;
+        }
+
+        void OnSong(byte[] song, SfxPatch[] sounds)
+        {
+            if (sounds == null) { Debug.LogWarning("SFX Forge: a song arrived without its 16 sounds – use 'Fetch the song' or SEND on the device's SONG page."); return; }
+            lastSong = SfxForgeEditorLink.CreateSong(sounds, song, EditorPrefs.GetString(FolderPref, "Assets/SfxForge"), "Song");
+            EditorGUIUtility.PingObject(lastSong);
+            Repaint();
         }
 
         void OnDisable()
         {
+            SfxLink.Shared.SongReceived -= OnSong;
             SfxLink.Shared.PatchReceived -= OnPatch;
             SfxLink.Shared.MessageReceived -= OnMessage;
         }
@@ -132,6 +143,15 @@ namespace CatSplat.SfxForge.Editor
                     if (r.saved != null) { if (GUILayout.Button("Show", GUILayout.Width(50))) EditorGUIUtility.PingObject(r.saved); }
                     else if (GUILayout.Button("Save", GUILayout.Width(50))) { r.saved = Save(r); received[i] = r; }
                 }
+            }
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Music", EditorStyles.boldLabel);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(!link.HasOutput))
+                    if (GUILayout.Button(new GUIContent("Fetch the song", "Asks the device for its 16 sounds and its song; they arrive as a Song asset. SEND on its SONG page does the same."))) link.RequestSong();
+                if (lastSong != null && GUILayout.Button("Show the last one", GUILayout.Width(130))) EditorGUIUtility.PingObject(lastSong);
             }
 
             EditorGUILayout.Space();

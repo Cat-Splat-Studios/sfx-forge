@@ -5,7 +5,7 @@ namespace SfxDemo
 {
     /// <summary>
     /// The demo's vehicle: W/S thrust, A/D turn, SPACE fires. Every sound is an SFX FORGE preset synthesized as it plays;
-    /// the engine's pitch and FM follow the speed (SfxTelemetrySender on the engine sound), and the same values go to the
+    /// the engine's pitch and FM follow the speed (SfxTelemetrySender on the engine sound), the music's layers come in with it, and the same values go to the
     /// device, so the pad that is held there follows the game.
     /// </summary>
     [RequireComponent(typeof(Rigidbody))]
@@ -14,6 +14,7 @@ namespace SfxDemo
         public float thrust = 26f;
         public float turnSpeed = 110f;
         public SfxPlayer engineSound, laserSound, impactSound, pickupSound;
+        public SfxMusicPlayer music;
         public Bolt boltPrefab;
         public float arena = 38f;
 
@@ -77,7 +78,7 @@ namespace SfxDemo
         {
             var link = SfxLink.Shared;
             GUI.Label(new Rect(12, 10, 700, 22), "W/S thrust   A/D turn   SPACE fire      every sound is synthesized live by SFX FORGE's engine");
-            GUI.Label(new Rect(12, 32, 700, 22), $"speed {Speed:0.0}   score {Score}   thrust {thrust:0}");
+            GUI.Label(new Rect(12, 32, 700, 22), $"speed {Speed:0.0}   score {Score}   thrust {thrust:0}" + (music != null ? $"      music: intensity {music.intensity:0.00}   pattern {(char)('A' + music.Pattern)}   step {music.Step + 1}" : ""));
             GUI.Label(new Rect(12, 54, 700, 22), link.IsOpen ? $"device: in '{link.InputName ?? "-"}'  out '{link.OutputName ?? "-"}'" : "device: not connected (Window > SFX Forge) - the game plays without it");
         }
     }

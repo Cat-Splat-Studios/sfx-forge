@@ -3,7 +3,7 @@
  * The caller owns all memory: a voice is sfxn_voice_size() zeroed bytes. Nothing here allocates or keeps state.
  * A patch is the 13 bytes of core/sfx_core.h. Every function may be called from an audio thread.
  */
-#include "../core/sfx_core.h"
+#include "../core/sfx_song.h"
 
 #if defined(_WIN32)
 #define API __declspec(dllexport)
@@ -11,7 +11,7 @@
 #define API __attribute__((visibility("default")))
 #endif
 
-API int sfxn_abi(void) { return 1; }
+API int sfxn_abi(void) { return 2; }
 API int sfxn_voice_size(void) { return (int)sizeof(sfx_voice); }
 
 /* 0 = it plays, -1 = not a valid patch */
@@ -61,4 +61,48 @@ API int sfxn_bake(const uint8_t *patch13, float sr, float vel, float note_st, fl
   }
   if (n < max && n > 0) for (int i = 0, f = n < 64 ? n : 64; i < f; i++) out[n - 1 - i] *= (float)i / (float)f;   /* the last 64: to zero */
   return n;
+}
+
+/* ---- music: the whole player (16 sounds, a song, its sequencer) in sfxn_player_size() bytes of the caller's ----------- */
+API int  sfxn_song_bytes(void) { return SFX_SONG_BYTES; }
+API int  sfxn_player_size(void) { return (int)sizeof(sfx_player); }
+API void sfxn_player_init(void *player, float sr) { sfx_player_init((sfx_player *)player, sr); }
+
+API int sfxn_player_set_patch(void *player, int slot, const uint8_t *patch13)
+{
+  sfx_patch p;
+  if (slot < 0 || slot >= SFX_TRACKS || sfx_patch_unpack(&p, patch13)) return -1;
+  sfx_player_set_patch((sfx_player *)player, slot, &p);
+  return 0;
+}
+
+/* the packed song (sfx_song_pack: what the device sends and stores). -1 = not a song, the player keeps what it had */
+API int  sfxn_player_set_song(void *player, const uint8_t *song, int n) { return sfx_song_unpack(&((sfx_player *)player)->song, song, n); }
+API void sfxn_player_start(void *player, int pattern) { sfx_player_start((sfx_player *)player, pattern); }   /* -1: the pattern it is on */
+API void sfxn_player_stop(void *player) { sfx_player_stop((sfx_player *)player); }
+API void sfxn_player_cue(void *player, int pattern) { sfx_player_cue((sfx_player *)player, pattern); }
+
+/* what the game moves while it plays: mods4 as sfxn_render (NULL = leave), intensity 0..1 */
+API void sfxn_player_set_live(void *player, const float *mods4, float intensity)
+{
+  sfx_player *p = (sfx_player *)player;
+  if (mods4) { p->mods.pitch_st = mods4[0]; p->mods.cutoff_oct = mods4[1]; p->mods.fm = mods4[2]; p->mods.level = mods4[3]; }
+  p->intensity = intensity < 0.0f ? 0.0f : intensity > 1.0f ? 1.0f : intensity;
+}
+
+/* a sound by hand, beside the song: midi_note 0 = as designed (a sound effect), else at that pitch */
+API void sfxn_player_note_on(void *player, int slot, float vel, int midi_note)
+{
+  if (slot >= 0 && slot < SFX_TRACKS) sfx_player_note_on((sfx_player *)player, slot, midi_note > 0 ? 100 + (midi_note & 127) : slot, vel, midi_note, 0.0f, 0);
+}
+API void sfxn_player_note_off(void *player, int slot, int midi_note) { sfx_player_note_off((sfx_player *)player, midi_note > 0 ? 100 + (midi_note & 127) : slot); }
+
+/* ADDS n mono samples to out, on its own clock. Returns the sounds that play, a bit each. */
+API unsigned sfxn_player_render(void *player, float *out, int n) { return sfx_player_render((sfx_player *)player, out, n, -1.0, 0.0); }
+
+/* out4: running, step (-1 = none yet), pattern, bar */
+API void sfxn_player_state(const void *player, int *out4)
+{
+  const sfx_player *p = (const sfx_player *)player;
+  out4[0] = p->running; out4[1] = p->step; out4[2] = p->pattern; out4[3] = p->bar;
 }

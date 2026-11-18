@@ -12,7 +12,7 @@ namespace CatSplat.SfxForge
     {
         public enum Source { RigidbodySpeed, Rigidbody2DSpeed, AnimatorFloat, Manual }
 
-        [Tooltip("What the value moves: Pitch (up to +24 semitones), Cutoff (0.5 = none, ±4 octaves), FM Depth, Level. Aux 1-4 are only shown on the device.")]
+        [Tooltip("What the value moves. Sounds: Pitch (up to +24 semitones), Cutoff (0.5 = none, ±4 octaves), FM Depth, Level. Music: Intensity (layers come in), Pattern (A..H from the next bar).")]
         public SfxTelemetry channel = SfxTelemetry.Pitch;
         public Source source = Source.RigidbodySpeed;
         [Tooltip("For Animator Float: the parameter's name.")]
@@ -26,6 +26,8 @@ namespace CatSplat.SfxForge
         public AnimationCurve curve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
         [Tooltip("Players in the game that follow the same value – the game then sounds the same without the device.")]
         public SfxPlayer[] localPlayers = new SfxPlayer[0];
+        [Tooltip("Music players in the game that follow the same value (Intensity, Pattern).")]
+        public SfxMusicPlayer[] musicPlayers = new SfxMusicPlayer[0];
 
         Rigidbody body;
         Rigidbody2D body2D;
@@ -65,11 +67,13 @@ namespace CatSplat.SfxForge
             Normalized = Mathf.Clamp01(curve.Evaluate(t));
             SfxLink.Shared.SendTelemetry(channel, Normalized);      // (only goes out when its 7-bit value changes)
             for (int i = 0; i < localPlayers.Length; i++) if (localPlayers[i] != null) localPlayers[i].ApplyTelemetry(channel, Normalized);
+            for (int i = 0; i < musicPlayers.Length; i++) if (musicPlayers[i] != null) musicPlayers[i].ApplyTelemetry(channel, Normalized);
         }
 
         void OnDisable()
         {
             // back to rest: no pitch, no FM, the filter and the level as they are
+            if (channel == SfxTelemetry.Intensity || channel == SfxTelemetry.Pattern) return;      // the music stays as it is
             float rest = channel == SfxTelemetry.Cutoff ? 64f / 127f : channel == SfxTelemetry.Level ? 1f : 0f;
             SfxLink.Shared.SendTelemetry(channel, rest);
             for (int i = 0; i < localPlayers.Length; i++) if (localPlayers[i] != null) localPlayers[i].ApplyTelemetry(channel, rest);

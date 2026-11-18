@@ -104,6 +104,28 @@ namespace SfxDemo.Editor
             craft.impactSound = Sound("ImpactSound", craftGo.transform, impact, 0.9f, 3);
             craft.pickupSound = Sound("PickupSound", craftGo.transform, coin, 0.6f, 2);
 
+            // the music: the song as SFX FORGE sent it (DemoSong.bytes: 16 sounds, then the packed song). Its layers
+            // come in with the speed – at rest only the kick, flat out the lead and the effects too.
+            byte[] raw = AssetDatabase.LoadAssetAtPath<TextAsset>(Root + "/DemoSong.bytes").bytes;
+            var sounds = new SfxPatch[SfxProtocol.Slots];
+            for (int i = 0; i < sounds.Length; i++) SfxPatch.TryUnpack(raw, i * SfxPatch.Bytes, out sounds[i]);
+            var packed = new byte[SfxProtocol.SongBytes];
+            Array.Copy(raw, sounds.Length * SfxPatch.Bytes, packed, 0, packed.Length);
+            var song = AssetDatabase.LoadAssetAtPath<SfxSong>(Root + "/DemoSong.asset");
+            if (song == null) { song = ScriptableObject.CreateInstance<SfxSong>(); AssetDatabase.CreateAsset(song, Root + "/DemoSong.asset"); }
+            song.Set(sounds, packed);
+            EditorUtility.SetDirty(song);
+
+            var musicGo = new GameObject("Music");
+            var musicSource = musicGo.AddComponent<AudioSource>();
+            musicSource.playOnAwake = false; musicSource.spatialBlend = 0f;
+            var music = musicGo.AddComponent<SfxMusicPlayer>();
+            music.song = song; music.volume = 0.45f; music.intensity = 0f;
+            var heat = craftGo.AddComponent<SfxTelemetrySender>();
+            heat.channel = SfxTelemetry.Intensity; heat.source = SfxTelemetrySender.Source.RigidbodySpeed; heat.max = 22f;
+            heat.musicPlayers = new[] { music };
+            craft.music = music;
+
             var boltGo = Shape(PrimitiveType.Cube, "BoltTemplate", Vector3.zero, new Vector3(0.12f, 0.12f, 1.4f), beam);
             UnityEngine.Object.DestroyImmediate(boltGo.GetComponent<Collider>());
             craft.boltPrefab = boltGo.AddComponent<Bolt>();
@@ -175,6 +197,12 @@ namespace SfxDemo.Editor
                     SfxLink.Shared.Close();
                     ok(sent, "MIDI out from inside Unity: a patch as SysEx and a telemetry CC");
                 }
+                var demoSong = AssetDatabase.LoadAssetAtPath<SfxSong>(Root + "/DemoSong.asset");
+                ok(demoSong != null && demoSong.IsValid && demoSong.Bpm == 120 && demoSong.Chain == 2 && demoSong.Layer(7) > 0.5f && demoSong.Layer(2) == 0f,
+                   "the song asset holds what the firmware sent (120 BPM, a chain of 2, the lead a late layer, the kick always)");
+                var made2 = SfxForgeEditorLink.CreateSong(demoSong.sounds, demoSong.data, Root + "/Presets", "SelfTestSong");
+                ok(made2 != null && made2.IsValid, "a song from the device becomes a Song asset");
+                AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(made2));
                 var scene = EditorSceneManager.OpenScene(ScenePath);
                 var craft = UnityEngine.Object.FindFirstObjectByType<HoverCraft>();
                 ok(scene.IsValid() && craft != null && craft.engineSound != null && craft.engineSound.preset != null && craft.boltPrefab != null, "the saved scene opens with its references");

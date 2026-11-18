@@ -71,6 +71,18 @@ namespace CatSplat.SfxForge.Editor
             return asset;
         }
 
+        public static SfxSong CreateSong(SfxPatch[] sounds, byte[] packedSong, string folder, string name)
+        {
+            if (string.IsNullOrEmpty(folder) || !folder.StartsWith("Assets")) folder = "Assets/SfxForge";
+            Directory.CreateDirectory(folder);
+            AssetDatabase.Refresh();
+            var asset = ScriptableObject.CreateInstance<SfxSong>();
+            asset.Set(sounds, packedSong);
+            AssetDatabase.CreateAsset(asset, AssetDatabase.GenerateUniqueAssetPath($"{folder}/{name}.asset"));
+            AssetDatabase.SaveAssets();
+            return asset;
+        }
+
         /// <summary>The preset as a 16-bit WAV next to its asset; returns the imported clip.</summary>
         public static AudioClip BakeWav(SfxPreset preset)
         {

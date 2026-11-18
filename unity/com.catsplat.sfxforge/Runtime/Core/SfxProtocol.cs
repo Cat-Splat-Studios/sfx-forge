@@ -4,7 +4,7 @@ using System;
 namespace CatSplat.SfxForge
 {
     /// <summary>What a game sends the device while it plays (CC 10..17 on channel 2).</summary>
-    public enum SfxTelemetry { Pitch, Cutoff, FmDepth, Level, Aux1, Aux2, Aux3, Aux4 }
+    public enum SfxTelemetry { Pitch, Cutoff, FmDepth, Level, Intensity, Pattern, Aux3, Aux4 }
 
     /// <summary>What moves a sounding voice: the device's "Mod" parameters, the same for a local SfxPlayer.</summary>
     public struct SfxMods
@@ -24,7 +24,11 @@ namespace CatSplat.SfxForge
         public const byte TelemetryStatus = 0xB1;   // control change, channel 2
         public const int MaxText = 24;
 
-        public const byte Dump = 0x01, Load = 0x02, Text = 0x03, Request = 0x04;
+        public const byte Dump = 0x01, Load = 0x02, Text = 0x03, Request = 0x04, SongChunk = 0x05, RequestSong = 0x06;
+        public const int SongBytes = 2455;          // a packed song (core/sfx_song.h)
+        public const int SongChunkBytes = 200;
+        public const int SongChunks = (SongBytes + SongChunkBytes - 1) / SongChunkBytes;
+        public const int Patterns = 8;
         static readonly byte[] Header = { 0xF0, 0x7D, 0x56, 0x42 };
 
         public static bool IsOurs(byte[] m)
@@ -78,6 +82,42 @@ namespace CatSplat.SfxForge
             slot = m[5];
             return SfxPatch.TryUnpack(m, 6, out patch);
         }
+
+        public static byte[] BuildRequestSong() => new byte[] { 0xF0, 0x7D, 0x56, 0x42, RequestSong, 0xF7 };
+
+        /// <summary>A packed song as its SysEx messages: F0 7D 56 42 05 chunk chunks [up to 200 bytes] F7.</summary>
+        public static byte[][] BuildSong(byte[] song)
+        {
+            if (song == null || song.Length != SongBytes) throw new ArgumentException("not a packed song", nameof(song));
+            var all = new byte[SongChunks][];
+            for (int k = 0; k < SongChunks; k++)
+            {
+                int n = Math.Min(SongChunkBytes, SongBytes - k * SongChunkBytes);
+                var m = new byte[8 + n];
+                Header.CopyTo(m, 0);
+                m[4] = SongChunk; m[5] = (byte)k; m[6] = (byte)SongChunks;
+                Array.Copy(song, k * SongChunkBytes, m, 7, n);
+                m[m.Length - 1] = 0xF7;
+                all[k] = m;
+            }
+            return all;
+        }
+
+        /// <summary>One piece of a song: copies it into song (SongBytes long). True when this was the last piece.</summary>
+        public static bool TryTakeSongChunk(byte[] m, byte[] song, ref int next)
+        {
+            if (!IsOurs(m) || m[4] != SongChunk || m.Length < 9 || m[6] != SongChunks) return false;
+            int k = m[5], n = m.Length - 8;
+            if (k == 0) next = 0;
+            if (k != next || k * SongChunkBytes + n > SongBytes) { next = -1; return false; }
+            Array.Copy(m, 7, song, k * SongChunkBytes, n);
+            if (++next < SongChunks) return false;
+            next = -1;
+            return true;
+        }
+
+        /// <summary>The telemetry value that cues pattern 0..7 (A..H) on the device.</summary>
+        public static float PatternValue(int pattern) => (Math.Max(0, Math.Min(Patterns - 1, pattern)) * 16 + 8) / 127f;
 
         /// <summary>A telemetry value 0..1 as its controller value.</summary>
         public static byte ToCc(float value01)

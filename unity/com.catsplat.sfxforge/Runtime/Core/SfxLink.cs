@@ -15,11 +15,19 @@ namespace CatSplat.SfxForge
         MidiIn input;
         MidiOut output;
         readonly int[] lastCc = new int[8];
+        readonly byte[] songIn = new byte[SfxProtocol.SongBytes];
+        readonly SfxPatch[] sounds = new SfxPatch[SfxProtocol.Slots];
+        int songNext = -1, soundsSeen;
 
         public SfxLink() { Forget(); }
 
         /// <summary>The device sent a patch: EXPORT was pressed, or the answer to RequestPatch. (slot 0..15)</summary>
         public event Action<int, SfxPatch> PatchReceived;
+        /// <summary>
+        /// The device sent its song (SEND on its SONG page, or the answer to RequestSong): the packed song, and its 16
+        /// sounds (null if not all of them came with it).
+        /// </summary>
+        public event Action<byte[], SfxPatch[]> SongReceived;
         /// <summary>A pad was played on the device (slot 0..15, velocity 0..1).</summary>
         public event Action<int, float> PadDown;
         public event Action<int> PadUp;
@@ -73,7 +81,16 @@ namespace CatSplat.SfxForge
                 if (m.Length == 0) continue;
                 if (m[0] == 0xF0)
                 {
-                    if (SfxProtocol.TryParsePatch(m, out int slot, out var patch)) PatchReceived?.Invoke(slot, patch);
+                    if (SfxProtocol.TryParsePatch(m, out int slot, out var patch))
+                    {
+                        sounds[slot] = patch; soundsSeen |= 1 << slot;
+                        PatchReceived?.Invoke(slot, patch);
+                    }
+                    else if (SfxProtocol.TryTakeSongChunk(m, songIn, ref songNext))
+                    {
+                        SongReceived?.Invoke((byte[])songIn.Clone(), soundsSeen == 0xFFFF ? (SfxPatch[])sounds.Clone() : null);
+                        soundsSeen = 0;
+                    }
                     continue;
                 }
                 if (m.Length < 3) continue;
@@ -100,6 +117,24 @@ namespace CatSplat.SfxForge
 
         /// <summary>Asks for a pad's patch; the answer comes as PatchReceived.</summary>
         public bool RequestPatch(int slot) => output != null && output.SendSysEx(SfxProtocol.BuildRequest(slot));
+
+        /// <summary>Asks for the 16 sounds and the song of the device; the answer comes as SongReceived.</summary>
+        public bool RequestSong() { soundsSeen = 0; return output != null && output.SendSysEx(SfxProtocol.BuildRequestSong()); }
+
+        /// <summary>16 sounds and a packed song to the device (it replaces what is there).</summary>
+        public bool SendSong(SfxPatch[] patches, byte[] song)
+        {
+            if (output == null || patches == null || patches.Length != SfxProtocol.Slots) return false;
+            bool ok = true;
+            for (int i = 0; i < patches.Length; i++) ok &= output.SendSysEx(SfxProtocol.BuildLoad(i, patches[i]));
+            foreach (var m in SfxProtocol.BuildSong(song)) ok &= output.SendSysEx(m);
+            return ok;
+        }
+
+        /// <summary>The music on the device: how hot the game is, 0..1 (layers come in).</summary>
+        public bool SendIntensity(float value01) => SendTelemetry(SfxTelemetry.Intensity, value01);
+        /// <summary>The music on the device: this pattern (0..7) from the next bar line.</summary>
+        public bool CuePattern(int pattern) => SendTelemetry(SfxTelemetry.Pattern, SfxProtocol.PatternValue(pattern));
 
         /// <summary>Text for the device's top line (a level's name, a state): 24 ASCII characters.</summary>
         public bool SendText(string text) => output != null && output.SendSysEx(SfxProtocol.BuildText(text));

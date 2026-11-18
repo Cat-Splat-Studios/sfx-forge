@@ -64,6 +64,26 @@ namespace SfxDemo.Tests
         }
 
         [UnityTest]
+        public IEnumerator TheMusicPlaysAndFollowsTheSpeed()
+        {
+            var music = craft.music;
+            Assert.IsNotNull(music, "the scene has its music player");
+            yield return Until(() => music.IsPlaying && music.Step >= 0, 2f);
+            Assert.IsTrue(music.IsPlaying, "the song runs from the start");
+            int first = music.Step + music.Bar * 16;
+            yield return new WaitForSecondsRealtime(0.6f);
+            Assert.Greater(music.Step + music.Bar * 16, first + 2, "and moves on: 8 steps a second at 120 BPM");
+            Assert.Less(music.intensity, 0.05f, "at rest the game is cold: only the layers that always play");
+            craft.GetComponent<Rigidbody>().linearVelocity = craft.transform.forward * 20f;
+            yield return new WaitForFixedUpdate();
+            yield return null;
+            Assert.Greater(music.intensity, 0.6f, "at speed the intensity is up, and with it the layers");
+            music.CuePattern(3);
+            yield return Until(() => music.Pattern == 3, 3f);
+            Assert.AreEqual(3, music.Pattern, "a cued pattern takes over on the next bar line");
+        }
+
+        [UnityTest]
         public IEnumerator EncoderOneSetsTheThrust()
         {
             var binding = Object.FindFirstObjectByType<SfxEncoderBinding>();
