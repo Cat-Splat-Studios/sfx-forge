@@ -43,14 +43,14 @@ namespace CatSplat.SfxForge.Editor
         /// <summary>Plays a patch through the computer's speakers, with the device's engine.</summary>
         public static void Preview(SfxPatch patch, float holdSeconds = 0.8f)
         {
-            float[] samples = SfxNative.Bake(patch, 48000, 1f, 0f, holdSeconds);
+            float[] samples = SfxNative.BakeInterleaved(patch, 48000, 1f, 0, 0f, holdSeconds);
             if (samples == null || samples.Length == 0) { Debug.LogWarning("SFX Forge: the native library (sfxforge) is not available on this platform."); return; }
             if (preview == null)
             {
                 var go = EditorUtility.CreateGameObjectWithHideFlags("SFX Forge Preview", HideFlags.HideAndDontSave, typeof(AudioSource));
                 preview = go.GetComponent<AudioSource>();
             }
-            var clip = AudioClip.Create("SFX Forge Preview", samples.Length, 1, 48000, false);
+            var clip = AudioClip.Create("SFX Forge Preview", samples.Length / 2, 2, 48000, false);
             clip.hideFlags = HideFlags.HideAndDontSave;
             clip.SetData(samples, 0);
             preview.Stop();
@@ -86,11 +86,11 @@ namespace CatSplat.SfxForge.Editor
         /// <summary>The preset as a 16-bit WAV next to its asset; returns the imported clip.</summary>
         public static AudioClip BakeWav(SfxPreset preset)
         {
-            float[] samples = SfxNative.Bake(preset.patch, 48000, 1f, 0f, preset.holdSeconds);
+            float[] samples = SfxNative.BakeInterleaved(preset.patch, 48000, 1f, 0, 0f, preset.holdSeconds);
             if (samples == null || samples.Length == 0) { Debug.LogWarning("SFX Forge: nothing to bake (the native library is missing on this platform)."); return null; }
             string asset = AssetDatabase.GetAssetPath(preset);
             string path = string.IsNullOrEmpty(asset) ? $"Assets/{preset.name}.wav" : Path.ChangeExtension(asset, ".wav");
-            SfxWav.Write(path, samples, 48000);
+            SfxWav.Write(path, samples, 48000, 2);
             AssetDatabase.ImportAsset(path);
             return AssetDatabase.LoadAssetAtPath<AudioClip>(path);
         }

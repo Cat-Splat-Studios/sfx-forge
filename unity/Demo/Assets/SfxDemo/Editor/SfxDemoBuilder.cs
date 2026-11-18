@@ -21,9 +21,7 @@ namespace SfxDemo.Editor
             string path = $"{Root}/Presets/{name}.asset";
             var preset = AssetDatabase.LoadAssetAtPath<SfxPreset>(path);
             if (preset == null) { preset = ScriptableObject.CreateInstance<SfxPreset>(); AssetDatabase.CreateAsset(preset, path); }
-            var p = new SfxPatch { engine = engine };
-            for (int i = 0; i < SfxPatch.ParamCount; i++) p[(SfxParam)i] = v[i];
-            preset.patch = p;
+            preset.patch = SfxPatch.Create(engine, v);
             EditorUtility.SetDirty(preset);
             return preset;
         }
@@ -48,14 +46,14 @@ namespace SfxDemo.Editor
             return go;
         }
 
-        static SfxPlayer Sound(string name, Transform parent, SfxPreset preset, float volume, int voices)
+        static SfxPlayer Sound(string name, Transform parent, SfxPreset preset, float volume)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
             var source = go.AddComponent<AudioSource>();
             source.playOnAwake = false; source.spatialBlend = 0f;
             var player = go.AddComponent<SfxPlayer>();
-            player.preset = preset; player.volume = volume; player.voices = voices;
+            player.preset = preset; player.volume = volume;
             return player;
         }
 
@@ -65,8 +63,8 @@ namespace SfxDemo.Editor
             foreach (string folder in new[] { "Presets", "Materials" })
                 if (!AssetDatabase.IsValidFolder($"{Root}/{folder}")) AssetDatabase.CreateFolder(Root, folder);
 
-            // the sounds: FREQ, PITCH ENV, ENV TIME, RATIO, DEPTH, NOISE, CUTOFF, RESO, DECAY, CRUSH – as on the device
-            SfxPreset hum = Preset("EngineHum", SfxEngine.SciFiFm, 22, 64, 0, 21, 55, 8, 78, 45, 127, 0);
+            // the sounds: FREQ, PITCH ENV, ENV TIME, A, B, NOISE, CUTOFF, RESO, DECAY, CRUSH, then ATTACK, SUSTAIN … – as on the device
+            SfxPreset hum = Preset("EngineHum", SfxEngine.SciFiFm, 22, 64, 0, 21, 55, 8, 78, 45, 60, 0, 0, 127);   // sustained
             SfxPreset laser = Preset("Laser", SfxEngine.SciFiFm, 70, 110, 45, 50, 70, 0, 120, 20, 58, 0);
             SfxPreset impact = Preset("Impact", SfxEngine.Impact, 32, 100, 28, 0, 20, 25, 90, 5, 55, 0);
             SfxPreset coin = Preset("Coin", SfxEngine.UiBlip, 86, 64, 0, 26, 60, 0, 127, 0, 62, 0);
@@ -93,16 +91,16 @@ namespace SfxDemo.Editor
             body.constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
             var craft = craftGo.AddComponent<HoverCraft>();
 
-            craft.engineSound = Sound("EngineSound", craftGo.transform, hum, 0.5f, 1);
+            craft.engineSound = Sound("EngineSound", craftGo.transform, hum, 0.5f);
             craft.engineSound.playOnEnable = true;
             var pitch = craft.engineSound.gameObject.AddComponent<SfxTelemetrySender>();   // speed -> pitch: up to about an octave
             pitch.channel = SfxTelemetry.Pitch; pitch.source = SfxTelemetrySender.Source.RigidbodySpeed; pitch.max = 40f;
             var fm = craft.engineSound.gameObject.AddComponent<SfxTelemetrySender>();      // speed -> a rougher tone
             fm.channel = SfxTelemetry.FmDepth; fm.source = SfxTelemetrySender.Source.RigidbodySpeed; fm.max = 45f;
             pitch.localPlayers = fm.localPlayers = new[] { craft.engineSound };
-            craft.laserSound = Sound("LaserSound", craftGo.transform, laser, 0.6f, 4);
-            craft.impactSound = Sound("ImpactSound", craftGo.transform, impact, 0.9f, 3);
-            craft.pickupSound = Sound("PickupSound", craftGo.transform, coin, 0.6f, 2);
+            craft.laserSound = Sound("LaserSound", craftGo.transform, laser, 0.6f);
+            craft.impactSound = Sound("ImpactSound", craftGo.transform, impact, 0.9f);
+            craft.pickupSound = Sound("PickupSound", craftGo.transform, coin, 0.6f);
 
             // the music: the song as SFX FORGE sent it (DemoSong.bytes: 16 sounds, then the packed song). Its layers
             // come in with the speed – at rest only the kick, flat out the lead and the effects too.
@@ -182,7 +180,7 @@ namespace SfxDemo.Editor
                 var laser = AssetDatabase.LoadAssetAtPath<SfxPreset>($"{Root}/Presets/Laser.asset");
                 ok(laser != null && laser.patch.engine == SfxEngine.SciFiFm && laser.patch.baseFreq == 70, "a preset asset keeps its patch");
                 AudioClip clip = laser != null ? laser.Bake() : null;
-                ok(clip != null && clip.samples > 4800 && clip.channels == 1, $"SfxPreset.Bake gives a clip ({(clip != null ? clip.length : 0f):0.00} s)");
+                ok(clip != null && clip.samples > 4800 && clip.channels == 2, $"SfxPreset.Bake gives a clip ({(clip != null ? clip.length : 0f):0.00} s)");
                 AudioClip wav = laser != null ? SfxForgeEditorLink.BakeWav(laser) : null;
                 ok(wav != null && wav.length > 0.1f, "Bake WAV writes a file Unity imports as an AudioClip");
                 AssetDatabase.DeleteAsset($"{Root}/Presets/Laser.wav");
@@ -198,8 +196,8 @@ namespace SfxDemo.Editor
                     ok(sent, "MIDI out from inside Unity: a patch as SysEx and a telemetry CC");
                 }
                 var demoSong = AssetDatabase.LoadAssetAtPath<SfxSong>(Root + "/DemoSong.asset");
-                ok(demoSong != null && demoSong.IsValid && demoSong.Bpm == 120 && demoSong.Chain == 2 && demoSong.Layer(7) > 0.5f && demoSong.Layer(2) == 0f,
-                   "the song asset holds what the firmware sent (120 BPM, a chain of 2, the lead a late layer, the kick always)");
+                ok(demoSong != null && demoSong.IsValid && demoSong.Bpm == 120 && demoSong.Chain == 2 && demoSong.Layer(7) > 0.5f && demoSong.Layer(2) == 0f && demoSong.sounds[15].engine == SfxEngine.Wavetable,
+                   "the song asset holds what the firmware sent (120 BPM, a chain of 2, the lead a late layer, the kick always, strings on pad 16)");
                 var made2 = SfxForgeEditorLink.CreateSong(demoSong.sounds, demoSong.data, Root + "/Presets", "SelfTestSong");
                 ok(made2 != null && made2.IsValid, "a song from the device becomes a Song asset");
                 AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(made2));

@@ -1,5 +1,5 @@
 {
-"seconds": 39.0,
+"seconds": 45.5,
 "steps": [
 {
 "t": 0.2,
@@ -44,10 +44,6 @@
 "shot": "tour-shape"
 },
 {
-"t": 7.6,
-"shot": "tour-crush"
-},
-{
 "t": 9.9,
 "shot": "tour-mutate"
 },
@@ -57,22 +53,30 @@
 },
 {
 "t": 16.0,
+"shot": "tour-instruments"
+},
+{
+"t": 18.6,
+"shot": "tour-wavetable"
+},
+{
+"t": 21.5,
 "shot": "tour-song"
 },
 {
-"t": 24.5,
+"t": 30.0,
 "shot": "tour-layers"
 },
 {
-"t": 32.0,
+"t": 37.4,
 "shot": "tour-link"
 },
 {
-"t": 36.9,
+"t": 42.3,
 "shot": "after-tour"
 },
 {
-"t": 37.5,
+"t": 44.0,
 "ev": [
 1,
 8,
@@ -81,7 +85,7 @@
 ]
 },
 {
-"t": 37.75,
+"t": 44.25,
 "ev": [
 1,
 8,

@@ -3,34 +3,50 @@ using System;
 
 namespace CatSplat.SfxForge
 {
-    public enum SfxEngine : byte { Impact, UiBlip, SciFiFm, Foley }
+    public enum SfxEngine : byte { Impact, UiBlip, SciFiFm, Foley, Wavetable }
 
-    /// <summary>The ten parameters of a patch, in wire order.</summary>
-    public enum SfxParam { BaseFreq, PitchEnvAmount, PitchEnvDecay, FmRatio, FmDepth, NoiseMix, FilterCutoff, FilterRes, AmpDecay, Bitcrush }
+    /// <summary>The parameters of a patch, in wire order.</summary>
+    public enum SfxParam
+    {
+        BaseFreq, PitchEnvAmount, PitchEnvDecay, FmRatio, FmDepth, NoiseMix, FilterCutoff, FilterRes, AmpDecay, Bitcrush,
+        Attack, Sustain, Release, FilterEnv, FilterEnvDecay, LfoRate, LfoPitch, LfoFilter, LfoTimbre, Spread, Chorus, Delay, Reverb, Level, Table
+    }
 
     /// <summary>
-    /// One SFX FORGE sound: the same 13 bytes the device keeps (core/sfx_core.h). Every value is 0..127.
+    /// One SFX FORGE sound: the same 28 bytes the device keeps (core/sfx_core.h). Every value is 0..127.
+    /// Start from <see cref="Create"/>: a new SfxPatch() has level 0 and is silent.
     /// </summary>
     [Serializable]
     public struct SfxPatch : IEquatable<SfxPatch>
     {
-        public const int Bytes = 13;
-        public const int Version = 1;
-        public const int ParamCount = 10;
-        public const int EngineCount = 4;
-        /// <summary>ampDecay at this value: the sound holds while its pad or note is held.</summary>
-        public const byte Hold = 127;
+        public const int Version = 2;
+        public const int ParamCount = 25;
+        public const int Bytes = 3 + ParamCount;
+        public const int EngineCount = 5;
+        public const int TableCount = 6;
 
         public SfxEngine engine;
         public byte baseFreq, pitchEnvAmount, pitchEnvDecay, fmRatio, fmDepth, noiseMix, filterCutoff, filterRes, ampDecay, bitcrush;
+        public byte attack, sustain, release, filterEnv, filterEnvDecay, lfoRate, lfoPitch, lfoFilter, lfoTimbre, spread, chorus, delay, reverb, level, table;
 
-        public static SfxPatch Default => new SfxPatch
+        static readonly byte[] Plain = { 60, 64, 40, 40, 40, 0, 110, 10, 60, 0, 0, 0, 34, 64, 40, 50, 0, 0, 0, 0, 0, 0, 0, 100, 0 };
+
+        /// <summary>
+        /// A plain patch of an engine (a short one-shot, nothing modulated, no effects), with the first parameters
+        /// set from <paramref name="first"/> in wire order: FREQ, PITCH ENV, ENV TIME, A, B, NOISE, CUTOFF, RESO, DECAY, CRUSH …
+        /// </summary>
+        public static SfxPatch Create(SfxEngine engine, params byte[] first)
         {
-            engine = SfxEngine.SciFiFm, baseFreq = 70, pitchEnvAmount = 110, pitchEnvDecay = 45, fmRatio = 50, fmDepth = 70,
-            noiseMix = 0, filterCutoff = 120, filterRes = 20, ampDecay = 58, bitcrush = 0,
-        };
+            var p = new SfxPatch { engine = engine };
+            for (int i = 0; i < ParamCount; i++) p[(SfxParam)i] = first != null && i < first.Length ? first[i] : Plain[i];
+            return p;
+        }
 
-        public bool IsHold => ampDecay == Hold;
+        /// <summary>A laser.</summary>
+        public static SfxPatch Default => Create(SfxEngine.SciFiFm, 70, 110, 45, 50, 70, 0, 120, 20, 58, 0);
+
+        /// <summary>Held while its pad or note is held (sustain above 0); otherwise a one-shot that plays to its end.</summary>
+        public bool IsSustained => sustain > 0;
 
         public byte this[SfxParam p]
         {
@@ -47,7 +63,22 @@ namespace CatSplat.SfxForge
                     case SfxParam.FilterCutoff: return filterCutoff;
                     case SfxParam.FilterRes: return filterRes;
                     case SfxParam.AmpDecay: return ampDecay;
-                    default: return bitcrush;
+                    case SfxParam.Bitcrush: return bitcrush;
+                    case SfxParam.Attack: return attack;
+                    case SfxParam.Sustain: return sustain;
+                    case SfxParam.Release: return release;
+                    case SfxParam.FilterEnv: return filterEnv;
+                    case SfxParam.FilterEnvDecay: return filterEnvDecay;
+                    case SfxParam.LfoRate: return lfoRate;
+                    case SfxParam.LfoPitch: return lfoPitch;
+                    case SfxParam.LfoFilter: return lfoFilter;
+                    case SfxParam.LfoTimbre: return lfoTimbre;
+                    case SfxParam.Spread: return spread;
+                    case SfxParam.Chorus: return chorus;
+                    case SfxParam.Delay: return delay;
+                    case SfxParam.Reverb: return reverb;
+                    case SfxParam.Level: return level;
+                    default: return table;
                 }
             }
             set
@@ -64,12 +95,30 @@ namespace CatSplat.SfxForge
                     case SfxParam.FilterCutoff: filterCutoff = v; break;
                     case SfxParam.FilterRes: filterRes = v; break;
                     case SfxParam.AmpDecay: ampDecay = v; break;
-                    default: bitcrush = v; break;
+                    case SfxParam.Bitcrush: bitcrush = v; break;
+                    case SfxParam.Attack: attack = v; break;
+                    case SfxParam.Sustain: sustain = v; break;
+                    case SfxParam.Release: release = v; break;
+                    case SfxParam.FilterEnv: filterEnv = v; break;
+                    case SfxParam.FilterEnvDecay: filterEnvDecay = v; break;
+                    case SfxParam.LfoRate: lfoRate = v; break;
+                    case SfxParam.LfoPitch: lfoPitch = v; break;
+                    case SfxParam.LfoFilter: lfoFilter = v; break;
+                    case SfxParam.LfoTimbre: lfoTimbre = v; break;
+                    case SfxParam.Spread: spread = v; break;
+                    case SfxParam.Chorus: chorus = v; break;
+                    case SfxParam.Delay: delay = v; break;
+                    case SfxParam.Reverb: reverb = v; break;
+                    case SfxParam.Level: level = v; break;
+                    default: table = v; break;
                 }
             }
         }
 
-        /// <summary>What a parameter is called for an engine (two of them change their job per engine).</summary>
+        public static readonly string[] EngineNames = { "Impact", "UI Blip", "Sci-Fi FM", "Foley", "Wavetable" };
+        public static readonly string[] TableNames = { "Saw to Square", "Pulse", "Peak", "Vowel", "Organ", "Glass" };
+
+        /// <summary>What a parameter is called for an engine (A and B change their job per engine).</summary>
         public static string Label(SfxParam p, SfxEngine engine)
         {
             if (engine == SfxEngine.UiBlip && p == SfxParam.FmRatio) return "Arp Step";
@@ -77,6 +126,8 @@ namespace CatSplat.SfxForge
             if (engine == SfxEngine.Foley && p == SfxParam.FmRatio) return "Grain Rate";
             if (engine == SfxEngine.Foley && p == SfxParam.FmDepth) return "Grain Amount";
             if (engine == SfxEngine.Foley && p == SfxParam.FilterCutoff) return "Band";
+            if (engine == SfxEngine.Wavetable && p == SfxParam.FmRatio) return "Position";
+            if (engine == SfxEngine.Wavetable && p == SfxParam.FmDepth) return "Warp";
             switch (p)
             {
                 case SfxParam.BaseFreq: return "Frequency";
@@ -87,12 +138,27 @@ namespace CatSplat.SfxForge
                 case SfxParam.NoiseMix: return "Noise";
                 case SfxParam.FilterCutoff: return "Cutoff";
                 case SfxParam.FilterRes: return "Resonance";
-                case SfxParam.AmpDecay: return "Decay (127 = hold)";
-                default: return "Bitcrush";
+                case SfxParam.AmpDecay: return "Decay";
+                case SfxParam.Bitcrush: return "Bitcrush";
+                case SfxParam.Attack: return "Attack";
+                case SfxParam.Sustain: return "Sustain (0 = one-shot)";
+                case SfxParam.Release: return "Release";
+                case SfxParam.FilterEnv: return "Filter Env (64 = none)";
+                case SfxParam.FilterEnvDecay: return "Filter Env Time";
+                case SfxParam.LfoRate: return "LFO Rate";
+                case SfxParam.LfoPitch: return "LFO > Pitch";
+                case SfxParam.LfoFilter: return "LFO > Filter";
+                case SfxParam.LfoTimbre: return "LFO > Timbre";
+                case SfxParam.Spread: return "Spread (wavetable)";
+                case SfxParam.Chorus: return "Chorus";
+                case SfxParam.Delay: return "Delay";
+                case SfxParam.Reverb: return "Reverb";
+                case SfxParam.Level: return "Level (100 = as designed)";
+                default: return "Table (wavetable)";
             }
         }
 
-        // ---- the 13 bytes ------------------------------------------------------------------------------------------
+        // ---- the 28 bytes ------------------------------------------------------------------------------------------
         public static byte Checksum(byte[] b, int offset)
         {
             int s = 0;
@@ -128,16 +194,19 @@ namespace CatSplat.SfxForge
             return true;
         }
 
-        /// <summary>Every parameter moves by at most 15 % of its range; the engine and HOLD stay (as MUTATE on the device).</summary>
+        /// <summary>
+        /// Every parameter moves by at most 15 % of its range (as MUTATE on the device). What kind of sound it is stays:
+        /// the engine, the table, its level, and whether it is a one-shot or a sustained sound.
+        /// </summary>
         public void Mutate(Random rng)
         {
             for (int i = 0; i < ParamCount; i++)
             {
                 var p = (SfxParam)i;
-                if (p == SfxParam.AmpDecay && ampDecay == Hold) continue;
+                if (p == SfxParam.Level || p == SfxParam.Table || (p == SfxParam.Sustain && sustain == 0)) continue;
                 int v = this[p] + rng.Next(-19, 20);
-                int top = p == SfxParam.AmpDecay ? Hold - 1 : 127;
-                this[p] = (byte)(v < 0 ? 0 : v > top ? top : v);
+                int low = p == SfxParam.Sustain ? 1 : 0;
+                this[p] = (byte)(v < low ? low : v > 127 ? 127 : v);
             }
         }
 

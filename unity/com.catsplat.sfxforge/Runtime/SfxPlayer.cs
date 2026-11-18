@@ -7,8 +7,9 @@ using UnityEngine;
 namespace CatSplat.SfxForge
 {
     /// <summary>
-    /// Plays a preset in the game with the device's own engine – synthesized live, so the four "Live" values can move the
-    /// sound while it plays (an engine hum following speed), exactly as telemetry does on the device. No device needed.
+    /// Plays a preset in the game with the device's own engine – synthesized live, with its chorus, delay and reverb, so
+    /// the four "Live" values can move the sound while it plays (an engine hum following speed), exactly as telemetry does
+    /// on the device. No device needed.
     /// The sound is added to this object's AudioSource, which this component keeps running: leave its AudioClip empty.
     /// Not spatialized: for 3D one-shots bake a clip instead.
     /// </summary>
@@ -17,30 +18,31 @@ namespace CatSplat.SfxForge
     public class SfxPlayer : MonoBehaviour
     {
         public SfxPreset preset;
-        [Range(1, 8)] public int voices = 4;
         [Range(0f, 1f)] public float volume = 0.8f;
-        [Tooltip("Start the sound when this component is enabled (for a HOLD sound: an engine, wind).")]
+        [Tooltip("Start the sound when this component is enabled (for a sustained sound: an engine, wind).")]
         public bool playOnEnable;
 
         [Header("Live (what telemetry moves on the device)")]
         [Range(0f, 24f)] public float pitchSemitones;
         [Range(-4f, 4f)] public float cutoffOctaves;
+        [Tooltip("Timbre: FM depth, or a wavetable's position.")]
         [Range(0f, 1f)] public float fm;
         [Range(0f, 1f)] public float level = 1f;
 
-        struct Command { public byte[] patch; public float velocity, semitones; public int kind; }   // 0 play, 1 release, 2 new values
+        const int Keys = 16;                                        // up to 16 notes of it at once
+        struct Command { public byte[] patch; public float velocity, semitones; public int kind, note; }   // 0 play, 1 release, 2 new values
         readonly ConcurrentQueue<Command> commands = new ConcurrentQueue<Command>();
         readonly object gate = new object();
         IntPtr memory;
-        int voiceSize, voiceCount, next, sampleRate;
-        uint seed = 1;
-        float[] mono = new float[2048];
+        int sampleRate, nextKey;
+        float[] left = new float[2048], right = new float[2048];
         SfxMods current = SfxMods.None;
         SfxPatch lastPatch;
         AudioSource source;
         volatile bool sounding;
         static bool warned;
 
+        /// <summary>It sounds (its echoes included).</summary>
         public bool IsPlaying => sounding;
 
         void OnEnable()
@@ -51,11 +53,10 @@ namespace CatSplat.SfxForge
                 return;
             }
             sampleRate = AudioSettings.outputSampleRate;
-            voiceSize = SfxNative.VoiceSize; voiceCount = Mathf.Clamp(voices, 1, 8);
             lock (gate)
             {
-                memory = Marshal.AllocHGlobal(voiceSize * voiceCount);
-                for (int i = 0; i < voiceSize * voiceCount; i += 4) Marshal.WriteInt32(memory, i, 0);
+                memory = Marshal.AllocHGlobal(SfxNative.PlayerSize);
+                SfxNative.PlayerInit(memory, sampleRate);
             }
             source = GetComponent<AudioSource>();
             if (preset != null) lastPatch = preset.patch;
@@ -83,21 +84,21 @@ namespace CatSplat.SfxForge
             }
         }
 
-        /// <summary>Plays the preset. velocity 0..1; semitones transposes it.</summary>
-        public void Play(float velocity = 1f, float semitones = 0f)
+        /// <summary>Plays the preset. velocity 0..1; semitones transposes it; midiNote above 0 plays it as that note.</summary>
+        public void Play(float velocity = 1f, float semitones = 0f, int midiNote = 0)
         {
             if (preset == null) return;
             lastPatch = preset.patch;
-            Play(preset.patch, velocity, semitones);
+            Play(preset.patch, velocity, semitones, midiNote);
         }
 
-        public void Play(SfxPatch patch, float velocity = 1f, float semitones = 0f)
+        public void Play(SfxPatch patch, float velocity = 1f, float semitones = 0f, int midiNote = 0)
         {
             if (memory == IntPtr.Zero) return;
-            commands.Enqueue(new Command { kind = 0, patch = patch.Pack(), velocity = Mathf.Clamp01(velocity), semitones = semitones });
+            commands.Enqueue(new Command { kind = 0, patch = patch.Pack(), velocity = Mathf.Clamp01(velocity), semitones = semitones, note = midiNote });
         }
 
-        /// <summary>Lets go of HOLD sounds (they fade); one-shots just finish.</summary>
+        /// <summary>Lets go of sustained sounds (they fade); one-shots just finish.</summary>
         public void Release() { if (memory != IntPtr.Zero) commands.Enqueue(new Command { kind = 1 }); }
 
         /// <summary>The same as the device does with a telemetry value 0..1.</summary>
@@ -115,40 +116,41 @@ namespace CatSplat.SfxForge
                 if (memory == IntPtr.Zero) return;
                 while (commands.TryDequeue(out var c))
                 {
-                    if (c.kind == 0)
-                    {
-                        int pick = next;
-                        for (int i = 0; i < voiceCount; i++) if (!SfxNative.Active(memory + i * voiceSize)) { pick = i; break; }
-                        next = (pick + 1) % voiceCount;
-                        SfxNative.Trigger(memory + pick * voiceSize, c.patch, c.velocity, c.semitones, sampleRate, seed += 0x9E3779B9u);
-                    }
-                    else for (int i = 0; i < voiceCount; i++)
-                    {
-                        if (c.kind == 1) SfxNative.Release(memory + i * voiceSize);
-                        else SfxNative.Update(memory + i * voiceSize, c.patch);
-                    }
+                    if (c.kind == 1) { for (int k = 0; k < Keys; k++) SfxNative.PlayerNoteOff(memory, k); continue; }
+                    SfxNative.PlayerSetPatch(memory, 0, c.patch);                    // (also reshapes what sounds now)
+                    if (c.kind == 0) { SfxNative.PlayerNoteOn(memory, 0, nextKey, c.velocity, c.note, c.semitones); nextKey = (nextKey + 1) % Keys; }
                 }
 
                 int frames = data.Length / channels;
-                if (mono.Length < frames) mono = new float[frames];
-                Array.Clear(mono, 0, frames);
+                if (left.Length < frames) { left = new float[frames]; right = new float[frames]; }
+                Array.Clear(left, 0, frames); Array.Clear(right, 0, frames);
                 float glide = Mathf.Exp(-frames / (0.03f * sampleRate));               // 30 ms, as on the device
                 current.pitchSemitones = pitchSemitones + (current.pitchSemitones - pitchSemitones) * glide;
                 current.cutoffOctaves = cutoffOctaves + (current.cutoffOctaves - cutoffOctaves) * glide;
                 current.fm = fm + (current.fm - fm) * glide;
                 current.level = level + (current.level - level) * glide;
+                SfxNative.PlayerSetLive(memory, ref current, 1f);
 
-                bool any = false;
-                for (int i = 0; i < voiceCount; i++) any |= SfxNative.Render(memory + i * voiceSize, ref current, mono, frames);
-                sounding = any;
-                if (!any) return;
-                float gain = volume * 1.25f;
-                for (int f = 0; f < frames; f++)
-                {
-                    float x = mono[f] * gain;
-                    x = x > 3f ? 1f : x < -3f ? -1f : x * (27f + x * x) / (27f + 9f * x * x);   // the device's soft clip
-                    for (int ch = 0; ch < channels; ch++) data[f * channels + ch] += x;
-                }
+                sounding = SfxNative.PlayerRender(memory, left, right, frames) != 0;
+                if (!sounding) return;
+                SfxMix.Add(data, channels, left, right, frames, volume);
+            }
+        }
+    }
+
+    static class SfxMix
+    {
+        static float Clip(float x) => x > 3f ? 1f : x < -3f ? -1f : x * (27f + x * x) / (27f + 9f * x * x);   // the device's soft clip
+
+        /// <summary>Adds a stereo block to Unity's interleaved buffer, at the device's output level.</summary>
+        public static void Add(float[] data, int channels, float[] left, float[] right, int frames, float volume)
+        {
+            float gain = volume * 1.25f;
+            for (int f = 0; f < frames; f++)
+            {
+                float l = Clip(left[f] * gain), r = Clip(right[f] * gain);
+                if (channels == 1) data[f] += (l + r) * 0.5f;
+                else { data[f * channels] += l; data[f * channels + 1] += r; }
             }
         }
     }

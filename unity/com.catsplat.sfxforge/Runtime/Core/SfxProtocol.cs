@@ -38,10 +38,10 @@ namespace CatSplat.SfxForge
             return true;
         }
 
-        /// <summary>F0 7D 56 42 02 slot [13] F7 – a patch into a pad of the device.</summary>
+        /// <summary>F0 7D 56 42 02 slot [28] F7 – a patch into a pad of the device.</summary>
         public static byte[] BuildLoad(int slot, SfxPatch patch) => BuildPatch(Load, slot, patch);
 
-        /// <summary>F0 7D 56 42 01 slot [13] F7 – what the device sends on EXPORT.</summary>
+        /// <summary>F0 7D 56 42 01 slot [28] F7 – what the device sends on EXPORT.</summary>
         public static byte[] BuildDump(int slot, SfxPatch patch) => BuildPatch(Dump, slot, patch);
 
         static byte[] BuildPatch(byte command, int slot, SfxPatch patch)

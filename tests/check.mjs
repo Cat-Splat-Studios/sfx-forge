@@ -22,11 +22,12 @@ const notes = midi.filter((m) => m[0] === 0x90).map((m) => m[1]);
 ok([...Array(16)].every((_, i) => notes.includes(36 + i)), 'pads send notes 36-51 on channel 1');
 ok(midi.some((m) => m[0] === 0xB0 && m[1] === 20 && m[2] === 69), 'LINK page: encoder 1 sends CC 20');
 const sx = midi.find((m) => m[0] === 0xF0);
-const head = sx && sx.slice(0, 5).join() === [0xF0, 0x7D, 0x56, 0x42, 0x01].join() && sx.length === 20 && sx[19] === 0xF7;
-ok(head, 'EXPORT sends F0 7D 56 42 01 <slot> <13 bytes> F7');
+const PATCH = 28;   // version, engine, 25 parameters, checksum
+const head = sx && sx.slice(0, 5).join() === [0xF0, 0x7D, 0x56, 0x42, 0x01].join() && sx.length === 7 + PATCH && sx[6 + PATCH] === 0xF7;
+ok(head, 'EXPORT sends F0 7D 56 42 01 <slot> <28 bytes> F7');
 if (head) {
-  const p = sx.slice(6, 19);
-  ok(p[0] === 1 && p[1] < 4 && p.every((v) => v < 128) && p[12] === (p.slice(0, 12).reduce((a, v) => a + v, 0) & 0x7F), `the patch is valid (slot ${sx[5]}, engine ${p[1]}, checksum ok)`);
+  const p = sx.slice(6, 6 + PATCH);
+  ok(p[0] === 2 && p[1] < 5 && p.every((v) => v < 128) && p[PATCH - 1] === (p.slice(0, PATCH - 1).reduce((a, v) => a + v, 0) & 0x7F), `the patch is valid (slot ${sx[5]}, engine ${p[1]}, checksum ok)`);
 }
 
 // the song at intensity 0: only layers with threshold 0 play – the thud (kick) on steps 1, 5, 9, 13, every 0.5 s at 120 BPM
@@ -41,10 +42,10 @@ ok(after > before * 1.5 && after > 0.03, `a pad on the SEQ page sets a step of t
 const sparse = rms(16.26, 16.49), full = rms(23.76, 23.99);
 ok(full > sparse * 3 && full > 0.05, `INTENSITY (CC 14) brings the layers in (${sparse.toFixed(3)} -> ${full.toFixed(3)} between two kicks)`);
 // pattern C (empty) was cued by CC 15 at 24.0 s: it takes over on the bar line at 25.5 s, not before
-ok(rms(24.6, 25.4) > 0.05 && rms(25.9, 27.4) < 0.01, `a cued pattern takes over on the next bar line (${rms(24.6, 25.4).toFixed(3)} then ${rms(25.9, 27.4).toFixed(3)})`);
+ok(rms(24.6, 25.4) > 0.05 && rms(27.0, 27.4) < 0.01, `a cued pattern takes over on the next bar line (${rms(24.6, 25.4).toFixed(3)}, then ${rms(27.0, 27.4).toFixed(3)} once the echoes have faded)`);
 const chunks = midi.filter((m) => m[0] === 0xF0 && m[4] === 0x05), dumps = midi.filter((m) => m[0] === 0xF0 && m[4] === 0x01);
 const bytes = chunks.reduce((a, m) => a + m.length - 8, 0);
 ok(chunks.length === 13 && chunks.every((m, i) => m[5] === i && m[6] === 13) && bytes === 2455 && dumps.length === 17, `SEND gives the 16 sounds and the song in 13 pieces (${dumps.length - 1} dumps, ${chunks.length} pieces, ${bytes} bytes)`);
-ok(rms(29.0, 29.5) < 0.01, 'silence at the end');
+ok(rms(33.5, 34.0) < 0.01, 'silence at the end');
 console.log(failed ? `FAILED (${failed})` : 'tour PASSED');
 process.exit(failed ? 1 : 0);

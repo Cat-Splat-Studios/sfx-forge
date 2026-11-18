@@ -31,7 +31,7 @@ namespace CatSplat.SfxForge
         readonly int[] state = new int[4];
         IntPtr memory;
         int sampleRate;
-        float[] mono = new float[2048];
+        float[] left = new float[2048], right = new float[2048];
         AudioSource source;
         SfxMods mods = SfxMods.None;
         volatile int step = -1, pattern, bar = -1;
@@ -116,6 +116,8 @@ namespace CatSplat.SfxForge
             }
         }
 
+        static int Key(int sound, int midiNote) => midiNote > 0 ? 100 + midiNote % 96 : sound;   // (what names a note for its release)
+
         void OnAudioFilterRead(float[] data, int channels)
         {
             lock (gate)
@@ -128,25 +130,19 @@ namespace CatSplat.SfxForge
                         case 0: SfxNative.PlayerStart(memory, c.a); break;
                         case 1: SfxNative.PlayerStop(memory); break;
                         case 2: SfxNative.PlayerCue(memory, c.a); break;
-                        case 3: SfxNative.PlayerNoteOn(memory, c.a, c.v, c.b); break;
-                        case 4: SfxNative.PlayerNoteOff(memory, c.a, c.b); break;
+                        case 3: SfxNative.PlayerNoteOn(memory, c.a, Key(c.a, c.b), c.v, c.b); break;
+                        case 4: SfxNative.PlayerNoteOff(memory, Key(c.a, c.b)); break;
                     }
                 }
                 int frames = data.Length / channels;
-                if (mono.Length < frames) mono = new float[frames];
-                Array.Clear(mono, 0, frames);
+                if (left.Length < frames) { left = new float[frames]; right = new float[frames]; }
+                Array.Clear(left, 0, frames); Array.Clear(right, 0, frames);
                 SfxNative.PlayerSetLive(memory, ref mods, intensity);
-                uint sounding = SfxNative.PlayerRender(memory, mono, frames);
+                uint sounding = SfxNative.PlayerRender(memory, left, right, frames);
                 SfxNative.PlayerState(memory, state);
                 running = state[0] != 0; step = state[1]; pattern = state[2]; bar = state[3];
                 if (sounding == 0) return;
-                float gain = volume * 1.25f;
-                for (int f = 0; f < frames; f++)
-                {
-                    float x = mono[f] * gain;
-                    x = x > 3f ? 1f : x < -3f ? -1f : x * (27f + x * x) / (27f + 9f * x * x);   // the device's soft clip
-                    for (int ch = 0; ch < channels; ch++) data[f * channels + ch] += x;
-                }
+                SfxMix.Add(data, channels, left, right, frames, volume);
             }
         }
     }

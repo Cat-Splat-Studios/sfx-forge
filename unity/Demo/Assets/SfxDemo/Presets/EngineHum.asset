@@ -22,6 +22,21 @@ MonoBehaviour:
     noiseMix: 8
     filterCutoff: 78
     filterRes: 45
-    ampDecay: 127
+    ampDecay: 60
     bitcrush: 0
+    attack: 0
+    sustain: 127
+    release: 34
+    filterEnv: 64
+    filterEnvDecay: 40
+    lfoRate: 50
+    lfoPitch: 0
+    lfoFilter: 0
+    lfoTimbre: 0
+    spread: 0
+    chorus: 0
+    delay: 0
+    reverb: 0
+    level: 100
+    table: 0
   holdSeconds: 1.5
