@@ -17,9 +17,6 @@
 size_t strlen(const char *s);                      /* (the SDK brings these two) */
 char *strcpy(char *d, const char *s);
 
-#define SFX_SIN(x)  vd_sin(x)
-#define SFX_EXP2(x) vd_exp2(x)
-#define SFX_TANH(x) vd_tanh(x)
 #include "../core/sfx_core.h"
 
 VIBE_PARALLEL_AUDIO

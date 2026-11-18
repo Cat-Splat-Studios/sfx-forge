@@ -1,14 +1,12 @@
 /* SPDX-License-Identifier: MIT
  * sfx_core.h – the SFX FORGE engine: a procedural game-audio synth in portable C.
  *
- * One header, no heap, no libc, no globals. The same file is meant to build for
- *   - the VIBE FM SDK (WebAssembly; maths from vibe_dsp.h), and
- *   - an M-VAVE FM-1 firmware later (define the three SFX_* maths macros for that toolchain).
+ * One header, no heap, no libc, no globals. The same file builds for
+ *   - the VIBE FM SDK (WebAssembly): sfx-forge/
+ *   - a native library for game engines: native/ (the Unity package plays patches with it)
+ *   - an M-VAVE FM-1 firmware, later.
  *
- * Before including, the port provides:
- *   SFX_SIN(turns)   sine of a phase in turns (1.0 = one cycle); any phase, also negative
- *   SFX_EXP2(x)      2^x
- *   SFX_TANH(x)      soft clip
+ * A port may bring faster maths: define SFX_SIN(turns), SFX_EXP2(x) and SFX_TANH(x) before including.
  *
  * A patch is 13 bytes, every one 0..127, so it travels through MIDI SysEx as it is.
  */
@@ -16,8 +14,30 @@
 #define SFX_CORE_H
 #include <stdint.h>
 
-#if !defined(SFX_SIN) || !defined(SFX_EXP2) || !defined(SFX_TANH)
-#error "define SFX_SIN, SFX_EXP2 and SFX_TANH before including sfx_core.h"
+/* ---- maths without libc: the same approximations on every target, so a patch sounds the same everywhere --------- */
+#ifndef SFX_SIN
+static inline float sfx_sin(float t)                       /* t in turns */
+{
+  t -= (float)(int)t; if (t < 0.0f) t += 1.0f;
+  float x = t * 6.28318530718f - 3.14159265359f;           /* -pi..pi; sin(x + pi) = -sin(x) */
+  float y = 1.27323954f * x - 0.405284735f * x * (x < 0.0f ? -x : x);
+  y = 0.225f * (y * (y < 0.0f ? -y : y) - y) + y;
+  return -y;
+}
+static inline float sfx_exp2(float x)
+{
+  if (x < -126.0f) return 0.0f;
+  if (x > 126.0f) x = 126.0f;
+  int i = (int)x; if (x < 0.0f && x != (float)i) i--;
+  float f = x - (float)i;
+  float p = 1.0f + f * (0.6931472f + f * (0.2402265f + f * (0.0555041f + f * (0.0096181f + f * 0.0013334f))));
+  union { uint32_t i; float f; } b; b.i = (uint32_t)(i + 127) << 23;
+  return p * b.f;
+}
+static inline float sfx_tanh(float x) { if (x > 3.0f) return 1.0f; if (x < -3.0f) return -1.0f; float x2 = x * x; return x * (27.0f + x2) / (27.0f + 9.0f * x2); }
+#define SFX_SIN(x)  sfx_sin(x)
+#define SFX_EXP2(x) sfx_exp2(x)
+#define SFX_TANH(x) sfx_tanh(x)
 #endif
 
 #define SFX_PATCH_VERSION 1

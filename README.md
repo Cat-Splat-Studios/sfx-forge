@@ -3,8 +3,9 @@
 A procedural game-audio workstation for **VIBE FM** (and, later, the M-VAVE FM-1): 16 pads of synthesized sound
 effects, a MUTATE button for instant variations, and a live MIDI/SysEx link to a game engine.
 
-Built with the VIBE FM SDK. Status: foundation (v0.1) – the synth, the device UI and the device side of the link work
-and are tested; the Unity package is not written yet.
+Built with the VIBE FM SDK. Status: foundation (v0.1). The synth, the device UI and the device side of the link are
+tested in the SDK's tools. The Unity package compiles against Unity 6 and its engine-independent code is tested, but it
+has not been run inside a Unity project yet, and receiving MIDI has not been tried against a real port.
 
 ## Layout
 
@@ -12,7 +13,9 @@ and are tested; the Unity package is not written yet.
 |---|---|
 | `core/sfx_core.h` | the engine: patch format, four sound engines, mutate, SysEx packing. Portable C, no heap, no libc – shared by the Vibe and the future FM-1 firmware |
 | `sfx-forge/` | the Vibe: pads, pages, display, storage, MIDI |
-| `tests/` | a scripted performance (`tour.json`) and its checks (`check.mjs`) |
+| `native/` | the same engine as a native library (Windows x64 so far), for game engines |
+| `unity/com.catsplat.sfxforge/` | the Unity package: the link, presets, a player, telemetry, editor tools |
+| `tests/` | a scripted performance (`tour.json`) and its checks (`check.mjs`); `dotnet/` tests the Unity package's core without Unity |
 | `build.sh` | build, `vibe-check`, render the performance to `out/` |
 
 ## Build
@@ -57,6 +60,33 @@ Plain MIDI, so it works over USB, the plugin's MIDI ports and Web MIDI. SysEx us
 noise_mix filter_cutoff filter_res amp_decay bitcrush checksum`, checksum = sum of the first 12 bytes `& 0x7F`.
 `amp_decay` 127 = HOLD. `pitch_env_amt` 64 = none. In UI BLIP, `fm_ratio` / `fm_depth` are the arpeggio's step and
 speed; in FOLEY the grain rate and amount.
+
+## Unity
+
+Add the package from disk: **Window > Package Manager > + > Add package from disk…** and pick
+`unity/com.catsplat.sfxforge/package.json` (Unity 2021.3 or newer; developed against Unity 6).
+
+| | |
+|---|---|
+| **Window > SFX Forge** | choose the MIDI ports, play the device's pads, fetch their patches. EXPORT on the device arrives here and is saved as a preset asset |
+| `SfxPreset` | a patch as an asset (Create > SFX Forge > Preset): sliders, Play, Mutate, Bake WAV, send to a pad |
+| `SfxPlayer` | plays a preset in the game with the device's own engine, live – its Pitch / Cutoff / FM / Level move the sound as telemetry does on the device. No device needed |
+| `SfxTelemetrySender` | a Rigidbody's speed, an Animator float or your own value → CC 10–17 to the device, and to local `SfxPlayer`s |
+| `SfxForgeLink` | the link in Play mode: pad and encoder events from the device |
+| `SfxEncoderBinding` | a device encoder (LINK page) → an exposed AudioMixer parameter or an event |
+
+From code: `SfxLink.Shared` (`SendPatch`, `SendTelemetry`, `SendText`, `PlayPad`, events) and `SfxNative.Bake`.
+
+MIDI is implemented for Windows (winmm) only; presets, `SfxPlayer` and baking need the native library, built for
+Windows x64 (`sh native/build.sh`). **Without the hardware** the device is the Playground in the browser or the plugin,
+so Unity needs a virtual MIDI cable to reach it (for example loopMIDI, two ports: one each way).
+
+```sh
+dotnet run -c Release --project tests/dotnet -- .
+```
+
+runs the package's core without Unity (after `sh build.sh`): the protocol against what the firmware really sent, and
+the native library against the Vibe's own rendering.
 
 ## Licence
 
