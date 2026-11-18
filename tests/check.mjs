@@ -29,14 +29,22 @@ if (head) {
   ok(p[0] === 1 && p[1] < 4 && p.every((v) => v < 128) && p[12] === (p.slice(0, 12).reduce((a, v) => a + v, 0) & 0x7F), `the patch is valid (slot ${sx[5]}, engine ${p[1]}, checksum ok)`);
 }
 
-// the sequencer: the demo pattern has the thud (kick) on steps 1, 5, 9, 13 – every 0.5 s at 120 BPM, from 16.0 s on
+// the song at intensity 0: only layers with threshold 0 play – the thud (kick) on steps 1, 5, 9, 13, every 0.5 s at 120 BPM
 const kicks = [...Array(8)].map((_, k) => rms(16.0 + k * 0.5, 16.0 + k * 0.5 + 0.08));
-const gaps = [...Array(8)].map((_, k) => rms(16.0 + k * 0.5 + 0.14, 16.0 + k * 0.5 + 0.24));   // step 2 of each beat is empty
+const gaps = [...Array(8)].map((_, k) => rms(16.0 + k * 0.5 + 0.14, 16.0 + k * 0.5 + 0.24));
 ok(Math.min(...kicks) > 0.08 && Math.max(...gaps) < Math.min(...kicks) * 0.6, `PLAY runs the pattern in time (kicks ${Math.min(...kicks).toFixed(2)}+, between ${Math.max(...gaps).toFixed(2)})`);
 ok(rms(20.35, 20.6) < 0.01, 'STOP stops it');
-// then pad 2 on the SEQ page put sound 8 on step 2: 0.125 s after the restart there is more than before
+// then pad 2 on the SEQ page put sound 4 on step 2: 0.125 s after the restart there is more than before
 const before = rms(16.125, 16.24), after = rms(21.125, 21.24);
 ok(after > before * 1.5 && after > 0.03, `a pad on the SEQ page sets a step of the selected sound (${before.toFixed(3)} -> ${after.toFixed(3)})`);
-ok(rms(23.6, 24) < 0.01, 'silence at the end');
+// full intensity brings the other layers in (bass, hat, snare, lead): much more between the kicks
+const sparse = rms(16.26, 16.49), full = rms(23.76, 23.99);
+ok(full > sparse * 3 && full > 0.05, `INTENSITY (CC 14) brings the layers in (${sparse.toFixed(3)} -> ${full.toFixed(3)} between two kicks)`);
+// pattern C (empty) was cued by CC 15 at 24.0 s: it takes over on the bar line at 25.5 s, not before
+ok(rms(24.6, 25.4) > 0.05 && rms(25.9, 27.4) < 0.01, `a cued pattern takes over on the next bar line (${rms(24.6, 25.4).toFixed(3)} then ${rms(25.9, 27.4).toFixed(3)})`);
+const chunks = midi.filter((m) => m[0] === 0xF0 && m[4] === 0x05), dumps = midi.filter((m) => m[0] === 0xF0 && m[4] === 0x01);
+const bytes = chunks.reduce((a, m) => a + m.length - 8, 0);
+ok(chunks.length === 13 && chunks.every((m, i) => m[5] === i && m[6] === 13) && bytes === 2455 && dumps.length === 17, `SEND gives the 16 sounds and the song in 13 pieces (${dumps.length - 1} dumps, ${chunks.length} pieces, ${bytes} bytes)`);
+ok(rms(29.0, 29.5) < 0.01, 'silence at the end');
 console.log(failed ? `FAILED (${failed})` : 'tour PASSED');
 process.exit(failed ? 1 : 0);

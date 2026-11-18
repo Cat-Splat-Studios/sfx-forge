@@ -1,1 +1,1 @@
-{"name": "SFX FORGE", "version": "0.2", "author": "Cat Splat Studios", "description": "16 pads of synthesized sound effects with a step sequencer, MUTATE, and a live MIDI link to game engines", "license": "MIT", "stage": {"w": 960, "h": 540}}
+{"name": "SFX FORGE", "version": "0.3", "author": "Cat Splat Studios", "description": "Sound effects and adaptive music for games: 16 synthesized sounds, a pattern sequencer with intensity layers, and a live MIDI link to game engines", "license": "MIT", "stage": {"w": 960, "h": 540}}

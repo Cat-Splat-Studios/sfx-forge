@@ -78,7 +78,8 @@ typedef struct {
 typedef struct {
   sfx_patch patch;
   int   active, gate, slot;
-  float sr, vel, note_st;         /* note_st: transposition in semitones (keys play a sound chromatically) */
+  float sr, vel, note_st;         /* note_st: transposition in semitones */
+  float abs_oct;                  /* >= 0: played as a note – this pitch (octaves above 20 Hz) instead of the patch's FREQ */
   float phase, mphase, fb;        /* carrier, modulator (turns), FM feedback memory */
   float penv, pcoef;              /* pitch envelope 1 -> 0, its factor per control step */
   float aenv, acoef, rcoef, att;  /* amp envelope, decay and release factors per sample, attack ramp 0..1 */
@@ -161,7 +162,7 @@ static inline void sfx_voice_set_patch(sfx_voice *v, const sfx_patch *p)
 
 static inline void sfx_voice_trigger(sfx_voice *v, const sfx_patch *p, float vel, float note_st, int slot, float sr, uint32_t seed)
 {
-  v->sr = sr; v->vel = vel; v->note_st = note_st; v->slot = slot;
+  v->sr = sr; v->vel = vel; v->note_st = note_st; v->slot = slot; v->abs_oct = -1.0f;
   sfx_voice_set_patch(v, p);
   v->active = 1; v->gate = 1;
   v->phase = v->mphase = v->fb = 0.0f;
@@ -174,6 +175,9 @@ static inline void sfx_voice_trigger(sfx_voice *v, const sfx_patch *p, float vel
   v->ctl = 0;
 }
 
+/* after a trigger: play the sound as a MIDI note (69 = 440 Hz), so every sound of a song is in tune with the others */
+static inline void sfx_voice_set_note(sfx_voice *v, int midi_note) { v->abs_oct = ((float)midi_note - 69.0f) * (1.0f / 12.0f) + 4.4594316f; }
+
 static inline void sfx_voice_release(sfx_voice *v) { v->gate = 0; }
 
 static inline void sfx__control(sfx_voice *v, const sfx_mods *m)
@@ -182,7 +186,7 @@ static inline void sfx__control(sfx_voice *v, const sfx_mods *m)
   int eng = v->patch.engine;
   float sr = v->sr;
   float amt = ((float)p[SFX_P_PITCH_ENV_AMT] - 64.0f) * (4.0f / 64.0f);            /* octaves */
-  float oct = sfx__unit(p[SFX_P_BASE_FREQ]) * 9.5f + (v->note_st + m->pitch_st) * (1.0f / 12.0f);
+  float oct = (v->abs_oct >= 0.0f ? v->abs_oct : sfx__unit(p[SFX_P_BASE_FREQ]) * 9.5f) + (v->note_st + m->pitch_st) * (1.0f / 12.0f);
   float sweep = amt * v->penv;
   float cut_oct = sfx__unit(p[SFX_P_FILTER_CUTOFF]) * 8.6f + m->cutoff_oct;
 
