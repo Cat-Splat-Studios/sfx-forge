@@ -28,5 +28,15 @@ if (head) {
   const p = sx.slice(6, 19);
   ok(p[0] === 1 && p[1] < 4 && p.every((v) => v < 128) && p[12] === (p.slice(0, 12).reduce((a, v) => a + v, 0) & 0x7F), `the patch is valid (slot ${sx[5]}, engine ${p[1]}, checksum ok)`);
 }
+
+// the sequencer: the demo pattern has the thud (kick) on steps 1, 5, 9, 13 – every 0.5 s at 120 BPM, from 16.0 s on
+const kicks = [...Array(8)].map((_, k) => rms(16.0 + k * 0.5, 16.0 + k * 0.5 + 0.08));
+const gaps = [...Array(8)].map((_, k) => rms(16.0 + k * 0.5 + 0.14, 16.0 + k * 0.5 + 0.24));   // step 2 of each beat is empty
+ok(Math.min(...kicks) > 0.08 && Math.max(...gaps) < Math.min(...kicks) * 0.6, `PLAY runs the pattern in time (kicks ${Math.min(...kicks).toFixed(2)}+, between ${Math.max(...gaps).toFixed(2)})`);
+ok(rms(20.35, 20.6) < 0.01, 'STOP stops it');
+// then pad 2 on the SEQ page put sound 8 on step 2: 0.125 s after the restart there is more than before
+const before = rms(16.125, 16.24), after = rms(21.125, 21.24);
+ok(after > before * 1.5 && after > 0.03, `a pad on the SEQ page sets a step of the selected sound (${before.toFixed(3)} -> ${after.toFixed(3)})`);
+ok(rms(23.6, 24) < 0.01, 'silence at the end');
 console.log(failed ? `FAILED (${failed})` : 'tour PASSED');
 process.exit(failed ? 1 : 0);

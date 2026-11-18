@@ -1,7 +1,10 @@
 # SFX FORGE
 
 A procedural game-audio workstation for **VIBE FM** (and, later, the M-VAVE FM-1): 16 pads of synthesized sound
-effects, a MUTATE button for instant variations, and a live MIDI/SysEx link to a game engine.
+effects, a step sequencer that turns them into a beat, a MUTATE button for instant variations, and a live MIDI/SysEx
+link to a game engine.
+
+![SFX FORGE](sfx-forge/icon.png)
 
 Built with the VIBE FM SDK. Status: foundation (v0.1). The synth, the device UI and the device side of the link are
 tested in the SDK's tools; the Unity package is tested in Unity 6.3 with the demo project's editor and Play mode tests.
@@ -29,14 +32,21 @@ sh build.sh
 ```
 
 Gives `build/sfx-forge.wasm` (drop it onto <https://play.thefirmwarehub.com/>) and `build/sfx-forge.zip` (drop it onto
-the VIBE FM VST window), then runs `vibe-check` and the test performance: `out/audio.wav`, screenshots, `out/midi.json`.
+the VIBE FM VST window), then runs `vibe-check` and two test performances: `out/audio.wav`, screenshots,
+`out/midi.json`, and `out/daw/` (the sequencer following a DAW).
 
 ## Playing it
 
 - **Pads** – 16 sounds: row 1 IMPACT, row 2 UI BLIP, row 3 SCI-FI FM, row 4 FOLEY. Pads 11 and 14 hold while pressed.
-- **Keys** – the selected sound, chromatically. **DATA** selects a pad, **PLAY** auditions it.
-- **K1–K4** – pages TONE · COLOR · FILTER · LINK; **encoders 1–4** are the four values shown (SHIFT: fast).
+- **Keys** – the selected sound, chromatically. **DATA** selects a sound.
+- **K1–K5** – pages TONE · COLOR · FILTER · LINK · SEQ; **encoders 1–4** are the four values shown (SHIFT: fast).
 - **F1–F6** – ENGINE · MUTATE (±15 %) · UNDO · RANDOM · EXPORT (SysEx) · SAVE.
+- **PLAY / STOP** – the sequencer: 16 steps over the 16 sounds, with a demo beat to start from. It follows the DAW's
+  song position while the DAW plays, else its own tempo. **REC**: pads you play go into the pattern.
+- **SEQ page** – the pads are the 16 steps of the selected sound; encoders: TEMPO · SWING · LENGTH · SOUND;
+  F1–F6: PLAY · REC · CLEAR · CLR ALL · DEMO · SAVE.
+- **The stage** (browser and plugin) – the same, big: the pads, the whole 16 × 16 step grid, the scope. Click to play
+  and to set steps.
 - **HOME** – what every control does.
 
 ## The link (device ⇄ game engine)
