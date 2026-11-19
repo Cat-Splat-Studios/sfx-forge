@@ -30,3 +30,6 @@ node "$SDK/tools/wasmtest.mjs" "$ROOT/build/sfx-forge.wasm" "$ROOT/tests/daw.jso
 node "$ROOT/tests/check-daw.mjs" "$ROOT/out/daw"
 node "$SDK/tools/wasmtest.mjs" "$ROOT/build/sfx-forge.wasm" "$ROOT/tests/guide.json" "$ROOT/out/guide"
 node "$ROOT/tests/check-guide.mjs" "$ROOT/out/guide"
+mkdir -p "$ROOT/out/reset"
+node "$SDK/tools/wasmtest.mjs" "$ROOT/build/sfx-forge.wasm" "$ROOT/tests/reset.json" "$ROOT/out/reset"
+node "$ROOT/tests/check-reset.mjs" "$ROOT/out/reset"

@@ -1,560 +1,622 @@
 # SFX FORGE – the manual
 
-SFX FORGE is a synthesizer for game audio. You design sound effects and instruments on it, write music with them, mix
-it, and the game plays the result with the same engine – so what you hear on the device is what the player hears.
+**A synthesizer for game audio.** Design sound effects and instruments, write music with them, mix it – and the game
+plays the result with the same engine, so what you hear here is what the player hears.
 
 Everything is synthesized. There are no samples and no recordings in it.
 
-- [1. A first five minutes](#1-a-first-five-minutes)
-- [2. The device at a glance](#2-the-device-at-a-glance)
-- [3. Two kits: SFX and MUSIC](#3-two-kits-sfx-and-music)
-- [4. Making a sound effect](#4-making-a-sound-effect)
-- [5. The five engines](#5-the-five-engines)
-- [6. Every value of a sound](#6-every-value-of-a-sound)
-- [7. Instruments](#7-instruments)
-- [8. Writing music: the sequencer](#8-writing-music-the-sequencer)
-- [9. The song: patterns, arrangement, layers](#9-the-song-patterns-arrangement-layers)
-- [10. Automation](#10-automation)
-- [11. The mixer and the master effects](#11-the-mixer-and-the-master-effects)
-- [12. The stage: all of it with a mouse](#12-the-stage-all-of-it-with-a-mouse)
-- [13. Into the game](#13-into-the-game)
-- [14. Saving, and older songs](#14-saving-and-older-songs)
-- [15. Recipes](#15-recipes)
-- [16. What it does not do](#16-what-it-does-not-do)
-- [17. Every control, page by page](#17-every-control-page-by-page)
+| I want to … | Go to |
+|---|---|
+| try it right now | [1. Five minutes](#1-five-minutes) |
+| know what each control is | [2. The device](#2-the-device) · [3. The display](#3-the-display) |
+| make a sound effect | [5. Tutorial: a sound effect](#5-tutorial-a-sound-effect) |
+| understand the knobs | [6. How a sound is built](#6-how-a-sound-is-built) · [7. The five engines](#7-the-five-engines) |
+| write a beat and a tune | [9. Tutorial: a beat](#9-tutorial-a-beat) |
+| make music that follows the game | [11. Layers](#11-layers-music-that-follows-the-game) |
+| move a knob by itself | [12. Automation](#12-automation) |
+| mix | [13. The mixer](#13-the-mixer-and-the-master-effects) |
+| work with the mouse | [14. The stage](#14-the-stage) |
+| get it into my game | [15. Into the game](#15-into-the-game) |
+| look something up | [19. Every control](#19-every-control-page-by-page) |
 
 ---
 
-## 1. A first five minutes
+## 1. Five minutes
 
-1. **Load it.** Drop `sfx-forge.wasm` onto the Playground (<https://play.thefirmwarehub.com/>), or `sfx-forge.zip`
-   onto the VIBE FM plugin's window.
-2. **Press MENU.** The tour plays and names what SFX FORGE does, a caption at a time (about 40 seconds). Any key ends
-   it, and everything it changed is put back.
-3. **Hit the pads.** They are the 16 sound effects of the SFX kit. The display shows the sound you hit last: its whole
-   shape on the left, its wave on the right.
-4. **Press F2 MUTATE** a few times. Each press is a new variation of that sound. F3 UNDO takes the last one back.
-5. **Press PLAY.** The demo song starts. Press K5 twice for the SONG page and turn encoder 3, INTENSITY: the band comes
-   in instrument by instrument. That is what a game does with it.
-6. **Press HOME** on any page: it lists what every control does on that page.
-
----
-
-## 2. The device at a glance
-
-![A sound page](img/sfx-sound.png)
-
-**The top line** always shows the selected sound (its pad number and name), the kit it belongs to (SFX or MUSIC), and
-on the right the song: playing or stopped, its pattern, its tempo, and a dot that is green while a game is linked.
-
-**The six K keys are the pages.** Pressing a K key again walks through its pages:
-
-| Key | Pages | What they are for |
+| | Do this | What happens |
 |---|---|---|
-| K1 SOUND | OSC, TONE, FILTER, (WAVE) | the selected sound's source and filter |
-| K2 ENV | ENV | how it starts, holds and ends |
-| K3 LFO | LFO | a slow wave that moves it |
-| K4 FX | FX, MIX, MASTER | its effect sends · the mixer · the effects themselves |
-| K5 SEQ | SEQ, SONG, AUTO | the steps · the song · automation |
-| K6 LINK | LINK | the game's side |
-
-**Encoders 1–4** are the four values the page shows. Hold SHIFT to turn them fast. **A** is the output volume (on SEQ
-and AUTO: the tempo). **DATA** selects a sound.
-
-**F1–F6** are the six soft keys along the bottom of the display; they change with the page.
-
-**LEFT / RIGHT** step to the sound page before or after. On SEQ, SONG and AUTO they change the pattern.
-
-**PLAY / STOP / REC** run the song. **MENU** is the tour. **HOME** shows the controls of the page you are on.
+| **1** | Drop `sfx-forge.wasm` onto the [Playground](https://play.thefirmwarehub.com/) (or `sfx-forge.zip` onto the VIBE FM plugin) | SFX FORGE starts |
+| **2** | Press **MENU** | the tour: it plays and names what it can do, about 40 seconds. Any key ends it |
+| **3** | Hit the **pads** | 16 sound effects. The display shows the one you hit |
+| **4** | Press **F2 MUTATE** a few times | each press is a new variation. **F3 UNDO** takes one back |
+| **5** | Press **PLAY** | the demo song |
+| **6** | Press **K5** twice, turn **encoder 3** | INTENSITY: the band comes in instrument by instrument |
+| **7** | Press **HOME** on any page | what every control does on that page |
 
 ---
 
-## 3. Two kits: SFX and MUSIC
+## 2. The device
 
-SFX FORGE holds two sets of 16 sounds:
+![The device's controls](img/device.png)
 
-| Kit | What is in it | How it sounds |
+| | Control | What it does |
 |---|---|---|
-| **SFX** | the game's sound effects: explosion, coin, laser, footstep … | straight to the output, beside the song |
-| **MUSIC** | the band the song plays: drums, bass, keys, brass, strings … | through the mixer: its fader, pan and mute |
+| **1** | the display | the selected sound, the page you are on, four values, six soft keys |
+| **2** | **F1 – F6** | the six soft keys shown along the bottom of the display. They change with the page |
+| **3** | **encoders 1 – 4** | the four values the display shows. Hold SHIFT to turn fast |
+| **4** | **DATA** | selects a sound |
+| **5** | **the 16 pads** | play the kit's sounds. On the song pages they are steps, patterns or mutes |
+| **6** | **SHIFT** | the second meaning of a key, and fast encoders |
+| **7** | **K1 – K6** | the pages. Press a K key again for its next page |
+| **8** | **A · B** | A: the output volume (on SEQ and AUTO, the tempo). B: the scale, or the bar's length |
+| **9** | **LEFT · MENU · RIGHT** | the page (or pattern) before and after · the tour |
+| **10** | **REC · STOP · PLAY** | the song |
+| **11** | **the keys** | play the selected sound as an instrument, in tune |
+| **12** | **RETURN · HOME** | back to the first page · the controls of this page |
 
-The pads, the keys and the sound pages always work on the kit shown in the top line.
+### The pages
 
-- **SHIFT + K1** changes kit.
-- Going to a song page (SEQ, SONG, AUTO, MIX, MASTER) chooses MUSIC by itself, because the song plays the MUSIC kit.
-- **F1 PRESET** offers sound effects in the SFX kit and instruments in the MUSIC kit.
+Six K keys, thirteen pages. Pressing a K key again walks to its next page.
 
-Nothing stops you from putting a laser in the MUSIC kit and sequencing it, or playing a sound effect on the keys.
-The kits only keep the two jobs apart.
+```mermaid
+flowchart LR
+  K1["K1 SOUND"] --> OSC --> TONE --> FILTER --> WAVE["WAVE<br/>(wavetable only)"]
+  K2["K2 ENV"] --> ENV
+  K3["K3 LFO"] --> LFO
+  K4["K4 FX"] --> FX["FX<br/>a sound's sends"] --> MIX["MIX<br/>faders"] --> MASTER["MASTER<br/>delay, reverb"]
+  K5["K5 SEQ"] --> SEQ["SEQ<br/>steps"] --> SONG["SONG<br/>patterns, layers"] --> AUTO["AUTO<br/>automation"]
+  K6["K6 LINK"] --> LINK["LINK<br/>the game"]
+```
 
----
-
-## 4. Making a sound effect
-
-The quickest way is to start from a sound that is close and change it.
-
-1. **Choose the SFX kit** (SHIFT + K1 if the top line says MUSIC) and **hit a pad**.
-2. **F1 PRESET** puts the next named sound effect on that pad (SHIFT + F1: the one before). There are 16.
-3. **F2 MUTATE** moves every value by up to 15 %. It keeps the kind of sound: the engine, whether it is held, its
-   wavetable. Press it until something is close. **F3 UNDO** takes one step back.
-4. **F4 RANDOM** is a completely new sound, if you would rather be surprised.
-5. **Shape it by hand.** K1 walks through OSC, TONE and FILTER; K2, K3 and K4 are the envelope, the LFO and the
-   effects. Each page is four knobs. The display redraws the sound as you turn, so you see what each knob does:
-
-   | Page | The picture on the right |
-   |---|---|
-   | OSC, TONE, FX | the wave: 10 ms of it, where it is loudest |
-   | ENV | the envelope, as its four values set it |
-   | FILTER | the filter's curve |
-   | LFO | the LFO's wave |
-
-   ![The ENV page](img/env.png)
-
-6. **F6 SAVE** keeps both kits and the song on the device.
-7. **F5 EXPORT** sends the sound to the game (section 13).
-
-Values read in their units – Hz, ms, % – wherever they have one.
+The top four rows shape **one sound**. The K4 and K5 rows after their first page are about **the song**.
 
 ---
 
-## 5. The five engines
+## 3. The display
 
-A sound is made by one of five engines. ENGINE is the first knob of the OSC page. Two knobs on the TONE page change
-meaning with the engine; they are called A and B below.
+Every sound page looks like this.
 
-| Engine | What it is | A | B | Good for |
-|---|---|---|---|---|
-| **IMPACT** | a sine whose pitch falls, with FM and noise, driven hard | FM RATIO | FM DEPTH | hits, kicks, explosions, drums |
-| **UI BLIP** | a square wave that can step upwards | ARP STEP: 0–24 semitones a step | ARP SPEED: 2–64 steps a second | coins, menus, chiptune leads and basses |
-| **SCI-FI FM** | two sines, one bending the other, with feedback | FM RATIO | FM DEPTH | lasers, zaps, engines, FM bass and keys |
-| **FOLEY** | noise through a band-pass filter, in grains | GRAIN RATE: 2–256 a second | GRAIN AMT | steps, wind, fire, hi-hats |
-| **WAVETABLE** | a wave that morphs through a table | POSITION in the table | WARP: squeezes the cycle | pads, strings, brass, organs, sweeps |
+![A sound page](img/page-sound.png)
 
-Things worth knowing about each:
+| | What it is |
+|---|---|
+| **1** | the selected sound: its pad number, its name, its engine |
+| **2** | the kit it belongs to: SFX or MUSIC |
+| **3** | the song: playing or stopped, its pattern, its tempo – and a dot that is green while a game is linked |
+| **4** | the pages. The bright one is where you are |
+| **5** | the sound's whole shape, from start to end, with its length |
+| **6** | what this page's knobs shape: the wave, the envelope, the filter or the LFO |
+| **7** | the 16 pads. White: sounding now |
+| **8** | SOUND's own pages. K1 again walks through them |
+| **9** | the four values = encoders 1 – 4, in their units |
+| **10** | the soft keys = F1 – F6 |
 
-- **IMPACT.** PITCH ENV and ENV TIME are the fall of the hit: a large fall over a short time is a kick, a small one
-  over a long time is a tom. NOISE adds the crack.
-- **UI BLIP.** With ARP STEP at 0 it is a plain square wave. With a step, the note climbs three times and stays: a
-  step of 7 (a fifth) at a high speed is the classic coin.
-- **SCI-FI FM.** FM RATIO sets the colour: around 42 the two sines are at the same pitch (round, like a bass or an
-  electric piano), higher values are more bell-like and metallic. The brightness falls over ENV TIME even with PITCH
-  ENV at 0 – that falling brightness is the pluck of FM BASS and FM KEYS.
-- **FOLEY.** CUTOFF is called BAND here: it is where the noise sits. PITCH ENV sweeps the band, not a pitch – that is
-  a whoosh. Turn NOISE down and a sine tone appears under it. GRAIN AMT chops the noise into random grains: crackle,
-  gravel, rain.
-- **WAVETABLE.** TABLE chooses one of six tables: SAW-SQ, PULSE, PEAK, VOWEL, ORGAN, GLASS. POSITION moves through the
-  table's eight waves, smoothly. SPREAD adds two detuned copies for width. The LFO page's `> TIMBRE` moves the
-  position by itself. The WAVE page (TABLE and SPREAD) is only there for a wavetable sound.
+**The pictures redraw as you turn a knob.** That is the quickest way to learn what a knob does.
 
 ---
 
-## 6. Every value of a sound
+## 4. Two kits
 
-A sound is 25 values and its engine. Each is stored as a number from 0 to 127; the display shows it in its unit.
+SFX FORGE holds two sets of 16 sounds.
+
+| | **SFX kit** | **MUSIC kit** |
+|---|---|---|
+| What is in it | the game's sound effects | the band the song plays |
+| At the start | explosion, punch, coin, laser, footstep, wind … | kick, snare, hi-hat, FM bass, FM keys, brass, strings … |
+| Where it goes | straight to the output, beside the song | through the mixer: fader, pan, mute |
+| F1 PRESET offers | 16 sound effects | 23 instruments |
+
+**SHIFT + K1** changes kit. The top line says which one you are in. Going to a song page chooses MUSIC by itself.
+
+Nothing stops you from sequencing a laser or playing a footstep on the keys. The kits only keep the two jobs apart.
+
+---
+
+## 5. Tutorial: a sound effect
+
+**1. Hit a pad** in the SFX kit. Press **F1 PRESET** until you have something close – here, LASER.
+
+![A laser](img/t-sfx-1.png)
+
+**2. Press F2 MUTATE.** Every value moves by up to 15 %. The picture changes; so does the sound. Press again for
+another; **F3 UNDO** takes one back.
+
+![The laser, mutated](img/t-sfx-2.png)
+
+**3. Shape it by hand.** Press **K1** until FILTER is lit, and turn **encoder 1**, CUTOFF. The filter's curve moves in
+the right-hand picture and the shape on the left gets duller.
+
+![The filter page](img/t-sfx-3.png)
+
+**4. Give it a tail.** Press **K2** for the envelope and turn **encoder 2**, DECAY.
+
+![The envelope page](img/t-sfx-4.png)
+
+**5. Keep it.** **F6 SAVE** stores both kits and the song. **F5 EXPORT** sends this sound to the game
+([section 15](#15-into-the-game)).
+
+> **Lost?** **F4 RANDOM** is a completely new sound. **SHIFT + MENU, twice** puts everything back as it came from the
+> factory – both kits and the song. What you saved is gone then.
+
+---
+
+## 6. How a sound is built
+
+Every sound follows the same path. Each box is one page of four knobs.
+
+```mermaid
+flowchart LR
+  E["ENGINE<br/>OSC and TONE pages<br/>the raw sound"] --> F["FILTER<br/>FILTER page<br/>takes highs away"] --> A["ENVELOPE<br/>ENV page<br/>start, hold, end"] --> L["LEVEL<br/>FX page"]
+  LFO["LFO<br/>a slow wave"] -.-> E
+  LFO -.-> F
+  L --> OUT["to the output"]
+  L --> S["CHORUS · DELAY · REVERB<br/>sends on the FX page"] --> OUT
+```
+
+### Every value
 
 | Page | Value | What it does | Range |
 |---|---|---|---|
-| OSC | FREQ | the pitch (overridden when the sound is played as a note) | 20 Hz – 14.5 kHz |
-| OSC | PITCH ENV | how far the pitch starts above (+) or below (−) and falls back | ±4 octaves; 0 = none |
-| OSC | ENV TIME | how long that takes | 5 ms – 2.6 s |
-| TONE | A | the engine's first own control (section 5) | |
-| TONE | B | the engine's second own control | |
-| TONE | NOISE | how much of the source is noise | 0 – 100 % |
-| TONE | CRUSH | fewer bits and fewer samples: grit | OFF – 100 % |
-| FILTER | CUTOFF | where the low-pass filter closes (FOLEY: where the band sits) | 40 Hz – 15.5 kHz |
-| FILTER | RESO | a peak at the cutoff | 0 – 100 % |
-| FILTER | FILTER ENV | how far the cutoff starts above or below and returns | ±5 octaves; 0 = none |
-| FILTER | F.ENV TIME | how long that takes | 5 ms – 2.6 s |
-| WAVE | TABLE | which wavetable | six tables |
-| WAVE | SPREAD | two detuned copies | up to 30 cents either way |
-| ENV | ATTACK | how long it takes to reach full level | 1.5 ms – 4 s |
-| ENV | DECAY | how fast it falls after that | 10 ms – 3.9 s |
-| ENV | SUSTAIN | the level it holds at | OFF, or up to 100 % |
-| ENV | RELEASE | how long it rings after the pad is let go | 5 ms – 3.9 s |
-| LFO | LFO RATE | the speed of the slow wave | 0.1 – 29 Hz |
-| LFO | > PITCH | how far it moves the pitch (vibrato) | up to an octave |
-| LFO | > FILTER | how far it moves the cutoff (wah) | up to 3 octaves |
-| LFO | > TIMBRE | how far it moves FM depth or wavetable position | |
-| FX | CHORUS | send to the chorus | 0 – 100 % |
-| FX | DELAY | send to the delay | 0 – 100 % |
-| FX | REVERB | send to the reverb | 0 – 100 % |
-| FX | LEVEL | the sound's own loudness | 100 = as designed |
+| **OSC** | ENGINE | which of the five engines makes the sound | |
+| | FREQ | the pitch (the keys override it) | 20 Hz – 14.5 kHz |
+| | PITCH ENV | how far the pitch starts above (+) or below (−) and falls back | ±4 octaves; 0 = none |
+| | ENV TIME | how long that takes | 5 ms – 2.6 s |
+| **TONE** | A · B | the engine's own two controls ([section 7](#7-the-five-engines)) | |
+| | NOISE | how much of it is noise | 0 – 100 % |
+| | CRUSH | fewer bits and samples: grit | OFF – 100 % |
+| **FILTER** | CUTOFF | where the filter closes | 40 Hz – 15.5 kHz |
+| | RESO | a peak at the cutoff | 0 – 100 % |
+| | FILTER ENV | how far the cutoff starts above or below and returns | ±5 octaves; 0 = none |
+| | F.ENV TIME | how long that takes | 5 ms – 2.6 s |
+| **WAVE** | TABLE | which wavetable | six |
+| | SPREAD | two detuned copies, for width | up to 30 cents |
+| **ENV** | ATTACK | time to reach full level | 1.5 ms – 4 s |
+| | DECAY | how fast it falls after that | 10 ms – 3.9 s |
+| | SUSTAIN | the level it holds at | OFF, or up to 100 % |
+| | RELEASE | how long it rings after the pad is let go | 5 ms – 3.9 s |
+| **LFO** | LFO RATE | the slow wave's speed | 0.1 – 29 Hz |
+| | > PITCH | vibrato | up to an octave |
+| | > FILTER | wah | up to 3 octaves |
+| | > TIMBRE | moves FM depth or wavetable position | |
+| **FX** | CHORUS · DELAY · REVERB | how much goes to each effect | 0 – 100 % |
+| | LEVEL | the sound's own loudness | 100 = as designed |
 
-**SUSTAIN decides what kind of sound it is.**
+### One-shot or held: SUSTAIN decides
 
-- **OFF: a one-shot.** It plays to its end however short the pad was hit. Drums, coins, explosions.
-- **Above OFF: a held sound.** It holds at that level as long as the pad or key is down, then rings out over RELEASE.
-  Strings, organs, an engine hum.
+| SUSTAIN | The sound is | Use it for |
+|---|---|---|
+| **OFF** | a **one-shot**: it plays to its end however short you hit the pad | drums, coins, explosions |
+| **above OFF** | **held**: it sounds while the pad or key is down, then rings out over RELEASE | strings, organs, an engine hum |
+
+The ENV page draws which one you have:
+
+![The ENV page](img/env.png)
+
+The LFO page draws the slow wave, and the FX page shows the three sends and the level:
+
+| LFO | FX |
+|---|---|
+| ![The LFO page](img/lfo.png) | ![The FX page](img/fx.png) |
 
 ---
 
-## 7. Instruments
+## 7. The five engines
 
-**Any sound is an instrument.** The keys play the selected sound in tune (A4 = 440 Hz), up to 16 notes at once. FREQ
-no longer matters then: the key sets the pitch.
+ENGINE is the first knob of the OSC page. The two knobs **A** and **B** on the TONE page change meaning with it.
 
-The MUSIC kit starts with a band on its 16 pads:
+| Engine | What it is | A | B | Good for |
+|---|---|---|---|---|
+| **IMPACT** | a sine whose pitch falls, with FM and noise, driven hard | FM RATIO | FM DEPTH | hits, kicks, explosions |
+| **UI BLIP** | a square wave that can step upwards | ARP STEP | ARP SPEED | coins, menus, chiptune |
+| **SCI-FI FM** | two sines, one bending the other | FM RATIO | FM DEPTH | lasers, engines, FM bass and keys |
+| **FOLEY** | noise through a band, in grains | GRAIN RATE | GRAIN AMT | steps, wind, fire, hi-hats |
+| **WAVETABLE** | a wave that morphs through a table | POSITION | WARP | pads, strings, brass, organs |
 
-| Pad | Sound | Pad | Sound | Pad | Sound | Pad | Sound |
-|---|---|---|---|---|---|---|---|
-| 1 | TIMPANI | 5 | PIZZICATO | 9 | HARP | 13 | HI-HAT |
-| 2 | SNARE | 6 | BRASS | 10 | CELESTA | 14 | BELLS |
-| 3 | KICK | 7 | FM BASS | 11 | ORGAN | 15 | CHOIR |
-| 4 | COWBELL | 8 | FM KEYS | 12 | WT SWEEP | 16 | STRINGS |
+**A tip for each:**
+
+| Engine | Try this |
+|---|---|
+| IMPACT | PITCH ENV high with a short ENV TIME is a kick. A small fall over a long time is a tom. NOISE adds the crack |
+| UI BLIP | ARP STEP 7 (a fifth) at a high ARP SPEED is the classic coin. At 0 it is a plain square wave |
+| SCI-FI FM | FM RATIO around 42 is round (a bass, an electric piano); higher is bells and metal. Its brightness falls over ENV TIME – that is the pluck |
+| FOLEY | CUTOFF is called BAND: it is where the noise sits. PITCH ENV sweeps the band – a whoosh. GRAIN AMT chops it: crackle, gravel, rain |
+| WAVETABLE | Turn POSITION and watch the wave morph. `> TIMBRE` on the LFO page moves it by itself. SPREAD makes it wide |
+
+A wavetable sound has a fourth SOUND page, WAVE, with its table – SAW-SQ, PULSE, PEAK, VOWEL, ORGAN or GLASS:
+
+![The WAVE page](img/music-wave.png)
+
+---
+
+## 8. Instruments
+
+**Any sound is an instrument.** The keys play the selected sound in tune (A4 = 440 Hz), up to 16 notes at once.
+
+The MUSIC kit starts with a band on its pads:
+
+| | | | |
+|---|---|---|---|
+| **1** TIMPANI | **2** SNARE | **3** KICK | **4** COWBELL |
+| **5** PIZZICATO | **6** BRASS | **7** FM BASS | **8** FM KEYS |
+| **9** HARP | **10** CELESTA | **11** ORGAN | **12** WT SWEEP |
+| **13** HI-HAT | **14** BELLS | **15** CHOIR | **16** STRINGS |
 
 F1 PRESET in the MUSIC kit also offers OPEN HAT, FLUTE, WT VOWEL, WT BASS, PAD, SQ BASS and SQ LEAD.
 
-These are synthesizer instruments in the style of their names. STRINGS is a slow, detuned wavetable with chorus and
+These are synthesizer instruments in the style of their names – STRINGS is a slow, detuned wavetable with chorus and
 reverb, not a recording of a string section.
 
 ---
 
-## 8. Writing music: the sequencer
+## 9. Tutorial: a beat
 
-Press **K5** for the SEQ page. A **pattern** is one bar of 16 steps for all 16 sounds of the MUSIC kit.
+A **pattern** is one bar: 16 steps for each of the MUSIC kit's 16 sounds. Press **K5** for the SEQ page, and **F2**
+until you reach an empty pattern.
 
-![The SEQ page](img/seq-playing.png)
+**1. The kick.** Turn **DATA** to KICK. Press **F3 FILL** once: a kick on every 4th step.
 
-The display shows two things:
+![A kick on every beat](img/t-beat-1.png)
 
-- **On top, big:** the 16 steps of the *selected* sound. A step that is on shows its note; its height is how hard it
-  plays; a white line under it shows how long it holds.
-- **Below:** the whole pattern, one row for each sound. The arrow marks the selected one. Rows are dim while their
-  layer is silent (section 9).
+**2. The snare.** DATA to SNARE. Hit **pads 5 and 13**: the pads are the 16 steps.
 
-### Putting steps in
+![Kick and snare](img/t-beat-2.png)
+
+**3. The hi-hat.** DATA to HI-HAT. Press **F3 FILL** twice: every 2nd step.
+
+![Kick, snare and hat](img/t-beat-3.png)
+
+**4. A bass line.** DATA to FM BASS. **Hold a step's pad and play a key**: that step plays that note.
+
+![With a bass line](img/t-beat-4.png)
+
+**5. Press PLAY.**
+
+### Reading the SEQ page
+
+![The SEQ page](img/page-seq.png)
+
+| | What it is |
+|---|---|
+| **1** | the pattern, and the sound whose steps are shown |
+| **2** | the tempo (A), the swing (SHIFT + A), the scale NOTE moves in (B) |
+| **3** | the selected sound's 16 steps. A step shows its **note**; its **height** is how hard it plays; a **line under it** is how long it holds; the frame is the step the encoders edit |
+| **4** | the whole pattern: a row for each sound. The arrow marks the selected one; the bright column is the step playing now |
+| **5** | STEP · NOTE · VELOCITY · LENGTH of the framed step |
+| **6** | pattern before / after · FILL · CLEAR the row · COPY the pattern to the next · SAVE |
+
+### Everything a step can do
 
 | To do this | Do this |
 |---|---|
-| switch a step on or off | hit its pad (pads 1–16 are steps 1–16) |
+| switch a step on or off | hit its pad |
 | choose another sound | turn DATA, or SHIFT + its pad (you hear it) |
-| move the frame to a step | hit its pad, or turn encoder 1 STEP |
-| give a step a note | hold its pad and play a key – or turn encoder 2 NOTE |
-| set how hard it plays | encoder 3 VELOCITY, 1–8 |
-| set how long it holds | encoder 4 LENGTH: AUTO, or 1–15 steps |
-| fill a row quickly | F3 FILL: every 4th step, then every 2nd, every step, none |
-| empty the selected row | F4 CLEAR |
+| give a step a note | hold its pad and play a key – or turn encoder 2 NOTE (it stays in the scale) |
+| make it louder or softer | encoder 3 VELOCITY, 1 – 8 |
+| make a held note shorter | encoder 4 LENGTH: AUTO, or 1 – 15 steps |
+| record what you play | REC, then PLAY: pads and keys land on the nearest step, as hard as you hit them |
+| change the tempo | A. SHIFT + A is the swing |
 
-A step without a note plays the sound as it was designed: right for drums and effects. A step with a note plays the
-sound at that pitch, in tune with everything else.
-
-**NOTE moves along a scale.** Encoder B chooses it: CHROMATIC, MAJOR, MINOR or PENTATONIC (in C). Notes played on the
-keys are taken as played.
-
-**LENGTH AUTO** holds a note until the sound plays again or the bar ends. A number lets it go after that many steps:
-1 or 2 for a stab, 7 for a chord that breathes before the next one. LENGTH is for held sounds (SUSTAIN above OFF); a
-one-shot always plays to its own end.
-
-### Recording
-
-Press **REC**, then **PLAY**. Whatever you play on the pads and keys in the MUSIC kit lands on the nearest step of the
-pattern that is playing, with the note you played and as hard as you hit it.
-
-### Tempo and swing
-
-On the SEQ and AUTO pages **A is the tempo** (40–240 BPM) and **SHIFT + A is the swing**. Both are shown above the
-steps. Swing delays every second step; 0 % is straight.
-
-### Patterns
-
-There are eight patterns, A to H. **F1 / F2** (or LEFT / RIGHT) go to the one before or after. **F5 COPY** copies the
-pattern into the next one and goes there – the way to make a variation.
+A step **without a note** plays the sound as designed – right for drums. **LENGTH AUTO** holds a note until the sound
+plays again or the bar ends; LENGTH is for held sounds, a one-shot always plays to its own end.
 
 ---
 
-## 9. The song: patterns, arrangement, layers
+## 10. The song
 
 Press **K5 again** for the SONG page.
 
-![The SONG page](img/song.png)
+![The SONG page](img/page-song.png)
+
+| | What it is |
+|---|---|
+| **1** | the eight patterns, A – H, each with a sketch of what is in it. White: playing. Blue: the one you edit |
+| **2** | the arrangement: a pattern for each bar |
+| **3** | INTENSITY: the orange level |
+| **4** | the layers: a column for each sound, with its mark |
+| **5** | PATTERN · CHAIN · INTENSITY · LAYER |
+| **6** | PLAY · COPY · CLR PAT · DEMO · SEND to the game · SAVE |
+
+### How a song is put together
+
+```mermaid
+flowchart TD
+  S["THE SONG<br/>tempo, swing, the mix"] --> A["ARRANGEMENT<br/>up to 32 bars: A B A B C D …"]
+  A --> P["8 PATTERNS, A – H<br/>one bar each"]
+  P --> R["16 ROWS<br/>one for each sound of the MUSIC kit"]
+  R --> ST["16 STEPS<br/>each: on or off, a note, a velocity, a length, an automation point"]
+```
 
 ### Which pattern plays
 
-- **Pads 1–8** choose pattern A–H. While the song plays, the change waits for the next bar line.
-- **CHAIN** (encoder 2): with a chain of A–D, patterns A, B, C, D play one after another, a bar each, and again.
-- **The arrangement** replaces the chain when you want an order of your own, such as A B A B C D C D. It is up to 32
-  bars, shown as a row of letters under the patterns:
-
-  | To do this | Do this |
-  |---|---|
-  | add a bar | SHIFT + pad 1–8 (that pattern) |
-  | remove the last bar | SHIFT + any of pads 9–15 |
-  | remove all bars (the chain plays again) | SHIFT + pad 16 |
-
-- **Encoder B** sets how many steps a bar has, 1–16, for odd metres.
-
-### Layers: music that follows the game
-
-This is what makes it game music. Every sound has a **LAYER** mark, and the song has one **INTENSITY**.
-
-**A sound plays only while INTENSITY is at or above its mark.**
-
-The lower half of the SONG page shows it: INTENSITY is the orange level that rises from the bottom, and each column
-is a sound with its mark. A sound whose mark is under the level plays.
-
-- **Encoder 3** is INTENSITY. Pads 9–16 set it in eight steps. A game sends it (section 13).
-- **Encoder 4** is the selected sound's LAYER mark.
-
-So one song is many: at 0 % only the sounds with a mark at 0 play (in the demo, the kick). As the game heats up, hat,
-bass, snare, strings, keys, brass and bells join in that order.
-
-### F keys on the SONG page
-
-F1 PLAY · F2 COPY the pattern to the next · F3 CLR PAT empties the pattern · F4 DEMO brings the demo song back ·
-F5 SEND sends the MUSIC kit and the song to the game · F6 SAVE.
-
----
-
-## 10. Automation
-
-Press **K5 a third time** for the AUTO page. Automation moves a knob by itself while the pattern plays.
-
-![The AUTO page](img/auto.png)
-
-**Every sound has one lane in each pattern, and the lane can move any knob:**
-
-- any of the sound's own 25 values (CUTOFF, FM DEPTH, POSITION, a send, …),
-- its fader or its pan in the mixer,
-- the master's DELAY TIME, FEEDBACK, ROOM SIZE, DAMPING or DRIVE.
-
-### Drawing a lane
-
-1. Select the sound (DATA).
-2. Turn **encoder 3 TARGET** to the knob you want to move. One target for each sound, the same in every pattern.
-3. **Hit a pad** to put a point on that step. It starts where the knob stands now. Hit it again to remove it.
-4. Turn **encoder 2 VALUE** to move the point. It is shown in the knob's own unit.
-5. **F3 RAMP** joins the points with straight lines: put a point on step 1 and one on step 16, press RAMP, and you
-   have a sweep. **F4 CLEAR** empties the lane.
-
-### How it behaves
-
-- **A point holds until the next point**, or until the bar ends. The dim bars in the picture are a held value.
-- **At every bar line the knob is back where you set it by hand.** Automation never writes into the sound or the mix.
-- The dots under the lane show where the sound plays, so you can line points up with notes.
-- Values move in steps of a 16th note. A filter sweep with a point on every step sounds smooth enough at most
-  tempos; a slow sweep over two points is audibly stepped – use RAMP.
-
-Master targets can sit on any sound's lane. A sound that is not used in the song is a good place for them.
-
----
-
-## 11. The mixer and the master effects
-
-### MIX (K4, twice)
-
-![The MIX page](img/mix.png)
-
-A fader for each sound of the MUSIC kit, with its pan as a mark above it. The faint line across is 100: the sound as
-it was designed.
-
-| Control | What it does |
+| You want | Do this |
 |---|---|
-| encoder 1 VOLUME | the selected sound's fader, 0–127 |
-| encoder 2 PAN | left … C … right |
-| encoder 3 DRIVE | saturation on the whole mix |
-| encoder 4 OUTPUT | the output volume (the same as A) |
-| a pad | mute that sound (an M appears) |
-| SHIFT + a pad | solo it (an S appears): only soloed sounds play |
-| F1 MUTE · F2 SOLO | the same for the selected sound |
-| F3 RESET | the selected fader back to 100 and the middle |
-| F4 ALL ON | no mutes, no solos |
-
-Sound effects from the SFX kit do not go through the mixer. A muted bass never mutes an explosion.
-
-### MASTER (K4, three times)
-
-![The MASTER page](img/master.png)
-
-Every sound has its own sends on its FX page. This page sets what those sends go into.
-
-| Control | What it does |
-|---|---|
-| encoder 1 DELAY TIME | the echo after a 16th, an 8th, a dotted 8th, a quarter, a dotted quarter or a half note – it follows the tempo |
-| encoder 2 FEEDBACK | how much of each echo comes again |
-| encoder 3 ROOM SIZE | how long the reverb rings |
-| encoder 4 DAMPING | how fast its highs fade: low is a bright hall, high is a dark room |
-
-The left picture is the echoes you will get (left and right in turn); the right picture is the reverb fading.
-
-**The mix belongs to the song.** Faders, pans, mutes and the master effects are saved with it and sent to the game
-with it.
+| one pattern, round and round | CHAIN (encoder 2) at 1 |
+| A, B, C, D in a row, a bar each | CHAIN at A – D |
+| your own order | the arrangement: **SHIFT + pad 1 – 8** adds that pattern as a bar |
+| to take the last bar away | SHIFT + any of pads 9 – 15 |
+| no arrangement (the chain plays again) | SHIFT + pad 16 |
+| to jump to a pattern while it plays | pads 1 – 8: it changes on the next bar line |
+| a bar of fewer than 16 steps | encoder B |
 
 ---
 
-## 12. The stage: all of it with a mouse
+## 11. Layers: music that follows the game
 
-In the Playground and the plugin, **Stage** opens a larger picture of the whole instrument. Everything above can be
-done there without the device's keys.
+This is what makes it game music.
+
+> **Every sound has a LAYER mark. The song has one INTENSITY. A sound plays only while INTENSITY is at or above its mark.**
+
+![How intensity brings the band in](img/layers.png)
+
+So one song is many. At 0 % only the kick plays; as the game heats up, hat, bass, snare, strings, keys, brass and
+bells join in that order.
+
+| | On the SONG page |
+|---|---|
+| set INTENSITY | encoder 3, or pads 9 – 16 (eight steps). A game sends it |
+| set a sound's LAYER mark | select the sound (DATA), turn encoder 4 |
+
+On the page the orange level rises from the bottom; a sound whose mark is under it plays.
+
+---
+
+## 12. Automation
+
+Automation moves a knob by itself while the pattern plays. Press **K5 a third time** for the AUTO page.
+
+![The AUTO page](img/page-auto.png)
+
+| | What it is |
+|---|---|
+| **1** | the pattern, the sound, and the knob its lane moves |
+| **2** | the lane: a bar for each step. Bright: a point. Dim: the value still held from the last point |
+| **3** | dots where the sound plays, to line points up with notes |
+| **4** | STEP and VALUE: the framed step's point, in the knob's own unit |
+| **5** | TARGET: which knob |
+| **6** | RAMP joins the points with straight lines · CLEAR empties the lane |
+
+### A lane can move any knob
+
+| | Targets |
+|---|---|
+| **the sound's own** | any of its 25 values: CUTOFF, FM DEPTH, POSITION, a send … |
+| **its place in the mix** | VOLUME, PAN |
+| **the master** | DELAY TIME, FEEDBACK, ROOM SIZE, DAMPING, DRIVE |
+
+### Drawing a sweep, step by step
+
+| | Do this |
+|---|---|
+| **1** | DATA to the sound |
+| **2** | turn **encoder 3 TARGET** to the knob – say CUTOFF |
+| **3** | hit **pad 1**. A point appears where the knob stands. Turn **encoder 2** down |
+| **4** | hit **pad 16**. Turn encoder 2 up |
+| **5** | press **F3 RAMP** – the picture above |
+
+### Three rules
+
+| | |
+|---|---|
+| **A point holds** | until the next point, or the end of the bar |
+| **Nothing is written** | at every bar line each knob is back where you set it by hand |
+| **It moves in steps** | a 16th note at a time. Use RAMP for a sweep that sounds smooth |
+
+Each sound has one lane and one target. Master targets can sit on any sound's lane – an unused sound is a good place.
+
+---
+
+## 13. The mixer and the master effects
+
+```mermaid
+flowchart LR
+  M["MUSIC kit<br/>16 instruments"] --> F["FADER · PAN · MUTE<br/>MIX page"] --> SUM(("sum"))
+  X["SFX kit<br/>16 sound effects"] --> SUM
+  F --> FX["CHORUS · DELAY · REVERB<br/>MASTER page"]
+  X --> FX
+  FX --> SUM
+  SUM --> D["DRIVE<br/>MIX page"] --> O["OUTPUT"]
+```
+
+Sound effects skip the faders: a muted bass never mutes an explosion.
+
+### MIX – press K4 twice
+
+![The MIX page](img/page-mix.png)
+
+| | What it is |
+|---|---|
+| **1** | each sound's pan: a mark from left to right |
+| **2** | each sound's fader. An **M** is a mute, an **S** a solo |
+| **3** | the line at 100: the sound as it was designed |
+| **4** | VOLUME and PAN of the selected sound |
+| **5** | DRIVE: saturation on the whole mix · OUTPUT volume |
+| **6** | MUTE · SOLO · RESET the fader · ALL ON · PLAY · SAVE |
+
+**The pads mute. SHIFT + a pad solos** – only soloed sounds play.
+
+### MASTER – press K4 a third time
+
+![The MASTER page](img/page-master.png)
+
+| | What it is |
+|---|---|
+| **1** | the delay, drawn as its echoes: left and right in turn |
+| **2** | the reverb, drawn as its fading |
+| **3** | DELAY TIME (a 16th to a half note – it follows the tempo) · FEEDBACK |
+| **4** | ROOM SIZE · DAMPING (low: a bright hall, high: a dark room) |
+
+Each sound's own FX page decides how much of it goes into these.
+
+**The mix belongs to the song.** It is saved with it and it is the mix in the game.
+
+---
+
+## 14. The stage
+
+In the Playground and the plugin, **Stage** opens a bigger picture of the whole instrument, for the mouse.
 
 ![The stage](img/stage.png)
 
-**Left: the sounds**
+| | What it is | With the mouse |
+|---|---|---|
+| **1** | messages appear here | |
+| **2** | PLAY / STOP · REC | click |
+| **3** | the tempo | click its left or right half, or the wheel |
+| **4** | the patterns A – H | click: go there · **right-click: add a bar of it to the arrangement** |
+| **5** | the arrangement | click a bar: its pattern · right-click: end the arrangement before it |
+| **6** | the kit's 16 pads | click to play and select |
+| **7** | SFX / MUSIC | choose the kit |
+| **8** | the selected sound's picture | |
+| **9** | the ten tabs | click |
+| **10** | the tab's four values | **drag**, or the wheel (SHIFT: bigger steps) |
+| **11** | PRESET · MUTATE · UNDO · RANDOM · EXPORT · SAVE | click (right-click PRESET: the one before) |
+| **12** | the rows' names | click: hear and select · right-click: mute |
+| **13** | the pattern | click a step · **wheel: its note** · SHIFT + wheel: velocity · CTRL + wheel: length |
+| **14** | INTENSITY, with each sound's mark above | drag |
+| **15** | the selected sound's LAYER mark | drag |
+| **16** | what plays now | |
+| **17** | FILL · CLEAR · COPY · DEMO | click |
 
-- **The 16 pads** of the kit, with their names. Click to play and select.
-- **SFX / MUSIC** chooses the kit.
-- **Ten tabs:** OSC, TONE, FILTER, WAVE, ENV, LFO, FX, MIX, MAST, AUTO. Each has four values. **Drag a value**, or
-  turn the wheel over it (SHIFT: bigger steps). UNDO takes a drag back.
-- **PRESET** (SHIFT or right-click: the one before), **MUTATE, UNDO, RANDOM, EXPORT, SAVE.**
+SHIFT-click does the same as right-click everywhere.
 
-**Right: the song**
-
-- **The pattern:** a row for each sound of the MUSIC kit, every step with its note.
-
-  | To do this | Do this |
-  |---|---|
-  | switch a step on or off | click it |
-  | give it a note | turn the wheel |
-  | set its velocity | SHIFT + wheel |
-  | set its length | CTRL + wheel |
-  | hear and select a sound | click its name |
-  | mute a sound | SHIFT-click or right-click its name |
-
-- **INTENSITY** and **LAYER** are sliders. The small marks above INTENSITY are where each sound comes in.
-- **FILL, CLEAR, COPY, DEMO** for the pattern.
-
-**Top:** PLAY, REC, the tempo (click its left or right half, or the wheel), the patterns A–H, and under them the
-arrangement.
-
-| To do this | Do this |
-|---|---|
-| go to a pattern | click it |
-| add a bar of a pattern to the arrangement | SHIFT-click or right-click the pattern |
-| end the arrangement before a bar | SHIFT-click or right-click that bar |
-
-**Automation on the stage.** The AUTO tab turns the 16 rows into the sounds' lanes, all at once.
+### Automation on the stage
 
 ![The stage's AUTO tab](img/stage-auto.png)
 
-- Choose the TARGET for the selected sound: drag the cell or turn the wheel over it.
-- **Click or drag in that sound's row to draw points.** The height in the row is the value; dragging across paints a
-  curve in one stroke.
-- SHIFT-click or right-click removes a point. FILL becomes **RAMP**.
-- A row is 20 pixels tall, so drawing gives about 20 levels. For an exact value drag the VALUE cell.
-
----
-
-## 13. Into the game
-
-What you make reaches the game in two ways: as data the game plays itself, or live over MIDI.
-
-### What the game plays
-
-The engine is plain C (`core/`), built as a native library the game loads. It is the same code the device runs.
-
-| You made | Send it with | In Unity it becomes |
-|---|---|---|
-| a sound effect | F5 EXPORT on a sound page | an `SfxPreset` asset |
-| the song, its 16 instruments and its mix | F5 SEND on the SONG page | an `SfxSong` asset |
-
-In Unity (the package is in `unity/com.catsplat.sfxforge`):
-
-- **`SfxPlayer`** plays a preset – live, so its pitch, cutoff, timbre and level can follow the game (an engine hum
-  that rises with speed), or baked to an ordinary WAV if you prefer.
-- **`SfxMusicPlayer`** plays a song:
-
-  | The game does | With |
-  |---|---|
-  | brings the band in and out | `intensity` (0–1) |
-  | changes pattern on the next bar line | `CuePattern(0…7)` |
-  | plays one of the song's sounds by hand | `PlaySound(sound, velocity, note)` |
-  | moves the mix | `SetTrackVolume`, `SetTrackPan`, `SetTrackMute`, `SetMaster` |
-
-**Cues and the arrangement.** Cueing a pattern that is in the arrangement carries on from its bar. Cueing one that is
-*not* in it – keep a pattern aside for the boss or the menu – takes over on the bar line and stays until the next cue.
-
-### Live, over MIDI
-
-Connected to the device (or to the Playground or plugin through a virtual MIDI cable), the game can drive it while
-you listen and tune:
-
-| The game sends | The device does |
+| | Do this |
 |---|---|
-| CC 10–13 on channel 2 | pitch, cutoff, timbre and level of what sounds |
-| CC 14 on channel 2 | INTENSITY |
-| CC 15 on channel 2 | cue a pattern (value ÷ 16) |
-| notes 36–51 | play the pads |
-| a patch as SysEx | load it into a pad of the kit shown |
-
-The **LINK page** (K6) shows what comes in, and its encoders send CC 20–25 to the game, to tune a game value from
-the device. The full protocol, byte by byte, is in the [README](../README.md#the-link-device--game-engine).
+| **1** | click the **AUTO** tab: the 16 rows become the sounds' lanes |
+| **2** | choose the **TARGET** (drag the cell, or the wheel). Drag **VALUE** to set one point exactly |
+| **3** | **click or drag in the sound's row to draw.** The height is the value; drag across to paint a curve. Right-click removes a point |
+| **4** | FILL has become **RAMP** |
 
 ---
 
-## 14. Saving, and older songs
+## 15. Into the game
 
-- **F6 SAVE** keeps both kits and the song (patterns, arrangement, layers, mix, automation) on the device. A DAW
-  project or preset keeps them too.
-- **F4 DEMO** on the SONG page brings the demo song back. It replaces your song, not your sounds.
-- The game and the device take songs from every earlier version of the format. A song or kit *stored on the device*
-  by an earlier version is not read: the demo and the factory kits appear instead.
+```mermaid
+flowchart LR
+  subgraph DEVICE["SFX FORGE"]
+    S1["a sound effect"]
+    S2["the song, its instruments, its mix"]
+  end
+  subgraph UNITY["Unity"]
+    P1["SfxPreset<br/>asset"] --> PL["SfxPlayer"]
+    P2["SfxSong<br/>asset"] --> MP["SfxMusicPlayer"]
+  end
+  S1 -- "F5 EXPORT" --> P1
+  S2 -- "F5 SEND (SONG page)" --> P2
+  G["your game"] -- "pitch, cutoff, level" --> PL
+  G -- "intensity, cues" --> MP
+```
+
+The game runs the same engine as the device (`core/`, plain C, built as a native library), so nothing is converted
+and nothing sounds different.
+
+### What the game controls
+
+| The game wants to … | It uses |
+|---|---|
+| play a sound effect | `SfxPlayer` – live, or baked to an ordinary WAV |
+| bend a sound while it plays (an engine that follows speed) | `SfxPlayer`'s pitch, cutoff, timbre and level |
+| bring the band in and out | `SfxMusicPlayer.intensity`, 0 – 1 |
+| change the music on the next bar | `SfxMusicPlayer.CuePattern(0 … 7)` |
+| play one of the song's instruments by hand | `SfxMusicPlayer.PlaySound(sound, velocity, note)` |
+| move the mix | `SetTrackVolume` · `SetTrackPan` · `SetTrackMute` · `SetMaster` |
+
+### Cues and the arrangement
+
+| The cued pattern is … | What happens |
+|---|---|
+| **in** the arrangement | the song carries on from that bar |
+| **not in** it (keep one aside for the boss, the menu) | it takes over on the bar line and stays until the next cue |
+
+### Tuning live
+
+Linked over MIDI, the game drives the device while you listen and adjust. The **LINK page** (K6) shows it:
+
+![The LINK page](img/page-link.png)
+
+| | What it is |
+|---|---|
+| **1** | what the game sends: pitch, cutoff, timbre, level, intensity, pattern |
+| **2** | what the device sends to the game |
+| **3** | green while a game is linked, with any text it sent |
+| **4** | encoders 1 – 4 send CC 20 – 23 to the game: tune a game value from here |
+
+The protocol, byte by byte, is in the [README](../README.md#the-link-device--game-engine). The Unity package is in
+`unity/com.catsplat.sfxforge`; the demo project in `unity/Demo` shows all of it in one scene.
 
 ---
 
-## 15. Recipes
+## 16. Saving and resetting
 
-**A laser in ten seconds.** SFX kit, any pad, F1 until LASER. F2 MUTATE until you like it.
+| | |
+|---|---|
+| **F6 SAVE** | keeps both kits and the song – patterns, arrangement, layers, mix, automation. A DAW project keeps them too |
+| **F4 DEMO** (SONG page) | the demo song again. It replaces your song, not your sounds |
+| **SHIFT + MENU, twice** | factory reset: both kits and the song as they came, and saved so. Press it once and it asks; twice within three seconds does it |
 
-**A footstep that is never the same twice.** Start from FOOTSTEP. In the game, play it with a slightly different
-pitch each time (`SfxPlayer`'s pitch), or EXPORT four mutations and pick one at random.
-
-**An engine that follows speed.** Start from ENGINE HUM (a held sound). In Unity give it an `SfxPlayer` and an
-`SfxTelemetrySender` that feeds speed to pitch and cutoff.
-
-**A beat in two minutes.** K5. DATA to KICK, F3 FILL once (every 4th step). DATA to SNARE, pads 5 and 13. DATA to
-HI-HAT, F3 FILL twice (every 2nd step). PLAY.
-
-**A bass line.** DATA to FM BASS. Hold pad 1 and play a low key; hold pad 4 and play another. Or switch steps on and
-turn NOTE, which stays in the scale.
-
-**A chord that swells.** DATA to STRINGS. One step with a note, LENGTH 12. K5 twice more for AUTO, TARGET to VOLUME,
-a point on step 1 turned down, a point on step 12 turned up, F3 RAMP.
-
-**A filter sweep into the drop.** AUTO page, select the bass, TARGET to CUTOFF, points on steps 1 and 16, RAMP.
-
-**Music that reacts to danger.** Give the calm instruments low LAYER marks and the tense ones high marks. The game
-sets `intensity` from how close the enemy is.
-
-**A boss theme.** Write it in pattern H and leave H out of the arrangement. The game calls `CuePattern(7)` when the
-boss appears and cues pattern A again when it is over.
-
-**Dub echoes on the snare only.** SNARE's FX page: DELAY up. MASTER page: DELAY TIME 3/16, FEEDBACK to taste.
+The game and the device read songs from every earlier version of the format. A kit or song *stored on the device* by
+an earlier version is not read; the factory kits and the demo appear instead.
 
 ---
 
-## 16. What it does not do
+## 17. Recipes
 
-- **No samples.** It cannot play recorded audio: no voice lines, no recorded foley, no real orchestra.
-- **A bar is 16 steps.** There are no triplets inside a bar and no notes between steps; swing is the only timing
-  change. Eight patterns, 32 bars of arrangement.
-- **16 voices.** With long reverberant sounds and busy patterns the oldest note is cut to make room.
-- **One automation lane for each sound**, and its values move in steps, not glides.
-- **One note per step for each sound.** A chord needs several sounds, or the keys.
-- **Unity on Windows x64 only** so far (the native library and MIDI). Receiving MIDI in Unity has not been tested
-  against a real port.
-- **The swing has no control on the stage**; it is SHIFT + A on the device.
+| I want … | Do this |
+|---|---|
+| **a laser in ten seconds** | SFX kit, F1 until LASER, F2 MUTATE until you like it |
+| **a footstep that is never the same** | in the game, play FOOTSTEP at a slightly different pitch each time – or EXPORT four mutations and pick one at random |
+| **an engine that follows speed** | ENGINE HUM (a held sound) on an `SfxPlayer`, with an `SfxTelemetrySender` feeding speed to pitch and cutoff |
+| **a chord that swells** | STRINGS: one step with a note, LENGTH 12. AUTO page: TARGET VOLUME, a low point on step 1, a high one on step 12, RAMP |
+| **a filter sweep into the drop** | AUTO page, the bass, TARGET CUTOFF, points on steps 1 and 16, RAMP |
+| **echoes on the snare only** | SNARE's FX page: DELAY up. MASTER page: DELAY TIME 3/16, FEEDBACK to taste |
+| **music that reacts to danger** | low LAYER marks for the calm instruments, high for the tense ones. The game sets `intensity` from how close the enemy is |
+| **a boss theme** | write it in pattern H and leave H out of the arrangement. `CuePattern(7)` when the boss appears, `CuePattern(0)` after |
+| **a variation of a pattern** | F5 COPY on the SEQ page: the next pattern is a copy, and you are on it |
+| **to start over** | SHIFT + MENU, twice |
 
 ---
 
-## 17. Every control, page by page
+## 18. What it does not do
 
-**Everywhere:** PADS play · KEYS play the selected sound in tune · DATA selects a sound · SHIFT + K1 the other kit ·
-PLAY STOP REC the song · MENU the tour · HOME this page's controls · A the output volume.
+| | |
+|---|---|
+| **Samples** | it cannot play recorded audio: no voice lines, no recorded foley, no real orchestra |
+| **Timing** | a bar is 16 steps. No triplets inside a bar, no notes between steps; swing is the only timing change |
+| **Size** | 8 patterns, 32 bars of arrangement, 16 voices – with long reverberant sounds the oldest note is cut to make room |
+| **Automation** | one lane for each sound, moving in steps, not glides |
+| **Chords** | one note per step for each sound. A chord needs several sounds, or the keys |
+| **Platforms** | the Unity package runs on Windows x64 so far. Receiving MIDI in Unity has not been tested against a real port |
+| **The stage** | has no control for the swing; it is SHIFT + A on the device |
 
-| Page | Pads | Encoders 1 – 4 | F1 – F6 |
-|---|---|---|---|
-| OSC | play | ENGINE · FREQ · PITCH ENV · ENV TIME | PRESET · MUTATE · UNDO · RANDOM · EXPORT · SAVE |
-| TONE | play | A · B · NOISE · CRUSH | the same |
-| FILTER | play | CUTOFF · RESO · FILTER ENV · F.ENV TIME | the same |
-| WAVE | play | TABLE · SPREAD | the same |
-| ENV | play | ATTACK · DECAY · SUSTAIN · RELEASE | the same |
-| LFO | play | LFO RATE · > PITCH · > FILTER · > TIMBRE | the same |
-| FX | play | CHORUS · DELAY · REVERB · LEVEL | the same |
-| MIX | mute (SHIFT: solo) | VOLUME · PAN · DRIVE · OUTPUT | MUTE · SOLO · RESET · ALL ON · PLAY · SAVE |
-| MASTER | play | DELAY TIME · FEEDBACK · ROOM SIZE · DAMPING | the same as MIX |
-| SEQ | steps (SHIFT: select a sound) | STEP · NOTE · VELOCITY · LENGTH | < PAT · PAT > · FILL · CLEAR · COPY · SAVE |
-| SONG | 1–8 pattern, 9–16 intensity (SHIFT: arrangement) | PATTERN · CHAIN · INTENSITY · LAYER | PLAY · COPY · CLR PAT · DEMO · SEND · SAVE |
-| AUTO | a point on / off (SHIFT: select a sound) | STEP · VALUE · TARGET | < PAT · PAT > · RAMP · CLEAR · COPY · SAVE |
-| LINK | play | send CC 20–23 (A, B: CC 24, 25) | as the sound pages |
+---
 
-Other encoders: on SEQ and AUTO, A is the tempo (SHIFT: swing). On SEQ, B is the scale. On SONG, B is the number of
-steps in a bar.
+## 19. Every control, page by page
+
+**Everywhere:** pads play · keys play the selected sound in tune · DATA selects · SHIFT + K1 the other kit ·
+PLAY STOP REC the song · MENU the tour · HOME this page's controls · A the output volume · SHIFT + MENU twice: reset.
+
+| Page | Key | Pads | Encoders 1 – 4 | F1 – F6 |
+|---|---|---|---|---|
+| **OSC** | K1 | play | ENGINE · FREQ · PITCH ENV · ENV TIME | PRESET · MUTATE · UNDO · RANDOM · EXPORT · SAVE |
+| **TONE** | K1 ×2 | play | A · B · NOISE · CRUSH | the same |
+| **FILTER** | K1 ×3 | play | CUTOFF · RESO · FILTER ENV · F.ENV TIME | the same |
+| **WAVE** | K1 ×4 | play | TABLE · SPREAD | the same |
+| **ENV** | K2 | play | ATTACK · DECAY · SUSTAIN · RELEASE | the same |
+| **LFO** | K3 | play | LFO RATE · > PITCH · > FILTER · > TIMBRE | the same |
+| **FX** | K4 | play | CHORUS · DELAY · REVERB · LEVEL | the same |
+| **MIX** | K4 ×2 | mute · SHIFT: solo | VOLUME · PAN · DRIVE · OUTPUT | MUTE · SOLO · RESET · ALL ON · PLAY · SAVE |
+| **MASTER** | K4 ×3 | play | DELAY TIME · FEEDBACK · ROOM SIZE · DAMPING | as MIX |
+| **SEQ** | K5 | steps · SHIFT: select a sound | STEP · NOTE · VELOCITY · LENGTH | < PAT · PAT > · FILL · CLEAR · COPY · SAVE |
+| **SONG** | K5 ×2 | 1 – 8 pattern · 9 – 16 intensity · SHIFT: arrangement | PATTERN · CHAIN · INTENSITY · LAYER | PLAY · COPY · CLR PAT · DEMO · SEND · SAVE |
+| **AUTO** | K5 ×3 | a point on / off · SHIFT: select a sound | STEP · VALUE · TARGET | < PAT · PAT > · RAMP · CLEAR · COPY · SAVE |
+| **LINK** | K6 | play | send CC 20 – 23 | as the sound pages |
+
+| Other encoder | Where | What it does |
+|---|---|---|
+| **A** | SEQ, AUTO | the tempo. SHIFT + A: the swing |
+| **A · B** | LINK | send CC 24 and 25 |
+| **B** | SEQ | the scale NOTE moves in |
+| **B** | SONG | the number of steps in a bar |

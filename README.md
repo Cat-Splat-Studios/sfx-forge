@@ -33,6 +33,7 @@ Not tried yet: receiving MIDI against a real port (it needs a loopback port or a
 | `unity/Demo/` | a Unity 6.3 project using the package: a hovercraft whose every sound is synthesized live |
 | `tests/` | a scripted performance (`tour.json`) and its checks (`check.mjs`); `dotnet/` tests the Unity package's core without Unity |
 | `tests/mix-report.mjs` | measures the demo song's mix: every instrument soloed in turn – its level, its peak, how much of it is high |
+| `docs/` | the manual, and `figures.py`, which builds its pictures from the firmware's own screenshots |
 | `build.sh` | build, `vibe-check`, render the performance to `out/` |
 
 ## Build
@@ -125,6 +126,7 @@ The short version; [the manual](docs/MANUAL.md) is the long one.
     arrangement under them (click a bar: its pattern; SHIFT or right-click: the arrangement ends before it),
     TOUR.
 - **HOME** – what every control does on the page open now.
+- **SHIFT + MENU, twice** – factory reset: both kits and the song as they came, and saved so.
 
 ## The link (device ⇄ game engine)
 

@@ -21,7 +21,7 @@
  *                pattern), encoders out as CC 20-25, patches and the song as SysEx (README.md)
  *   the stage    the whole instrument for the mouse (plugin and browser): pads, the sound's pages with values to
  *                drag, the song as 16 rows of steps with their notes, intensity and layer as sliders
- *   MENU         the tour: it plays and names what SFX FORGE can do, a caption at a time
+ *   MENU         the tour: it plays and names what SFX FORGE can do, a caption at a time. SHIFT + MENU twice: factory reset
  * On the sound pages the display shows the selected sound itself – its whole shape and its wave – as the knobs change it.
  *
  * Two flows: the player (core/sfx_song.h: voices, effects and sequencer) belongs to the audio. The controls reach it
@@ -1023,7 +1023,7 @@ static const char *const HELP_SOUND[] = {
   "F1 PRESET", "next named sound (SHIFT: the one before)",
   "F2 F3 F4", "MUTATE · UNDO · RANDOM",
   "F5 F6", "EXPORT to a game (SysEx) · SAVE",
-  "MENU", "the tour.  PLAY STOP: the song",
+  "MENU", "the tour (SHIFT + MENU twice: factory reset)",
 };
 static const char *const HELP_SEQ[] = {
   "PADS", "the 16 steps of the selected sound",
@@ -1074,6 +1074,26 @@ static const char *const HELP_LINK[] = {
   "SONG: F5", "SEND: all sounds and the song",
   "MENU", "the tour",
 };
+
+/* SHIFT + MENU, twice within three seconds: both kits and the song as they came, and kept so (what was saved is gone) */
+static void factory_reset(void)
+{
+  static uint64_t asked;
+  static int armed;
+  int was = kit;
+  if (!armed || vibe_frames() - asked > (uint64_t)(3.0f * SR)) { armed = 1; asked = vibe_frames(); say("AGAIN: FACTORY RESET"); return; }
+  armed = 0;
+  if (tour_on) tour_end();
+  if (running) seq_play(0);
+  factory();
+  for (int k = 0; k < 2; k++) for (int i = 0; i < SLOTS; i++) has_undo_k[k][i] = 0;
+  kit = KIT_MUSIC;
+  for (int i = 0; i < SLOTS; i++) changed(i);          /* the song's sounds, to the player */
+  kit = was;
+  edit_pat = 0; cur_step = 0; send(M_CUE, 0, 0, 0, 0);
+  bank_save();
+  say("FACTORY RESET");
+}
 
 static const char *const HELP_MIX[] = {
   "K4 MIX", "FX again: every sound a fader",
@@ -1142,7 +1162,7 @@ void vibe_on_event(const vibe_event *e)
     else if (e->id == VB_PLAY) seq_play(!running);
     else if (e->id == VB_STOP) seq_play(0);
     else if (e->id == VB_REC) seq_rec(!rec);
-    else if (e->id == VB_MENU) tour_start();
+    else if (e->id == VB_MENU) { if (shift) factory_reset(); else tour_start(); }
     else if (e->id == VB_LEFT || e->id == VB_RIGHT) arrow(e->id == VB_LEFT ? -1 : 1);
     else if (e->id >= VB_F1 && e->id <= VB_F6) { int f = e->id - VB_F1; if (page == PG_SEQ) soft_seq(f); else if (page == PG_SONG) soft_song(f); else if (page == PG_AUTO) soft_auto(f); else if (mix_page()) soft_mix(f); else soft_sound(f); }
     else if (e->id == VB_K1 && shift) { kit_set(!kit); if (!sound_page()) set_page(PG_OSC); say(kit == KIT_SFX ? "SFX KIT" : "MUSIC KIT"); }   /* SHIFT + SOUND: the other kit */
