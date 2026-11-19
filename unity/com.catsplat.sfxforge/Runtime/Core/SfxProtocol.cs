@@ -3,6 +3,9 @@ using System;
 
 namespace CatSplat.SfxForge
 {
+    /// <summary>The song's master effects (core/sfx_song.h, SFX_M_*).</summary>
+    public enum SfxMaster { DelayTime, DelayFeedback, ReverbSize, ReverbDamping, Drive }
+
     /// <summary>What a game sends the device while it plays (CC 10..17 on channel 2).</summary>
     public enum SfxTelemetry { Pitch, Cutoff, FmDepth, Level, Intensity, Pattern, Aux3, Aux4 }
 
@@ -25,7 +28,8 @@ namespace CatSplat.SfxForge
         public const int MaxText = 24;
 
         public const byte Dump = 0x01, Load = 0x02, Text = 0x03, Request = 0x04, SongChunk = 0x05, RequestSong = 0x06;
-        public const int SongBytes = 2455;          // a packed song (core/sfx_song.h)
+        public const int SongBytesV1 = 2455;        // a song from before the mixer: still played
+        public const int SongBytes = 2498;          // a packed song (core/sfx_song.h)
         public const int SongChunkBytes = 200;
         public const int SongChunks = (SongBytes + SongChunkBytes - 1) / SongChunkBytes;
         public const int Patterns = 8;

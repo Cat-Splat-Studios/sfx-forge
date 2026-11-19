@@ -41,11 +41,11 @@ ok(after > before * 1.5 && after > 0.03, `a pad on the SEQ page sets a step of t
 // full intensity brings the other layers in (bass, hat, snare, lead): much more between the kicks
 const sparse = rms(16.26, 16.49), full = rms(23.76, 23.99);
 ok(full > sparse * 3 && full > 0.05, `INTENSITY (CC 14) brings the layers in (${sparse.toFixed(3)} -> ${full.toFixed(3)} between two kicks)`);
-// pattern C (empty) was cued by CC 15 at 24.0 s: it takes over on the bar line at 25.5 s, not before
+// pattern H (empty) was cued by CC 15 at 24.0 s: it takes over on the bar line at 25.5 s, not before
 ok(rms(24.6, 25.4) > 0.05 && rms(27.0, 27.4) < 0.01, `a cued pattern takes over on the next bar line (${rms(24.6, 25.4).toFixed(3)}, then ${rms(27.0, 27.4).toFixed(3)} once the echoes have faded)`);
 const chunks = midi.filter((m) => m[0] === 0xF0 && m[4] === 0x05), dumps = midi.filter((m) => m[0] === 0xF0 && m[4] === 0x01);
 const bytes = chunks.reduce((a, m) => a + m.length - 8, 0);
-ok(chunks.length === 13 && chunks.every((m, i) => m[5] === i && m[6] === 13) && bytes === 2455 && dumps.length === 17, `SEND gives the 16 sounds and the song in 13 pieces (${dumps.length - 1} dumps, ${chunks.length} pieces, ${bytes} bytes)`);
+ok(chunks.length === 13 && chunks.every((m, i) => m[5] === i && m[6] === 13) && bytes === 2498 && dumps.length === 17, `SEND gives the 16 sounds and the song in 13 pieces (${dumps.length - 1} dumps, ${chunks.length} pieces, ${bytes} bytes)`);
 ok(rms(33.5, 34.0) < 0.01, 'silence at the end');
 console.log(failed ? `FAILED (${failed})` : 'tour PASSED');
 process.exit(failed ? 1 : 0);

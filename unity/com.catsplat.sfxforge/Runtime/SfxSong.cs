@@ -16,7 +16,14 @@ namespace CatSplat.SfxForge
         [Tooltip("The song as the device packs it (core/sfx_song.h).")]
         [HideInInspector] public byte[] data = new byte[0];
 
-        public bool IsValid => data != null && data.Length == SfxProtocol.SongBytes && data[0] == 1 && sounds != null && sounds.Length == SfxProtocol.Slots;
+        public bool IsValid => data != null && sounds != null && sounds.Length == SfxProtocol.Slots
+            && ((data.Length == SfxProtocol.SongBytes && data[0] == 2) || (data.Length == SfxProtocol.SongBytesV1 && data[0] == 1));
+        /// <summary>It carries a mix (faders, pans, mutes, master effects): a song from firmware 0.6 on.</summary>
+        public bool HasMix => IsValid && data[0] == 2;
+        /// <summary>A sound's fader: 1 = as designed, up to 1.27.</summary>
+        public float Volume(int sound) => HasMix && sound >= 0 && sound < SfxProtocol.Slots ? data[7 + SfxProtocol.Slots + sound] / 100f : 1f;
+        /// <summary>A sound's pan: -1 left .. 0 the middle .. 1 right.</summary>
+        public float Pan(int sound) => HasMix && sound >= 0 && sound < SfxProtocol.Slots ? Mathf.Clamp((data[7 + 2 * SfxProtocol.Slots + sound] - 64) / 63f, -1f, 1f) : 0f;
         public int StepsPerPattern => IsValid ? data[1] : 0;
         public int Bpm => IsValid ? data[2] << 7 | data[3] : 0;
         /// <summary>How many patterns it walks through by itself (1 = it stays on one).</summary>

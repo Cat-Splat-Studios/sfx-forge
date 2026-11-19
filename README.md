@@ -78,13 +78,20 @@ the VIBE FM VST window), then runs `vibe-check` and two test performances: `out/
   - **PATTERN** A–H (also pads 1–8): a cued pattern takes over on the next bar line. **CHAIN**: walk patterns A…n by
     itself. Pads 9–16 set the intensity. Encoder B: steps in a pattern. F2 COPY makes the next pattern a variation.
   - **SEND** (F5): the 16 sounds and the song to the game.
+- **K5 a third time: MIX** – the mixer: a fader and a pan for every sound (encoders 1 and 2, for the selected one), DRIVE
+  on the sum, the OUTPUT volume. The pads mute a sound, SHIFT + pad solos it; F1 MUTE, F2 SOLO, F3 RESET, F4 ALL ON.
+- **K4 again: MASTER** – the effects every sound sends to: the delay's TIME (1/16 to 1/2) and FEEDBACK, the reverb's ROOM
+  SIZE and DAMPING, drawn as the echoes and the fading they give.
+  The mix belongs to the song: it is saved with it, sent with it, and is the mix in the game.
+- **The demo song** – our own: funk in E minor the way a 16-bit console's FM chip played it, four patterns in a chain
+  (the groove, its answer, a breakdown, a turnaround). Only the kick plays at intensity 0.
 - **K6 LINK** – the game engine's side (below).
 - **The stage** (browser and plugin) – the whole instrument for the mouse, on one picture:
-  - left: the 16 pads with their names; the selected sound's picture, its seven pages (OSC TONE FILTER WAVE ENV LFO FX)
+  - left: the 16 pads with their names; the selected sound's picture, its pages (OSC TONE FILTER WAVE ENV LFO FX, and MIX and MASTER)
     and their four values – drag one, or turn the wheel over it (SHIFT: fast; UNDO takes a drag back); PRESET (SHIFT or
     the right button: the one before), MUTATE, UNDO, RANDOM, EXPORT, SAVE.
   - right: the pattern, a row a sound, every step with its note; rows are dim while their layer is silent. Click a step
-    to set it, the wheel gives it a note, click a row's name to hear and select the sound. INTENSITY and the selected
+    to set it, the wheel gives it a note, click a row's name to hear and select the sound (SHIFT or the right button: mute it). INTENSITY and the selected
     sound's LAYER are sliders; the marks over INTENSITY are where each sound comes in. FILL, CLEAR, COPY, DEMO.
   - top: PLAY, REC, the tempo (click its halves, or the wheel), the patterns A–H (SHIFT + click: the chain ends there),
     TOUR.
@@ -107,7 +114,7 @@ Plain MIDI, so it works over USB, the plugin's MIDI ports and Web MIDI. SysEx us
 | game → device | `F0 7D 56 42 02 <slot> <28 patch bytes> F7` | load a patch into a pad |
 | game → device | `F0 7D 56 42 03 <ASCII, ≤ 24> F7` | text for the top line |
 | game → device | `F0 7D 56 42 04 <slot> F7` | request a dump of a pad |
-| both ways | `F0 7D 56 42 05 <piece> <pieces> <≤ 200 bytes> F7` | the song, in 13 pieces (2455 bytes, `sfx_song_pack`) |
+| both ways | `F0 7D 56 42 05 <piece> <pieces> <≤ 200 bytes> F7` | the song with its mix, in 13 pieces (2498 bytes, `sfx_song_pack`; a 2455-byte song from before the mixer is still taken) |
 | game → device | `F0 7D 56 42 06 F7` | request the 16 sounds and the song (as SEND does) |
 
 `<slot>` is 0–15. Telemetry also arrives as the DAW parameters Mod Pitch / Cutoff / FM / Level and Intensity.
@@ -130,7 +137,7 @@ Add the package from disk: **Window > Package Manager > + > Add package from dis
 | `SfxPreset` | a patch as an asset (Create > SFX Forge > Preset): sliders, Play, Mutate, Bake WAV (stereo, with its effects), send to a pad |
 | `SfxPlayer` | plays a preset in the game with the device's own engine and effects, live – its Pitch / Cutoff / Timbre / Level move the sound as telemetry does on the device. No device needed |
 | `SfxSong` | a song and its 16 sounds as an asset: SEND on the device's SONG page (or "Fetch the song" in the window) creates one |
-| `SfxMusicPlayer` | plays a song in the game with the device's own player: `intensity` brings its layers in and out, `CuePattern` changes pattern on the next bar line. No device needed |
+| `SfxMusicPlayer` | plays a song in the game with the device's own player: `intensity` brings its layers in and out, `CuePattern` changes pattern on the next bar line, `SetTrackVolume` / `SetTrackPan` / `SetTrackMute` and `SetMaster` move the mix. No device needed |
 | `SfxTelemetrySender` | a Rigidbody's speed, an Animator float or your own value → CC 10–17 to the device, and to local `SfxPlayer`s and `SfxMusicPlayer`s |
 | `SfxForgeLink` | the link in Play mode: pad and encoder events from the device |
 | `SfxEncoderBinding` | a device encoder (LINK page) → an exposed AudioMixer parameter or an event |

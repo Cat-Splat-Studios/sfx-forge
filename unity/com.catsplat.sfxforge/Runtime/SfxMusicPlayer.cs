@@ -25,7 +25,7 @@ namespace CatSplat.SfxForge
         [Tooltip("How hot the game is. Every sound of the song has a threshold (LAYER on the device) and only plays at or above it.")]
         [Range(0f, 1f)] public float intensity = 1f;
 
-        struct Command { public int kind, a, b; public float v; }   // 0 start, 1 stop, 2 cue, 3 note on, 4 note off
+        struct Command { public int kind, a, b, c, d; public float v; }   // 0 start, 1 stop, 2 cue, 3 note on, 4 note off, 5 track, 6 master
         readonly ConcurrentQueue<Command> commands = new ConcurrentQueue<Command>();
         readonly object gate = new object();
         readonly int[] state = new int[4];
@@ -105,6 +105,18 @@ namespace CatSplat.SfxForge
 
         public void ReleaseSound(int sound, int midiNote = 0) { if (memory != IntPtr.Zero) commands.Enqueue(new Command { kind = 4, a = sound, b = midiNote }); }
 
+        /// <summary>A sound's fader while the music plays: 1 = as designed, 0 = silent, up to 1.27. (Reload puts the song's own mix back.)</summary>
+        public void SetTrackVolume(int sound, float volume) => Track(sound, Mathf.Clamp(Mathf.RoundToInt(volume * 100f), 0, 127), -1, -1);
+        /// <summary>A sound's pan: -1 left .. 1 right.</summary>
+        public void SetTrackPan(int sound, float pan) => Track(sound, -1, Mathf.Clamp(64 + Mathf.RoundToInt(pan * 63f), 0, 127), -1);
+        public void SetTrackMute(int sound, bool mute) => Track(sound, -1, -1, mute ? 1 : 0);
+        /// <summary>A master effect: delay time 0..5 (1, 2, 3, 4, 6, 8 sixteenths), the others 0..127.</summary>
+        public void SetMaster(SfxMaster what, int value) { if (memory != IntPtr.Zero) commands.Enqueue(new Command { kind = 6, a = (int)what, b = value }); }
+        void Track(int sound, int vol, int pan, int mute)
+        {
+            if (memory != IntPtr.Zero && sound >= 0 && sound < SfxProtocol.Slots) commands.Enqueue(new Command { kind = 5, a = sound, b = vol, c = pan, d = mute });
+        }
+
         /// <summary>The same as the device does with a telemetry value 0..1 (Intensity, Pattern).</summary>
         public void ApplyTelemetry(SfxTelemetry channel, float value01)
         {
@@ -132,6 +144,8 @@ namespace CatSplat.SfxForge
                         case 2: SfxNative.PlayerCue(memory, c.a); break;
                         case 3: SfxNative.PlayerNoteOn(memory, c.a, Key(c.a, c.b), c.v, c.b); break;
                         case 4: SfxNative.PlayerNoteOff(memory, Key(c.a, c.b)); break;
+                        case 5: SfxNative.PlayerSetTrack(memory, c.a, c.b, c.c, c.d); break;
+                        case 6: SfxNative.PlayerSetMaster(memory, (SfxMaster)c.a, c.b); break;
                     }
                 }
                 int frames = data.Length / channels;

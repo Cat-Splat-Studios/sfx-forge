@@ -224,6 +224,45 @@ static class Tests
             var after = Play(1f, 900);
             Ok(sounds[15].engine == SfxEngine.Wavetable && Rms(held, 1.2, 1.6) > 0.05 && held.All(x => !float.IsNaN(x)) && Rms(after, 4.0, 4.8) < 0.002,
                $"an 8-note chord on the strings holds ({Rms(held, 1.2, 1.6):0.000}) and dies away after the keys are let go ({Rms(after, 4.0, 4.8):0.0000})");
+            // ---- the mixer: it is part of the song, and a game may move it
+            for (int i = 0; i < 60; i++) Play(1f, 10);
+            (double l, double r) Hit(int slot)
+            {
+                var bl = new float[256]; var br = new float[256]; double sl = 0, sr = 0;
+                SfxNative.PlayerNoteOn(pl, slot, 1, 1f);
+                for (int b = 0; b < 60; b++) { Array.Clear(bl, 0, 256); Array.Clear(br, 0, 256); SfxNative.PlayerRender(pl, bl, br, 256); for (int i = 0; i < 256; i++) { sl += bl[i] * bl[i]; sr += br[i] * br[i]; } }
+                SfxNative.PlayerNoteOff(pl, 1);
+                for (int b = 0; b < 400; b++) SfxNative.PlayerRender(pl, bl, br, 256);
+                return (Math.Sqrt(sl / 15360), Math.Sqrt(sr / 15360));
+            }
+            SfxNative.PlayerSetTrack(pl, 2, 100, 64, 0);
+            var full = Hit(2);
+            SfxNative.PlayerSetTrack(pl, 2, 50, -1, -1);
+            var half = Hit(2);
+            Ok(Math.Abs(half.l / full.l - 0.5) < 0.02 && Math.Abs(full.l - full.r) < full.l * 0.001, $"MIX: a fader at 50 halves a sound ({full.l:0.000} -> {half.l:0.000}), the middle is the same on both sides");
+            SfxNative.PlayerSetTrack(pl, 2, 100, 0, -1);
+            var leftOnly = Hit(2);
+            SfxNative.PlayerSetTrack(pl, 2, -1, 127, -1);
+            var rightOnly = Hit(2);
+            Ok(leftOnly.r < full.l * 0.001 && Math.Abs(leftOnly.l - full.l) < full.l * 0.01 && rightOnly.l < full.l * 0.001 && Math.Abs(rightOnly.r - full.l) < full.l * 0.01, $"MIX: pan puts a sound left ({leftOnly.l:0.000} / {leftOnly.r:0.000}) or right ({rightOnly.l:0.000} / {rightOnly.r:0.000})");
+            SfxNative.PlayerSetTrack(pl, 2, -1, 64, 1);
+            var muted = Hit(2);
+            SfxNative.PlayerSetTrack(pl, 2, -1, -1, 0);
+            var back = Hit(2);
+            Ok(muted.l < 1e-6 && muted.r < 1e-6 && back.l > full.l * 0.99, $"MIX: a muted sound is silent ({muted.l:0.0000}), and back when the mute goes ({back.l:0.000})");
+            SfxNative.PlayerSetMaster(pl, SfxMaster.Drive, 127);
+            var driven = Hit(2);
+            SfxNative.PlayerSetMaster(pl, SfxMaster.Drive, 0);
+            Ok(Math.Abs(driven.l - full.l) > full.l * 0.05, $"MASTER: DRIVE changes the sum ({full.l:0.000} -> {driven.l:0.000})");
+            var mixed = (byte[])song.Clone();
+            mixed[7 + 16 + 2] = 50; mixed[7 + 32 + 2] = 127;                           // sound 3: fader 50, hard right
+            Ok(SfxNative.PlayerSetSong(pl, mixed), "a song with another mix is taken");
+            var fromSong = Hit(2);
+            Ok(fromSong.l < full.l * 0.001 && Math.Abs(fromSong.r / full.l - 0.5) < 0.02, $"the mix is part of the song: fader and pan come with it ({fromSong.l:0.000} / {fromSong.r:0.000})");
+            var old = new byte[SfxProtocol.SongBytesV1];                               // a song from before the mixer: its head, then the patterns
+            Array.Copy(song, 0, old, 0, 23); Array.Copy(song, SfxProtocol.SongBytes - 2432, old, 23, 2432); old[0] = 1;
+            Ok(SfxNative.PlayerSetSong(pl, old) && Math.Abs(Hit(2).l - full.l) < full.l * 0.01, "a song from before the mixer still loads, with every fader as designed");
+            SfxNative.PlayerSetSong(pl, song);
             Marshal.FreeHGlobal(pl);
 
             // the demo project's song: exactly what the firmware sent

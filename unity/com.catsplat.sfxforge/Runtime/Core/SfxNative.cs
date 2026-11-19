@@ -11,7 +11,7 @@ namespace CatSplat.SfxForge
     public static class SfxNative
     {
         const string Lib = "sfxforge";
-        const int Abi = 3;
+        const int Abi = 4;
 
         [DllImport(Lib)] static extern int sfxn_abi();
         [DllImport(Lib)] static extern int sfxn_voice_size();
@@ -29,6 +29,8 @@ namespace CatSplat.SfxForge
         [DllImport(Lib)] static extern void sfxn_player_stop(IntPtr player);
         [DllImport(Lib)] static extern void sfxn_player_cue(IntPtr player, int pattern);
         [DllImport(Lib)] static extern void sfxn_player_set_live(IntPtr player, ref SfxMods mods, float intensity);
+        [DllImport(Lib)] static extern void sfxn_player_set_track(IntPtr player, int slot, int vol, int pan, int mute);
+        [DllImport(Lib)] static extern void sfxn_player_set_master(IntPtr player, int index, int value);
         [DllImport(Lib)] static extern void sfxn_player_note_on(IntPtr player, int slot, int key, float vel, int midiNote, float noteSt);
         [DllImport(Lib)] static extern void sfxn_player_note_off(IntPtr player, int key);
         [DllImport(Lib)] static extern uint sfxn_player_render(IntPtr player, [In, Out] float[] left, [In, Out] float[] right, int n);
@@ -77,6 +79,10 @@ namespace CatSplat.SfxForge
         /// <summary>Change to this pattern on the next bar line (at once while stopped).</summary>
         public static void PlayerCue(IntPtr player, int pattern) => sfxn_player_cue(player, pattern);
         public static void PlayerSetLive(IntPtr player, ref SfxMods mods, float intensity) => sfxn_player_set_live(player, ref mods, intensity);
+        /// <summary>A sound's place in the mix: volume 0..127 (100 = as designed), pan 0..127 (64 = the middle), mute 0 / 1. -1 leaves a value.</summary>
+        public static void PlayerSetTrack(IntPtr player, int slot, int volume, int pan, int mute) => sfxn_player_set_track(player, slot, volume, pan, mute);
+        /// <summary>The master effects: see SfxMaster. Delay time 0..5 (1, 2, 3, 4, 6, 8 sixteenths), the others 0..127.</summary>
+        public static void PlayerSetMaster(IntPtr player, SfxMaster what, int value) => sfxn_player_set_master(player, (int)what, value);
         /// <summary>
         /// A sound by hand, beside the song. key (0..199) names this note for PlayerNoteOff. midiNote 0: as designed
         /// (a sound effect), else at that pitch; semitones transposes either.
