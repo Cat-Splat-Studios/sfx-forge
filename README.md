@@ -1,9 +1,14 @@
 # SFX FORGE
 
-Sound effects, instruments and adaptive music for games, on **VIBE FM** (and, later, the M-VAVE FM-1): 16 synthesized
-sounds on 16 pads from five engines (one of them a wavetable synth), with envelopes, an LFO, chorus, delay and reverb;
-a MUTATE button for instant variations; a pattern sequencer whose layers follow the game's intensity; and a live
-MIDI/SysEx link to a game engine. What you make on the device plays in the game with the same engine.
+Sound effects, instruments and adaptive music for games, on **VIBE FM** (and, later, the M-VAVE FM-1). Two kits of 16
+synthesized sounds – SFX for the game's sound effects, MUSIC for the band its song plays – from five engines (one of
+them a wavetable synth), with envelopes, an LFO, chorus, delay and reverb; a MUTATE button for instant variations; a
+step sequencer with notes, velocity and length, an arrangement, automation for every knob, a mixer, and layers that
+follow the game's intensity; and a live MIDI/SysEx link to a game engine. What you make on the device plays in the
+game with the same engine.
+
+**[The manual](docs/MANUAL.md)** explains all of it: making sound effects, writing and mixing music, and getting both
+into a game.
 
 Everything is synthesized: there are no samples in it. Its strings, brass, choir and bells are synthesizer
 instruments in that style, not recordings of an orchestra. The wavetables are computed from sums of harmonics in
@@ -11,7 +16,7 @@ instruments in that style, not recordings of an orchestra. The wavetables are co
 
 ![SFX FORGE](sfx-forge/icon.png)
 
-Built with the VIBE FM SDK. Status: foundation (v0.1). The synth, the device UI and the device side of the link are
+Built with the VIBE FM SDK. Status: v1.0. The synth, the device UI and the device side of the link are
 tested in the SDK's tools; the Unity package is tested in Unity 6.3 with the demo project's editor and Play mode tests.
 Not tried yet: receiving MIDI against a real port (it needs a loopback port or a device).
 
@@ -44,6 +49,11 @@ the VIBE FM VST window), then runs `vibe-check` and two test performances: `out/
 
 ## Playing it
 
+The short version; [the manual](docs/MANUAL.md) is the long one.
+
+- **Two kits** – SFX (the game's sound effects, beside the song) and MUSIC (the instruments the song plays, through the
+  mixer), 16 sounds each. SHIFT + K1 changes kit; the song pages choose MUSIC by themselves. The top line says which.
+
 - **MENU** – the tour: SFX FORGE plays and names what it can do, a caption at a time (about 40 s: the sounds, shaping
   one, MUTATE, notes, instruments, wavetables, the song, its layers, cued patterns, the link). Any touch ends it;
   everything it changed is put back. On the stage: the TOUR button.
@@ -51,9 +61,9 @@ the VIBE FM VST window), then runs `vibe-check` and two test performances: `out/
   wave (10 ms of it) – or, on ENV, FILTER and LFO, the envelope, the filter and the LFO as their knobs set them. It
   redraws as the knobs turn. Values read in their units (Hz, ms, %). The top line always shows the selected sound and
   the song: playing or not, its pattern and tempo. **LEFT / RIGHT**: the sound page before / after.
-- **Pads** – 16 sounds. **Keys** – the selected sound as an instrument, in tune, up to 16 notes. **DATA** selects a sound.
-- **F1 PRESET** – the next of 32 named sounds onto the selected pad (SHIFT: the one before): the sound effects, and
-  STRINGS, BRASS, CHOIR, PIZZICATO, HARP, TIMPANI, BELLS, CELESTA, FLUTE, ORGAN, PAD, wavetable sweeps and basses.
+- **Pads** – the kit's 16 sounds. **Keys** – the selected sound as an instrument, in tune, up to 16 notes. **DATA** selects a sound.
+- **F1 PRESET** – the next named sound onto the selected pad (SHIFT: the one before): 16 sound effects in the SFX
+  kit; in the MUSIC kit 23 instruments – KICK, SNARE, HI-HAT, FM BASS, FM KEYS, BRASS, STRINGS, CHOIR, BELLS, ORGAN, …
   **F2–F6** – MUTATE (±15 %) · UNDO · RANDOM · EXPORT (SysEx) · SAVE.
 - **K1 SOUND** – press again for its next page; **encoders 1–4** are the four values shown (SHIFT: fast):
   1. ENGINE · FREQ · PITCH ENV · ENV TIME
@@ -95,8 +105,10 @@ the VIBE FM VST window), then runs `vibe-check` and two test performances: `out/
 - **K4 a third time: MASTER** – the effects every sound sends to: the delay's TIME (1/16 to 1/2) and FEEDBACK, the reverb's ROOM
   SIZE and DAMPING, drawn as the echoes and the fading they give.
   The mix belongs to the song: it is saved with it, sent with it, and is the mix in the game.
-- **The demo song** – our own: funk in E minor the way a 16-bit console's FM chip played it, four patterns (the groove, its answer, a breakdown, a turnaround)
-  arranged over eight bars, the bass opening its filter through the last two. Only the kick plays at intensity 0.
+- **The demo song** – our own, played by the MUSIC kit: funk in E minor the way a 16-bit console's FM chip played it.
+  Drums, an FM bass, FM keys, brass stabs, bells, strings and a choir; six patterns (two of the verse, two of the
+  chorus, a breakdown, a turnaround) arranged over 16 bars, with the strings swelling and the bass opening its filter
+  by automation. Only the kick plays at intensity 0.
 - **K6 LINK** – the game engine's side (below).
 - **The stage** (browser and plugin) – the whole instrument for the mouse, on one picture:
   - left: the 16 pads with their names; the selected sound's picture, its pages (OSC TONE FILTER WAVE ENV LFO FX, and MIX, MASTER and AUTO)
@@ -133,7 +145,8 @@ Plain MIDI, so it works over USB, the plugin's MIDI ports and Web MIDI. SysEx us
 | both ways | `F0 7D 56 42 05 <piece> <pieces> <≤ 200 bytes> F7` | the song with its mix, in 34 pieces (6643 bytes, `sfx_song_pack`; the older 4546-, 2498- and 2455-byte songs are still taken) |
 | game → device | `F0 7D 56 42 06 F7` | request the 16 sounds and the song (as SEND does) |
 
-`<slot>` is 0–15. Telemetry also arrives as the DAW parameters Mod Pitch / Cutoff / FM / Level and Intensity.
+`<slot>` is 0–15, a pad of the kit the device shows. SEND and the request `06` always give the MUSIC kit: the song's
+sounds. A game plays sound effects beside the song with slots 16–31 of the player (`sfx_player_note_on`). Telemetry also arrives as the DAW parameters Mod Pitch / Cutoff / FM / Level and Intensity.
 
 **Patch bytes** (28, each 0–127): `version(2) engine(0–4)`, then 25 parameters, then `checksum` = the sum of the
 first 27 bytes `& 0x7F`. The parameters, in order: `base_freq pitch_env_amt pitch_env_time a b noise_mix filter_cutoff

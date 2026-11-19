@@ -196,8 +196,8 @@ namespace SfxDemo.Editor
                     ok(sent, "MIDI out from inside Unity: a patch as SysEx and a telemetry CC");
                 }
                 var demoSong = AssetDatabase.LoadAssetAtPath<SfxSong>(Root + "/DemoSong.asset");
-                ok(demoSong != null && demoSong.IsValid && demoSong.Bpm == 120 && demoSong.Chain == 4 && demoSong.HasMix && demoSong.Pan(12) > 0.2f && demoSong.Layer(7) > 0.5f && demoSong.Layer(2) == 0f && demoSong.sounds[15].engine == SfxEngine.Wavetable,
-                   "the song asset holds what the firmware sent (120 BPM, a chain of 4, its mix, the lead a late layer, the kick always, strings on pad 16)");
+                ok(demoSong != null && demoSong.IsValid && demoSong.Bpm == 120 && demoSong.Chain == 6 && demoSong.ArrangementBars == 16 && demoSong.HasMix && demoSong.Pan(12) > 0.2f && demoSong.Layer(7) > 0.5f && demoSong.Layer(2) == 0f && demoSong.sounds[15].engine == SfxEngine.Wavetable,
+                   "the song asset holds what the firmware sent (120 BPM, 16 bars arranged, its mix, the lead a late layer, the kick always, strings on pad 16)");
                 var made2 = SfxForgeEditorLink.CreateSong(demoSong.sounds, demoSong.data, Root + "/Presets", "SelfTestSong");
                 ok(made2 != null && made2.IsValid, "a song from the device becomes a Song asset");
                 AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(made2));

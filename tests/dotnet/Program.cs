@@ -13,6 +13,21 @@ static class Tests
 {
     static int failed;
     static void Ok(bool c, string t) { Console.WriteLine((c ? "  ok    " : "  FAIL  ") + t); if (!c) failed++; }
+    // the pitch of a stretch of sound, by its autocorrelation (FM and wavetables cross zero more than once a cycle)
+    static double Pitch(float[] a, double t0, double t1, int sr = 48000)
+    {
+        int i0 = (int)(t0 * sr), n = Math.Min(a.Length, (int)(t1 * sr)) - i0, best = 0; double top = 0, r0 = 0; bool dipped = false;
+        for (int i = 0; i < n; i++) r0 += a[i0 + i] * a[i0 + i];
+        r0 /= Math.Max(1, n);
+        for (int lag = sr / 2000; lag < sr / 30 && lag < n / 2; lag++)                // the first peak after the first dip
+        {
+            double c = 0; for (int i = 0; i < n - lag; i++) c += a[i0 + i] * a[i0 + i + lag];
+            c /= n - lag;
+            if (c < r0 * 0.3) dipped = true;
+            if (dipped && c > top * 1.02) { top = c; best = lag; }
+        }
+        return best > 0 ? (double)sr / best : 0;
+    }
     static double Rms(float[] a, double t0, double t1, int sr = 48000) { double s = 0; int i0 = (int)(t0 * sr), i1 = Math.Min(a.Length, (int)(t1 * sr)); for (int i = i0; i < i1; i++) s += a[i] * a[i]; return i1 > i0 ? Math.Sqrt(s / (i1 - i0)) : 0; }
     static int Cycles(float[] a, double t0, double t1, int sr = 48000) { int c = 0; for (int i = (int)(t0 * sr) + 1; i < (int)(t1 * sr); i++) if (a[i - 1] < 0 && a[i] >= 0) c++; return c; }
 
@@ -213,7 +228,18 @@ static class Tests
             for (int i = 0; i < 60; i++) Play(1f, 10);                               // let everything ring out
             SfxNative.PlayerNoteOn(pl, 6, 1, 1f, 69);
             var tone = Play(1f, 60);
-            Ok(Math.Abs(Cycles(tone, 0.05, 0.2) / 0.15 - 440) < 12, $"a sound played as the note A4 is in tune ({Cycles(tone, 0.05, 0.2) / 0.15:0} Hz)");
+            Ok(Math.Abs(Pitch(tone, 0.05, 0.2) - 440) < 6, $"a sound played as the note A4 is in tune ({Pitch(tone, 0.05, 0.2):0} Hz)");
+
+            // the band of the MUSIC kit, measured (nobody here can listen): the drums are drums, the FM instruments are in tune
+            float[] One(int slot, int note = 0, float hold = 0.3f) { SfxNative.Bake(sounds[slot], out var x, out _, 48000, 1f, note, 0f, hold); return x; }
+            double Bright(float[] x, double t0, double t1) => Cycles(x, t0, t1) / (t1 - t0);                     // zero crossings a second
+            var kick = One(2); var snare = One(1); var hat = One(12); var bass = One(6, 45); var keys = One(7, 69);
+            Ok(Pitch(kick, 0.12, 0.25) < 110 && Rms(kick, 0.0, 0.05) > 0.15 && kick.Length < 48000, $"KICK: a low drum ({Pitch(kick, 0.12, 0.25):0} Hz after its fall, {kick.Length / 48000f:0.00} s)");
+            Ok(Bright(snare, 0.0, 0.1) > 1500 && Rms(snare, 0.4, 0.5) < Rms(snare, 0.0, 0.1) * 0.1, $"SNARE: noise over a tone ({Bright(snare, 0.0, 0.1):0} crossings a second, {snare.Length / 48000f:0.00} s)");
+            Ok(Bright(hat, 0.0, 0.03) > 6000 && hat.Length < 48000 * 0.35, $"HI-HAT: a short, bright tick ({Bright(hat, 0.0, 0.03):0} crossings a second, {hat.Length / 48000f:0.00} s)");
+            Ok(Math.Abs(Pitch(bass, 0.05, 0.25) - 110) < 2 && Rms(bass, 0.0, 0.1) > 0.1, $"FM BASS: the note A2 is {Pitch(bass, 0.05, 0.25):0.0} Hz, level {Rms(bass, 0.0, 0.1):0.00}");
+            Ok(Math.Abs(Pitch(keys, 0.05, 0.25) - 440) < 6 && Rms(keys, 0.0, 0.1) > 0.1, $"FM KEYS: the note A4 is {Pitch(keys, 0.05, 0.25):0} Hz, level {Rms(keys, 0.0, 0.1):0.00}");
+            Ok(Rms(bass, 0.0, 0.03) > Rms(bass, 0.2, 0.3) * 1.5 && Rms(keys, 0.0, 0.05) > Rms(keys, 0.5, 0.6) * 1.5, "both are plucked: loudest at the start, then they fall");
 
             // a chord on the strings: 16 voices, held, then let go
             for (int i = 0; i < 60; i++) Play(1f, 10);

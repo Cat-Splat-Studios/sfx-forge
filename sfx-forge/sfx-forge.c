@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: MIT
  * SFX FORGE – sound effects, instruments and adaptive music for games, on VIBE FM.
  *
- *   16 pads      16 sounds, each a 28-byte patch (core/sfx_core.h). Five engines: IMPACT, UI BLIP, SCI-FI FM, FOLEY,
+ *   two kits     SFX (the game's sound effects) and MUSIC (the instruments the song plays): 16 sounds each, SHIFT + K1
+ *   16 pads      the kit's 16 sounds, each a 28-byte patch (core/sfx_core.h). Five engines: IMPACT, UI BLIP, SCI-FI FM, FOLEY,
  *                WAVETABLE – with envelopes, an LFO, and sends to a chorus, a delay and a reverb
  *   keys         the selected sound as an instrument, in tune, 16 voices
  *   K1-K6        SOUND (press again: its next page) · ENV · LFO · FX (again: MIX, MASTER) · SEQ (again: SONG, AUTO) · LINK
@@ -71,39 +72,51 @@ static const char *const GROUPS[P_COUNT] = { "OUTPUT", "TELEMETRY", "TELEMETRY",
    The first 16 are on the pads at the start; F1 PRESET puts any of them on the selected pad. ----------------------- */
 typedef struct { const char *name; uint8_t engine, p[SFX_P_COUNT]; } preset;
 static const preset PRESETS[] = {
+  /* the SFX kit: what a game makes noise with */
   { "EXPLOSION", 0, { 28,  96, 55,  20,  60,  70,  85, 10, 100,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0, 30, 100, 0 } },
   { "PUNCH",     0, { 32, 100, 28,   0,  20,  25,  90,  5,  55,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 100, 0 } },
   { "THUD",      0, { 24,  90, 35,   0,   0,   5,  70,  0,  70,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 100, 0 } },
   { "METAL HIT", 0, { 62,  70, 20,  75,  80,  15, 110, 40,  75,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0, 20, 100, 0 } },
   { "COIN",      1, { 86,  64,  0,  26,  60,   0, 127,  0,  62,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 100, 0 } },
   { "SELECT",    1, { 78,  64,  0,   0,   0,   0, 120,  0,  35,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 100, 0 } },
-  { "BASS",      1, { 19,  64,  0,   0,   0,   0,  78, 25,  60,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 100, 0 } },
-  { "LEAD",      1, { 60,  64,  0,   0,   0,   0, 108, 10,  56, 15,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0, 35,  0, 100, 0 } },
+  { "ERROR",     1, { 42,  58, 60,   0,   0,   0,  80, 20,  60, 50,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 100, 0 } },
+  { "POWER-UP",  1, { 60,  40, 75,  37,  75,   0, 115, 10,  85, 20,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 100, 0 } },
   { "LASER",     2, { 70, 110, 45,  50,  70,   0, 120, 20,  58,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 100, 0 } },
   { "ZAP",       2, { 80, 120, 25, 100,  90,  10, 127,  0,  45, 30,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 100, 0 } },
   { "ENGINE HUM",2, { 22,  64,  0,  21,  55,   8,  78, 45,  60,  0,    0, 127, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 100, 0 } },
-  { "WT SWEEP",  4, { 46,  64,  0,  10,  20,   0, 100, 30,  80,  0,    5,  90, 60,  90, 70,   30,  0, 20,  80,   35, 50, 30, 40, 100, 0 } },
+  { "WARP",      2, { 66,  30, 90,  40,  60,   0, 110, 30, 100,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0, 30, 30, 100, 0 } },
   { "FOOTSTEP",  3, { 30,  80, 25,  90,  40, 127,  62, 15,  45,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 100, 0 } },
   { "WIND",      3, { 30,  64,  0,  20,  70, 127,  75, 55,  60,  0,   40, 127, 60,  64, 40,   20,  0, 40,   0,    0,  0,  0, 30, 100, 0 } },
   { "WHOOSH",    3, { 30,  30, 85,   0,   0, 127,  90, 45,  88,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0, 20, 100, 0 } },
-  { "STRINGS",   4, { 52,  64,  0,   0,   0,   0,  88,  5,  90,  0,   75, 110, 70,  72, 80,   87, 12,  0,   0,   40, 70,  0, 70,  95, 0 } },
-  { "BRASS",     4, { 52,  64,  0,  20,  10,   0,  70, 15,  70,  0,   45, 100, 45, 100, 60,   87,  8,  0,   0,   30, 20,  0, 50, 100, 0 } },
-  { "CHOIR",     4, { 58,  64,  0,   0,   0,   0,  95,  5,  90,  0,   85, 115, 80,  64, 40,   85, 10,  0,  30,   35, 60,  0, 90, 100, 3 } },
-  { "PIZZICATO", 4, { 52,  64,  0,   0,   0,   0,  60, 10,  45,  0,    0,   0, 34, 100, 35,   50,  0,  0,   0,    0,  0,  0, 45, 110, 0 } },
-  { "HARP",      4, { 58,  64,  0,  10,   0,   0,  85,  5,  85,  0,    0,   0, 34,  90, 50,   50,  0,  0,   0,    0,  0, 20, 60, 110, 2 } },
+  { "CRACKLE",   3, { 30,  64,  0, 110, 127, 127, 105, 20, 100, 25,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 100, 0 } },
+  /* the MUSIC kit: a band. Drums (a sine that falls for the kick, noise over a tone for the snare, a high band of noise
+     for the hats), FM for the bass and the keys – its index falls with ENV TIME, which is the pluck –, wavetables for
+     what is held. The first 16 are on the pads at the start. */
   { "TIMPANI",   0, { 30,  76, 40,  20,  25,  12,  62, 20,  95,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0, 70, 100, 0 } },
-  { "BELLS",     4, { 70,  64,  0,  60,   0,   0, 120,  0, 105,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,   20,  0, 30, 70, 100, 5 } },
+  { "SNARE",     0, { 44,  84, 18,  30,  30,  85, 112,  5,  46,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0, 14, 100, 0 } },
+  { "KICK",      0, { 20,  98, 30,   0,   0,   3,  76,  0,  60,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 105, 0 } },
+  { "COWBELL",   0, { 72,  64,  0,  75,  60,   0, 110, 30,  40,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0,  90, 0 } },
+  { "PIZZICATO", 4, { 52,  64,  0,   0,   0,   0,  60, 10,  45,  0,    0,   0, 34, 100, 35,   50,  0,  0,   0,    0,  0,  0, 45, 110, 0 } },
+  { "BRASS",     4, { 52,  64,  0,  20,  10,   0,  70, 15,  70,  0,   45, 100, 45, 100, 60,   87,  8,  0,   0,   30, 20,  0, 50, 100, 0 } },
+  { "FM BASS",   2, { 22,  64, 35,  42,  50,   0,  96, 10,  62,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 108, 0 } },
+  { "FM KEYS",   2, { 58,  64, 55,  42,  42,   0, 116,  0,  84,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0, 35, 18, 28, 100, 0 } },
+  { "HARP",      4, { 58,  64,  0,  10,   0,   0,  85,  5,  85,  0,    0,   0, 34,  90, 50,   50,  0,  0,   0,    0,  0, 20, 60, 110, 2 } },
   { "CELESTA",   2, { 70,  64, 60,  81,  45,   0, 120,  0,  90,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0, 55, 100, 0 } },
-  { "FLUTE",     4, { 64,  64,  0,   0,   0,   8, 100,  0,  80,  0,   50, 105, 45,  64, 40,   87, 10,  0,   0,    0,  0,  0, 55, 100, 2 } },
   { "ORGAN",     4, { 52,  64,  0,  70,   0,   0, 110,  0,  80,  0,    5, 120, 30,  64, 40,   50,  0,  0,   0,    0, 60,  0, 40,  95, 4 } },
+  { "WT SWEEP",  4, { 46,  64,  0,  10,  20,   0, 100, 30,  80,  0,    5,  90, 60,  90, 70,   30,  0, 20,  80,   35, 50, 30, 40, 100, 0 } },
+  { "HI-HAT",    3, { 30,  64,  0,   0,   0, 127, 122, 35,  18,  0,    0,   0, 20,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0,  85, 0 } },
+  { "BELLS",     4, { 70,  64,  0,  60,   0,   0, 120,  0, 105,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,   20,  0, 30, 70, 100, 5 } },
+  { "CHOIR",     4, { 58,  64,  0,   0,   0,   0,  95,  5,  90,  0,   85, 115, 80,  64, 40,   85, 10,  0,  30,   35, 60,  0, 90, 100, 3 } },
+  { "STRINGS",   4, { 52,  64,  0,   0,   0,   0,  88,  5,  90,  0,   75, 110, 70,  72, 80,   87, 12,  0,   0,   40, 70,  0, 70,  95, 0 } },
+  { "OPEN HAT",  3, { 30,  64,  0,   0,   0, 127, 120, 30,  52,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  8,  80, 0 } },
+  { "FLUTE",     4, { 64,  64,  0,   0,   0,   8, 100,  0,  80,  0,   50, 105, 45,  64, 40,   87, 10,  0,   0,    0,  0,  0, 55, 100, 2 } },
   { "WT VOWEL",  4, { 46,  64,  0,  20,   0,   0, 105, 10,  80,  0,   10, 100, 55,  64, 40,   45,  0,  0, 100,   30, 30, 40, 30, 100, 3 } },
   { "WT BASS",   4, { 34,  64,  0,  40,  50,   0,  60, 40,  70,  0,    0,   0, 34, 105, 55,   50,  0,  0,   0,    0,  0,  0,  0, 105, 1 } },
   { "PAD",       4, { 52,  64,  0,  50,   0,   0,  80, 10,  90,  0,   95, 110, 95,  64, 40,   30,  0, 30,  20,   55, 80,  0, 90,  95, 0 } },
-  { "ERROR",     1, { 42,  58, 60,   0,   0,   0,  80, 20,  60, 50,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 100, 0 } },
-  { "POWER-UP",  1, { 60,  40, 75,  37,  75,   0, 115, 10,  85, 20,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 100, 0 } },
-  { "WARP",      2, { 66,  30, 90,  40,  60,   0, 110, 30, 100,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0, 30, 30, 100, 0 } },
-  { "CRACKLE",   3, { 30,  64,  0, 110, 127, 127, 105, 20, 100, 25,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 100, 0 } },
+  { "SQ BASS",   1, { 19,  64,  0,   0,   0,   0,  78, 25,  60,  0,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0,  0,  0, 100, 0 } },
+  { "SQ LEAD",   1, { 60,  64,  0,   0,   0,   0, 108, 10,  56, 15,    0,   0, 34,  64, 40,   50,  0,  0,   0,    0,  0, 35,  0, 100, 0 } },
 };
+#define SFX_PRESETS 16             /* the first 16: the SFX kit's. The rest: the MUSIC kit's */
 #define PRESET_COUNT ((int)(sizeof PRESETS / sizeof PRESETS[0]))
 static const char *const ENGINE_NAME[SFX_ENGINE_COUNT] = { "IMPACT", "UI BLIP", "SCI-FI FM", "FOLEY", "WAVETABLE" };
 static const char *const ENGINE_SHORT[SFX_ENGINE_COUNT] = { "IMPACT", "BLIP", "FM", "FOLEY", "WAVE" };
@@ -120,7 +133,7 @@ static float vol_s;
 #define NO_STEP 0xFFFFFFFFu
 #define SCOPE 164
 static volatile uint32_t seq_arr;                    /* the bar of the arrangement that plays (NO_STEP: none) */
-static volatile uint32_t seq_step = NO_STEP, seq_pattern, playing;   /* playing: bit per sound */
+static volatile uint32_t seq_step = NO_STEP, seq_pattern, play_k[2];   /* play_k: what sounds, a bit a sound, for each kit */
 static volatile float seq_frac;
 static volatile float scope_lo[SCOPE], scope_hi[SCOPE];
 static volatile uint32_t scope_w;
@@ -142,9 +155,19 @@ static const int8_t PAGE_PARAMS[PG_SEQ][4] = {       /* what encoders 1-4 turn o
   { SFX_P_LFO_RATE, SFX_P_LFO_PITCH, SFX_P_LFO_FILTER, SFX_P_LFO_TIMBRE },
   { SFX_P_CHORUS, SFX_P_DELAY, SFX_P_REVERB, SFX_P_LEVEL },
 };
-static sfx_patch patches[SLOTS], undo[SLOTS];
-static uint8_t has_undo[SLOTS];
-static int8_t pad_preset[SLOTS], undo_preset[SLOTS]; /* which named sound a pad holds, -1 = its own */
+/* two kits of 16 sounds: MUSIC – the instruments the song plays, through the mixer – and SFX – the game's sound effects,
+   beside the song. The pads, the keys and the sound pages work on the kit that is chosen; the song pages mean MUSIC. */
+enum { KIT_MUSIC, KIT_SFX };
+static const char *const KIT_NAME[2] = { "MUSIC", "SFX" };
+static sfx_patch kits[2][SLOTS], undo_k[2][SLOTS];
+static uint8_t has_undo_k[2][SLOTS];
+static int8_t pad_preset_k[2][SLOTS], undo_preset_k[2][SLOTS];   /* which named sound a pad holds, -1 = its own */
+static int kit = KIT_SFX;
+#define patches     kits[kit]
+#define undo        undo_k[kit]
+#define has_undo    has_undo_k[kit]
+#define pad_preset  pad_preset_k[kit]
+#define undo_preset undo_preset_k[kit]
 static int sel, page, help, shift, rec, running;
 static int edit_pat, cur_step, held_step = -1;      /* the pattern and the step being edited; the step pad held */
 static float acc[VE_COUNT];                         /* encoder turns not yet a whole step */
@@ -159,6 +182,7 @@ static int tour_on, tour_i;                         /* the tour (MENU): running,
 static uint64_t tour_t0;
 static const char *tour_title = "", *tour_line = "";
 static float tour_progress, tour_heat0, tour_ramp_from, tour_ramp_to, tour_ramp_t0, tour_ramp_len;
+static int tour_kit0;
 static int tour_page0, tour_sel0, tour_kept = -1;   /* what it puts back; the sound it changed */
 static sfx_patch tour_keep;
 static int export_at = -1;                          /* sending the sounds and the song: the next message, -1 = not */
@@ -174,7 +198,7 @@ static int sound_page(void) { return page < PG_SEQ; }
 
 /* ---- from the controls to the audio: one queue, one writer, one reader ---------------------------------------------- */
 enum { M_TRIGGER, M_RELEASE, M_UPDATE, M_START, M_STOP, M_CUE, M_QUIET };
-typedef struct { uint8_t type, slot, note, pad_; int16_t key; float vel; sfx_patch patch; } msg;
+typedef struct { uint8_t type, slot, note, kit; int16_t key; float vel; sfx_patch patch; } msg;
 #define QN 64
 static msg q[QN];
 static volatile uint32_t qw, qr;
@@ -185,7 +209,7 @@ static void send(int type, int slot, int key, float vel, int note)
   if (w - qr >= QN) return;                          /* full: dropped */
   msg *m = &q[w % QN];
   m->type = (uint8_t)type; m->slot = (uint8_t)slot; m->key = (int16_t)key; m->vel = vel; m->note = (uint8_t)note;
-  m->patch = patches[slot & 15];
+  m->patch = patches[slot & 15]; m->kit = (uint8_t)kit;
   VIBE_RELEASE();
   qw = w + 1;
 }
@@ -198,9 +222,9 @@ void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames)
   for (uint32_t k = qr; k != w; k++) {
     const msg *m = &q[k % QN];
     switch (m->type) {
-    case M_TRIGGER: sfx_player_note_on(&P, m->slot, m->key, m->vel, m->note, 0.0f, &m->patch); break;
+    case M_TRIGGER: sfx_player_note_on(&P, m->slot + SLOTS * m->kit, m->key, m->vel, m->note, 0.0f, &m->patch); break;   /* (SFX: beside the song) */
     case M_RELEASE: sfx_player_note_off(&P, m->key); break;
-    case M_UPDATE:  sfx_player_set_patch(&P, m->slot, &m->patch); break;   /* a knob turned: also for what sounds now */
+    case M_UPDATE:  sfx_player_set_patch(&P, m->slot + SLOTS * m->kit, &m->patch); break;   /* a knob turned: also for what sounds now */
     case M_START:   sfx_player_start(&P, m->slot); break;
     case M_STOP:    sfx_player_stop(&P); break;
     case M_CUE:     sfx_player_cue(&P, m->slot); break;
@@ -221,7 +245,10 @@ void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames)
   const vibe_transport_info *tp = vibe_transport();
   int host = tp->has && tp->playing && tp->bpm > 0.0f;
   for (int n = 0; n < frames; n++) mixl[n] = mixr[n] = 0.0f;
-  playing = sfx_player_render(&P, mixl, mixr, frames, host ? tp->beat * 4.0 : -1.0, host ? (double)tp->bpm / 60.0 * 4.0 / (double)SR : 0.0) & 0xFFFFu;
+  sfx_player_render(&P, mixl, mixr, frames, host ? tp->beat * 4.0 : -1.0, host ? (double)tp->bpm / 60.0 * 4.0 / (double)SR : 0.0);
+  uint32_t music = 0, effects = 0;
+  for (int i = 0; i < SFX_PLAYER_VOICES; i++) if (P.voice[i].active) { if (P.voice[i].slot < SLOTS) music |= 1u << P.voice[i].slot; else effects |= 1u << (P.voice[i].slot - SLOTS); }
+  play_k[0] = music; play_k[1] = effects;
   seq_step = P.running && P.step >= 0 ? (uint32_t)P.step : NO_STEP; seq_frac = P.frac; seq_pattern = (uint32_t)P.pattern;
   seq_arr = P.running && !P.hold && P.arr_pos >= 0 ? (uint32_t)P.arr_pos : NO_STEP;
 
@@ -241,7 +268,9 @@ static void say(const char *t) { toast = t; toast_frames = 70; }
 static void changed(int slot) { send(M_UPDATE, slot, 0, 0, 0); }
 static void keep_undo(int slot) { undo[slot] = patches[slot]; undo_preset[slot] = pad_preset[slot]; has_undo[slot] = 1; }
 static sfx_pattern *pat(void) { return &SONG.pat[edit_pat]; }
-static const char *pad_name(int slot) { return pad_preset[slot] >= 0 && pad_preset[slot] < PRESET_COUNT ? PRESETS[pad_preset[slot]].name : ENGINE_NAME[patches[slot].engine]; }
+static const char *name_of(int k, int slot) { int n = pad_preset_k[k][slot]; return n >= 0 && n < PRESET_COUNT ? PRESETS[n].name : ENGINE_NAME[kits[k][slot].engine]; }
+static const char *pad_name(int slot) { return name_of(kit, slot); }
+static void kit_set(int k) { if (k == kit) return; kit = k; for (int i = 0; i < SLOTS; i++) led_cache[i] = 0xFFFFFFFFu; }
 
 static void preset_load(int slot, int k)
 {
@@ -252,83 +281,102 @@ static void preset_load(int slot, int k)
 
 static void step_set(sfx_pattern *p, int step, int slot, int note) { p->on[step] |= (uint16_t)(1u << slot); p->note[slot][step] = (uint8_t)note; }
 
-/* a song to start from, our own: funk in E minor the way a 16-bit console's FM chip played it – a bass that jumps
-   octaves on the off-beats, a swung hat, a lead that answers in stabs. Four patterns in a chain: the groove, its answer,
-   a breakdown, a turnaround. Only the kick plays at intensity 0; the game's intensity brings the rest in. */
+/* a song to start from, our own, played by the MUSIC kit: funk in E minor the way a 16-bit console's FM chip played it.
+   Drums, an FM bass that jumps octaves on the off-beats, FM keys with the tune, brass stabs, bells, strings, a choir.
+   Six patterns – two of the verse, two of the chorus, a breakdown, a turnaround – arranged over 16 bars. Only the kick
+   plays at intensity 0; the game's intensity brings the band in. */
 static void demo_song(void)
 {
-  enum { KICK = 2, SNARE = 1, HAT = 12, BASS = 6, LEAD = 7, PAD = 15, BELL = 5, COIN = 4, LASER = 8 };
-  static const uint8_t BASS_N[4][STEPS] = {
-    { 28,  0,  0, 28,  0, 40,  0, 28,   31,  0, 33,  0,  0, 35, 38,  0 },
-    { 28,  0,  0, 28,  0, 40,  0, 28,   33,  0, 33, 45,  0, 31, 35,  0 },
-    { 33,  0,  0,  0, 33,  0,  0, 45,   31,  0,  0,  0, 31,  0, 43,  0 },
-    { 28,  0, 40, 28,  0, 40,  0, 31,   33,  0, 45, 33, 35,  0, 38, 40 } };
-  static const uint8_t LEAD_N[4][STEPS] = {
+  enum { SNARE = 1, KICK = 2, BRASS = 5, BASS = 6, KEYS = 7, HAT = 12, BELLS = 13, CHOIR = 14, PAD = 15, N = 6 };
+  static const uint8_t BASS_N[N][STEPS] = {
+    { 28,  0,  0, 28,  0, 40,  0, 28,   31,  0, 33,  0,  0, 35, 38,  0 },      /* Em */
+    { 28,  0,  0, 28,  0, 40,  0, 28,   33,  0, 33, 45,  0, 31, 35,  0 },      /* Em, A */
+    { 36,  0,  0, 36,  0, 48,  0, 36,   38,  0,  0, 38,  0, 50, 38,  0 },      /* C, D */
+    { 36,  0,  0, 36,  0, 48,  0, 36,   38,  0, 38,  0, 40,  0, 40, 35 },      /* C, D, back to E */
+    { 33,  0,  0,  0, 33,  0,  0, 45,   35,  0,  0,  0, 35,  0, 47,  0 },      /* Am, Bm: the breakdown */
+    { 28,  0, 40, 28,  0, 40,  0, 31,   33,  0, 45, 33, 35,  0, 38, 40 } };    /* the turnaround */
+  static const uint8_t KEYS_N[N][STEPS] = {
     {  0,  0, 76, 79,  0,  0, 81,  0,    0, 79,  0, 76,  0,  0, 74,  0 },
     { 83,  0,  0, 81,  0,  0, 79,  0,   76,  0, 79,  0, 81,  0, 83, 86 },
-    {  0,  0,  0,  0, 76,  0,  0,  0,    0,  0,  0,  0, 74,  0,  0,  0 },
+    { 79,  0,  0, 76,  0, 79,  0,  0,   81,  0,  0, 78,  0, 81,  0, 83 },
+    { 84,  0, 83,  0, 79,  0, 76,  0,   78,  0, 81,  0, 83,  0, 86,  0 },
+    {  0,  0,  0,  0, 76,  0,  0, 72,    0,  0,  0,  0, 78,  0, 74,  0 },
     { 76,  0, 79,  0, 81,  0, 83,  0,   86,  0, 83,  0, 81, 79, 76,  0 } };
-  static const uint8_t PAD_N[4][2] = { { 52, 50 }, { 55, 57 }, { 48, 50 }, { 52, 47 } };
-  static const uint16_t KICKS[4] = { 0x1191, 0x1191, 0x0101, 0x5191 }, SNARES[4] = { 0x1010, 0x1410, 0x1000, 0x9010 },
-                        HATS[4] = { 0xD555, 0xD555, 0x4444, 0xF555 }, BELLS[4] = { 0, 0x4040, 0, 0x4444 };   /* a bit a step */
+  static const uint8_t PAD_N[N][2] = { { 52, 50 }, { 55, 57 }, { 60, 62 }, { 60, 62 }, { 57, 59 }, { 52, 47 } };
+  static const uint16_t KICKS[N] = { 0x1191, 0x1191, 0x1511, 0x1511, 0x0101, 0x5111 }, SNARES[N] = { 0x1010, 0x1410, 0x9010, 0x9090, 0x1000, 0xF010 },
+                        HATS[N] = { 0xD555, 0xD555, 0xFFFF, 0xFFFF, 0x4444, 0xF555 };                    /* a bit a step */
+  static const uint8_t STABS[][4] = {                 /* the brass: pattern, step, note, steps it holds */
+    { 1, 14, 71, 2 },
+    { 2, 3, 67, 1 }, { 2, 6, 67, 2 }, { 2, 11, 69, 1 }, { 2, 14, 69, 2 },
+    { 3, 0, 72, 3 }, { 3, 8, 74, 2 }, { 3, 12, 76, 3 },
+    { 5, 0, 64, 1 }, { 5, 3, 64, 1 }, { 5, 6, 67, 2 }, { 5, 12, 67, 1 }, { 5, 13, 69, 1 }, { 5, 14, 71, 1 }, { 5, 15, 74, 1 } };
+  static const uint8_t CHIMES[][3] = { { 2, 2, 88 }, { 2, 10, 90 }, { 3, 2, 86 }, { 3, 10, 90 }, { 4, 0, 88 }, { 4, 6, 91 }, { 4, 8, 86 }, { 4, 14, 90 } };   /* the bells: pattern, step, note */
+  static const uint8_t BARS[16] = { 0, 1, 0, 1,  2, 3, 2, 3,  4, 4, 0, 1,  2, 3, 2, 5 };
   sfx_song_init(&SONG);
-  for (int b = 0; b < 4; b++) {
+  for (int b = 0; b < N; b++) {
     sfx_pattern *p = &SONG.pat[b];
     for (int i = 0; i < STEPS; i++) {
       if ((KICKS[b] >> i) & 1) { step_set(p, i, KICK, 0); p->acc[KICK][i] = SFX_ACC(i % 4 ? 3 : 5, 0); }              /* the pushes between the beats: softer */
-      if ((SNARES[b] >> i) & 1) { step_set(p, i, SNARE, 0); p->acc[SNARE][i] = SFX_ACC(i % 8 == 4 ? 6 : 2, 0); }      /* 2 and 4, and ghosts */
+      if ((SNARES[b] >> i) & 1) { step_set(p, i, SNARE, 0); p->acc[SNARE][i] = SFX_ACC(i % 8 == 4 ? 6 : b == 5 && i > 12 ? i - 9 : 2, 0); }   /* 2 and 4, ghosts, a fill that grows */
       if ((HATS[b] >> i) & 1) { step_set(p, i, HAT, 0); p->acc[HAT][i] = SFX_ACC(i & 1 ? 2 : i % 4 ? 5 : 3, 0); }     /* the off-beat leads */
-      if ((BELLS[b] >> i) & 1) step_set(p, i, BELL, 0);
       if (BASS_N[b][i]) { step_set(p, i, BASS, BASS_N[b][i]); p->acc[BASS][i] = SFX_ACC(BASS_N[b][i] >= 40 ? 7 : 5, 0); }   /* the octave pops */
-      if (LEAD_N[b][i]) { step_set(p, i, LEAD, LEAD_N[b][i]); p->acc[LEAD][i] = SFX_ACC(i & 1 ? 4 : 6, 0); }
+      if (KEYS_N[b][i]) { step_set(p, i, KEYS, KEYS_N[b][i]); p->acc[KEYS][i] = SFX_ACC(i & 1 ? 4 : 6, 0); }
     }
     step_set(p, 0, PAD, PAD_N[b][0]); step_set(p, 8, PAD, PAD_N[b][1]);     /* strings: two long notes a bar, each let go before the next */
     p->acc[PAD][0] = p->acc[PAD][8] = SFX_ACC(4, 7);
-    if (b & 1) step_set(p, 11, COIN, 0);
-    if (b == 3) step_set(p, 15, LASER, 0);
   }
-  SONG.chain = 4; SONG.swing = 20;
-  { static const uint8_t BARS[8] = { 0, 1, 0, 1, 0, 1, 2, 3 };              /* A B A B  A B C D */
-    for (int i = 0; i < 8; i++) SONG.arr[i] = BARS[i];
-    SONG.arr_len = 8; }
-  SONG.auto_to[BASS] = SFX_AT_PATCH + SFX_P_FILTER_CUTOFF;
-  for (int i = 0; i < STEPS; i++) { if (i % 4 == 0) SONG.pat[2].aut[BASS][i] = (uint8_t)(50 + i * 3); SONG.pat[3].aut[BASS][i] = (uint8_t)(62 + i * 3); }
-  SONG.pan[HAT] = 84; SONG.pan[BELL] = 36; SONG.pan[COIN] = 40; SONG.pan[LEAD] = 74; SONG.pan[LASER] = 50;
-  SONG.vol[BASS] = 110; SONG.vol[PAD] = 85; SONG.vol[BELL] = 70;
-  SONG.level[HAT] = 20; SONG.level[BASS] = 35; SONG.level[SNARE] = 50; SONG.level[PAD] = 65; SONG.level[LEAD] = 80; SONG.level[BELL] = 95; SONG.level[COIN] = 105; SONG.level[LASER] = 105;
+  for (unsigned k = 0; k < sizeof STABS / sizeof STABS[0]; k++) { step_set(&SONG.pat[STABS[k][0]], STABS[k][1], BRASS, STABS[k][2]); SONG.pat[STABS[k][0]].acc[BRASS][STABS[k][1]] = SFX_ACC(6, STABS[k][3]); }
+  for (unsigned k = 0; k < sizeof CHIMES / sizeof CHIMES[0]; k++) { step_set(&SONG.pat[CHIMES[k][0]], CHIMES[k][1], BELLS, CHIMES[k][2]); SONG.pat[CHIMES[k][0]].acc[BELLS][CHIMES[k][1]] = SFX_ACC(4, 0); }
+  step_set(&SONG.pat[4], 0, CHOIR, 64); SONG.pat[4].acc[CHOIR][0] = SFX_ACC(4, 15);                     /* the breakdown: a choir holds through it */
+  SONG.chain = N; SONG.swing = 20;
+  for (int i = 0; i < 16; i++) SONG.arr[i] = BARS[i];
+  SONG.arr_len = 16;
+  SONG.auto_to[BASS] = SFX_AT_PATCH + SFX_P_FILTER_CUTOFF;                  /* automation: the bass opens through the turnaround … */
+  SONG.auto_to[PAD] = SFX_AT_VOL;                                           /* … and the strings swell through the breakdown */
+  for (int i = 0; i < STEPS; i++) { SONG.pat[5].aut[BASS][i] = (uint8_t)(62 + i * 3); if (i % 2 == 0) SONG.pat[4].aut[PAD][i] = (uint8_t)(41 + i * 4); }
+  SONG.pan[HAT] = 84; SONG.pan[KEYS] = 76; SONG.pan[BRASS] = 48; SONG.pan[BELLS] = 36; SONG.pan[CHOIR] = 70;
+  SONG.vol[BASS] = 105; SONG.vol[KEYS] = 95; SONG.vol[BRASS] = 90; SONG.vol[PAD] = 85; SONG.vol[BELLS] = 80; SONG.vol[CHOIR] = 75;
+  SONG.level[HAT] = 20; SONG.level[BASS] = 35; SONG.level[SNARE] = 50; SONG.level[PAD] = 60; SONG.level[CHOIR] = 60; SONG.level[KEYS] = 72; SONG.level[BRASS] = 90; SONG.level[BELLS] = 100;
 }
 
 static void factory(void)
 {
-  for (int s = 0; s < SLOTS; s++) preset_load(s, s);
+  int was = kit;
+  for (int s = 0; s < SLOTS; s++) { kit = KIT_SFX; preset_load(s, s); kit = KIT_MUSIC; preset_load(s, SFX_PRESETS + s); }
+  kit = was;
   demo_song();
 }
 
+#define BANK_BYTES (2 * SLOTS * (SFX_PATCH_BYTES + 1))
 static void bank_save(void)
 {
-  static uint8_t b[SLOTS * SFX_PATCH_BYTES + SLOTS], s[SFX_SONG_BYTES];
-  for (int i = 0; i < SLOTS; i++) { sfx_patch_pack(&patches[i], b + i * SFX_PATCH_BYTES); b[SLOTS * SFX_PATCH_BYTES + i] = (uint8_t)(pad_preset[i] + 1); }
-  vibe_store_write("bank2.bin", b, sizeof b);
+  static uint8_t b[BANK_BYTES], s[SFX_SONG_BYTES];
+  for (int k = 0; k < 2; k++) for (int i = 0; i < SLOTS; i++) {
+    sfx_patch_pack(&kits[k][i], b + (k * SLOTS + i) * SFX_PATCH_BYTES);
+    b[2 * SLOTS * SFX_PATCH_BYTES + k * SLOTS + i] = (uint8_t)(pad_preset_k[k][i] + 1);
+  }
+  vibe_store_write("kits.bin", b, sizeof b);
   sfx_song_pack(&SONG, s);
   vibe_store_write("song.bin", s, sizeof s);
 }
 
 static void bank_load(void)
 {
-  static uint8_t b[SLOTS * SFX_PATCH_BYTES + SLOTS], s[SFX_SONG_BYTES];
-  if (vibe_store_read("bank2.bin", b, sizeof b) == (int)sizeof b)
-    for (int i = 0; i < SLOTS; i++)                  /* a broken one keeps its factory sound */
-      if (!sfx_patch_unpack(&patches[i], b + i * SFX_PATCH_BYTES)) { int k = b[SLOTS * SFX_PATCH_BYTES + i]; pad_preset[i] = (int8_t)(k >= 1 && k <= PRESET_COUNT ? k - 1 : -1); }
+  static uint8_t b[BANK_BYTES], s[SFX_SONG_BYTES];
+  if (vibe_store_read("kits.bin", b, sizeof b) == (int)sizeof b)
+    for (int k = 0; k < 2; k++) for (int i = 0; i < SLOTS; i++)       /* a broken one keeps its factory sound */
+      if (!sfx_patch_unpack(&kits[k][i], b + (k * SLOTS + i) * SFX_PATCH_BYTES)) { int n = b[2 * SLOTS * SFX_PATCH_BYTES + k * SLOTS + i]; pad_preset_k[k][i] = (int8_t)(n >= 1 && n <= PRESET_COUNT ? n - 1 : -1); }
   if (vibe_store_read("song.bin", s, sizeof s) == (int)sizeof s) sfx_song_unpack(&SONG, s, sizeof s);
 }
 
-static int sysex_dump(int slot)
+static int sysex_dump_k(int k, int slot)
 {
   uint8_t b[7 + SFX_PATCH_BYTES] = { 0xF0, 0x7D, 0x56, 0x42, SX_DUMP, (uint8_t)slot };
-  sfx_patch_pack(&patches[slot], b + 6);
+  sfx_patch_pack(&kits[k][slot], b + 6);
   b[6 + SFX_PATCH_BYTES] = 0xF7;
   return vibe_midi_send_sysex(b, sizeof b);
 }
+static int sysex_dump(int slot) { return sysex_dump_k(kit, slot); }
 
 /* the 16 sounds, then the song in pieces. The host takes one SysEx a block, so this is called again and again (from
    every draw and every event) until all are out. */
@@ -336,7 +384,7 @@ static void export_pump(void)
 {
   static uint8_t song[SFX_SONG_BYTES], b[8 + SONG_CHUNK];
   for (int guard = 0; guard < 2 && export_at >= 0; guard++) {
-    if (export_at < SLOTS) { if (sysex_dump(export_at)) return; }
+    if (export_at < SLOTS) { if (sysex_dump_k(KIT_MUSIC, export_at)) return; }     /* (the song's sounds: the MUSIC kit) */
     else {
       int k = export_at - SLOTS, n = k == SONG_CHUNKS - 1 ? SFX_SONG_BYTES - k * SONG_CHUNK : SONG_CHUNK;
       if (k == 0) sfx_song_pack(&SONG, song);
@@ -376,7 +424,7 @@ static void sysex_in(const uint8_t *b, int n)
 static void record(int slot, int note, float vel)    /* REC while it runs: onto the nearest step of the pattern that plays, as hard as it was hit */
 {
   uint32_t st = seq_step;
-  if (!rec || st == NO_STEP) return;
+  if (!rec || st == NO_STEP || kit != KIT_MUSIC) return;      /* (the song plays the MUSIC kit) */
   if (seq_frac > 0.5f) st = (st + 1) % SONG.len;
   sfx_pattern *p = &SONG.pat[seq_pattern % SFX_PATTERNS];
   step_set(p, (int)(st % STEPS), slot, note);
@@ -433,7 +481,7 @@ static void len_turn(int d)
 /* the selected sound's automation lane. What its target is without a point (where a new point starts), and how far it goes */
 static int auto_own(int to, int track)
 {
-  return to >= SFX_AT_MASTER ? SONG.fx[to - SFX_AT_MASTER] : to == SFX_AT_PAN ? SONG.pan[track] : to == SFX_AT_VOL ? SONG.vol[track] : to ? patches[track].p[to - SFX_AT_PATCH] : 0;
+  return to >= SFX_AT_MASTER ? SONG.fx[to - SFX_AT_MASTER] : to == SFX_AT_PAN ? SONG.pan[track] : to == SFX_AT_VOL ? SONG.vol[track] : to ? kits[KIT_MUSIC][track].p[to - SFX_AT_PATCH] : 0;
 }
 static int auto_hi(int to) { return to == SFX_AT_MASTER + SFX_M_DELAY_TIME ? SFX_DELAY_TIMES - 1 : to == SFX_AT_PATCH + SFX_P_TABLE ? SFX_WT_TABLES - 1 : 126; }
 
@@ -468,6 +516,7 @@ static void auto_ramp(void)                          /* a straight line from eac
 static void set_page(int p)
 {
   page = p; held_step = -1;
+  if (p >= PG_SEQ && p <= PG_MASTER) kit_set(KIT_MUSIC);      /* the song's pages: its own sounds */
   for (int i = 0; i < 6; i++) vibe_label(VB_F1 + i, SOFT[soft_set()][i]);
   vibe_label(VB_K1 + TAB_SEQ, p == PG_SONG ? "SONG" : p == PG_AUTO ? "AUTO" : "SEQ");
   vibe_label(VB_K1 + TAB_FX, p == PG_MASTER ? "MASTER" : p == PG_MIX ? "MIX" : "FX");
@@ -605,7 +654,8 @@ static void soft_sound(int f)                        /* F1-F6 on the sound pages
   sfx_patch *p = &patches[sel];
   rng ^= vd_rand();
   switch (f) {
-  case 0: { int k = wrap(pad_preset[sel] < 0 ? (shift ? 0 : -1) : pad_preset[sel], shift ? -1 : 1, PRESET_COUNT);
+  case 0: { int first = kit == KIT_SFX ? 0 : SFX_PRESETS, n = kit == KIT_SFX ? SFX_PRESETS : PRESET_COUNT - SFX_PRESETS;     /* (each kit has its own names) */
+            int at = pad_preset[sel] >= first && pad_preset[sel] < first + n ? pad_preset[sel] - first : (shift ? 0 : -1), k = first + wrap(at, shift ? -1 : 1, n);
             keep_undo(sel); preset_load(sel, k); say(PRESETS[k].name);
             if (page == PG_WAVE && p->engine != SFX_ENGINE_WAVETABLE) set_page(PG_OSC);
             break; }
@@ -711,12 +761,12 @@ static void soft_mix(int f)                          /* F1-F6 on the MIX and MAS
 }
 
 /* ---- the tour: SFX FORGE shows by itself what it can do. Everything it touches is put back at the end. --------------- */
-enum { T_SAY, T_PAGE, T_PAD, T_SELECT, T_PARAM, T_MUTATE, T_RESTORE, T_NOTE, T_ON, T_OFF, T_PLAY, T_STOP, T_HEAT, T_RAMP, T_CUE, T_END };
+enum { T_SAY, T_PAGE, T_PAD, T_SELECT, T_PARAM, T_MUTATE, T_RESTORE, T_NOTE, T_ON, T_OFF, T_PLAY, T_STOP, T_HEAT, T_RAMP, T_CUE, T_KIT, T_END };
 typedef struct { float t; uint8_t act, a, b; const char *title, *line; } tour_step;
 #define S 5.4f                                      /* (the later parts, after the instruments) */
 static const tour_step TOUR[] = {
-  {  0.0f, T_SAY, 0, 0, "16 SOUNDS, 5 ENGINES", "every sound is synthesized - no samples" },
-  {  0.0f, T_PAGE, PG_OSC, 0, 0, 0 }, { 0.0f, T_HEAT, 8, 0, 0, 0 },
+  {  0.0f, T_SAY, 0, 0, "SOUND EFFECTS", "the SFX kit: 16 of them, all synthesized" },
+  {  0.0f, T_KIT, KIT_SFX, 0, 0, 0 }, { 0.0f, T_PAGE, PG_OSC, 0, 0, 0 }, { 0.0f, T_HEAT, 8, 0, 0, 0 },
   {  0.2f, T_PAD, 0, 0, 0, 0 }, { 0.65f, T_PAD, 4, 0, 0, 0 }, { 1.1f, T_PAD, 8, 0, 0, 0 }, { 1.55f, T_PAD, 12, 0, 0, 0 },
   {  2.0f, T_PAD, 3, 0, 0, 0 }, { 2.45f, T_PAD, 5, 0, 0, 0 }, { 2.9f, T_PAD, 9, 0, 0, 0 }, { 3.35f, T_PAD, 14, 0, 0, 0 },
   {  4.2f, T_SAY, 0, 0, "SHAPE IT", "four knobs a page - watch the wave change" },
@@ -731,11 +781,11 @@ static const tour_step TOUR[] = {
   {  7.8f, T_PAGE, PG_OSC, 0, 0, 0 },
   {  8.0f, T_MUTATE, 0, 0, 0, 0 }, { 8.7f, T_MUTATE, 0, 0, 0, 0 }, { 9.4f, T_MUTATE, 0, 0, 0, 0 }, { 10.1f, T_MUTATE, 0, 0, 0, 0 },
   { 10.9f, T_RESTORE, 0, 0, 0, 0 },
-  { 11.2f, T_SAY, 0, 0, "PLAY IT", "the keys play any sound as an instrument" },
-  { 11.2f, T_SELECT, 7, 0, 0, 0 },
+  { 11.2f, T_SAY, 0, 0, "INSTRUMENTS", "the MUSIC kit: 16 more, played on the keys" },
+  { 11.2f, T_KIT, KIT_MUSIC, 0, 0, 0 }, { 11.2f, T_SELECT, 7, 0, 0, 0 },
   { 11.4f, T_NOTE, 69, 0, 0, 0 }, { 11.65f, T_NOTE, 72, 0, 0, 0 }, { 11.9f, T_NOTE, 76, 0, 0, 0 }, { 12.15f, T_NOTE, 81, 0, 0, 0 },
   { 12.4f, T_NOTE, 79, 0, 0, 0 }, { 12.65f, T_NOTE, 76, 0, 0, 0 }, { 12.9f, T_NOTE, 72, 0, 0, 0 }, { 13.15f, T_NOTE, 69, 0, 0, 0 },
-  { 13.8f, T_SAY, 0, 0, "INSTRUMENTS", "strings, choir, bells - with chorus, delay, reverb" },
+  { 13.8f, T_SAY, 0, 0, "CHORDS", "strings, brass, bells - with chorus, delay, reverb" },
   { 13.8f, T_SELECT, 15, 0, 0, 0 }, { 13.8f, T_PAGE, PG_ENV, 0, 0, 0 },
   { 14.0f, T_ON, 57, 0, 0, 0 }, { 14.0f, T_ON, 60, 0, 0, 0 }, { 14.0f, T_ON, 64, 0, 0, 0 },
   { 15.7f, T_OFF, 57, 0, 0, 0 }, { 15.7f, T_OFF, 60, 0, 0, 0 }, { 15.7f, T_OFF, 64, 0, 0, 0 },
@@ -772,12 +822,13 @@ static void tour_end(void)
   intensity_set(tour_heat0);
   sel = tour_sel0;
   set_page(tour_page0);
+  kit_set(tour_kit0);
 }
 
 static void tour_start(void)
 {
   if (tour_on) { tour_end(); return; }
-  tour_heat0 = vibe_param_get(P_INTENSITY); tour_page0 = page; tour_sel0 = sel;
+  tour_heat0 = vibe_param_get(P_INTENSITY); tour_page0 = page; tour_sel0 = sel; tour_kit0 = kit;
   if (running) seq_play(0);
   seq_rec(0); help = 0;
   tour_on = 1; tour_i = 0; tour_t0 = vibe_frames(); tour_ramp_len = 0.0f; tour_title = tour_line = "";
@@ -811,6 +862,7 @@ static void tour_pump(void)                          /* from the display: the to
     case T_HEAT:    tour_ramp_len = 0.0f; intensity_set((float)st->a / 8.0f); break;
     case T_RAMP:    tour_ramp_from = vibe_param_get(P_INTENSITY); tour_ramp_to = (float)st->a / 8.0f; tour_ramp_t0 = t; tour_ramp_len = (float)st->b / 4.0f; break;
     case T_CUE:     pattern_pick(st->a); break;
+    case T_KIT:     tour_restore(); tour_kept = -1; kit_set(st->a); break;
     case T_END:     tour_end(); break;
     }
   }
@@ -901,14 +953,16 @@ static void stage_event(const vibe_event *e)
   if (inside(x, y, SP_X, SP_Y, 4 * SP_PX, 4 * SP_PY) && px % SP_PX < SP_W && py % SP_PY < SP_H) {
     stage_pad = py / SP_PY * 4 + px / SP_PX;
     pad(stage_pad, 1, 0.9f);
-  } else if (gx >= 0 && gy >= 0 && gx < SG_W && gy < SLOTS * SG_PY && spage == PG_AUTO) {    /* a lane: a point – SHIFT or the right button takes it away */
+  } else if (inside(x, y, SP_X + 312, 304, 114, 24)) { kit_set(x < SP_X + 370 ? KIT_SFX : KIT_MUSIC); if (kit == KIT_SFX && spage >= PG_SEQ) spage = PG_OSC; }
+  else if (gx >= 0 && gy >= 0 && gx < SG_W && gy < SLOTS * SG_PY && spage == PG_AUTO) {
+    kit_set(KIT_MUSIC);    /* a lane: a point – SHIFT or the right button takes it away */
     sel = gy / SG_PY; cur_step = gx / SG_PX;
     if (e->midi[1] & (VIBE_STAGE_MOD_SHIFT | VIBE_STAGE_MOD_RIGHT)) pat()->aut[sel][cur_step] = 0;
     else { stage_drag = SD_AUTO; stage_auto(x, y); }
-  } else if (gx >= 0 && gy >= 0 && gx < SG_W && gy < SLOTS * SG_PY) { sel = gy / SG_PY; step_toggle(gx / SG_PX, sel); }
+  } else if (gx >= 0 && gy >= 0 && gx < SG_W && gy < SLOTS * SG_PY) { kit_set(KIT_MUSIC); sel = gy / SG_PY; step_toggle(gx / SG_PX, sel); }
   else if (inside(x, y, SN_X, SG_Y, SG_X - SN_X, SLOTS * SG_PY)) {                         /* a row's name: that sound – SHIFT or the right button: mute */
     if (e->midi[1] & (VIBE_STAGE_MOD_SHIFT | VIBE_STAGE_MOD_RIGHT)) SONG.mute ^= (uint16_t)(1u << (gy / SG_PY));
-    else { stage_pad = gy / SG_PY; pad(stage_pad, 1, 0.9f); }
+    else { kit_set(KIT_MUSIC); stage_pad = gy / SG_PY; pad(stage_pad, 1, 0.9f); }
   }
   else if (inside(x, y, SG_X, SI_Y - 4, SG_W, 22)) { stage_drag = SD_HEAT; stage_dragged(x); }
   else if (inside(x, y, SG_X, SL_Y, SG_W, 20)) { stage_drag = SD_LAYER; stage_dragged(x); }
@@ -916,6 +970,7 @@ static void stage_event(const vibe_event *e)
   else if (inside(x, y, SP_X, ST_Y, ST_N * ST_PX, 20)) {
     int k = ST_PAGE[(x - SP_X) / ST_PX];
     if (k == PG_WAVE && patches[sel].engine != SFX_ENGINE_WAVETABLE) return;
+    if (k >= PG_SEQ) kit_set(KIT_MUSIC);                 /* MIX, MASTER, AUTO: the song's */
     spage = k; if (stage_page_follows()) set_page(k);
   } else if (inside(x, y, SP_X, SA_Y, 6 * SA_PX, 32)) {                                    /* (PRESET: SHIFT or the right button = the one before) */
     shift = (e->midi[1] & (VIBE_STAGE_MOD_SHIFT | VIBE_STAGE_MOD_RIGHT)) != 0;
@@ -945,7 +1000,7 @@ void vibe_on_init(float sample_rate)
   SR = sample_rate;
   sfx_player_init(&P, SR);
   factory(); bank_load();
-  for (int i = 0; i < SLOTS; i++) P.patch[i] = patches[i];
+  for (int i = 0; i < SLOTS; i++) P.patch[i] = kits[KIT_MUSIC][i];
   vibe_notes(VIBE_NOTES);
   vibe_params(PARAMS, P_COUNT);
   vibe_param_groups(GROUPS);
@@ -958,9 +1013,9 @@ void vibe_on_init(float sample_rate)
 
 /* HOME: the controls of the page open now – up to 11 rows, so each has the whole width */
 static const char *const HELP_SOUND[] = {
-  "PADS", "play a sound, and select it",
+  "PADS  DATA", "play a sound and select it · select one",
   "KEYS", "the selected sound as an instrument",
-  "DATA", "select a sound",
+  "SHIFT + K1", "the other kit: SFX (effects) / MUSIC",
   "ENCODER 1-4", "the four values shown (SHIFT: fast)",
   "K1 SOUND", "again: OSC, TONE, FILTER (WAVE)",
   "K2 - K6", "ENV · LFO · FX · SEQ · LINK",
@@ -1090,6 +1145,7 @@ void vibe_on_event(const vibe_event *e)
     else if (e->id == VB_MENU) tour_start();
     else if (e->id == VB_LEFT || e->id == VB_RIGHT) arrow(e->id == VB_LEFT ? -1 : 1);
     else if (e->id >= VB_F1 && e->id <= VB_F6) { int f = e->id - VB_F1; if (page == PG_SEQ) soft_seq(f); else if (page == PG_SONG) soft_song(f); else if (page == PG_AUTO) soft_auto(f); else if (mix_page()) soft_mix(f); else soft_sound(f); }
+    else if (e->id == VB_K1 && shift) { kit_set(!kit); if (!sound_page()) set_page(PG_OSC); say(kit == KIT_SFX ? "SFX KIT" : "MUSIC KIT"); }   /* SHIFT + SOUND: the other kit */
     else if (e->id >= VB_K1 && e->id < VB_K1 + TAB_COUNT) tab_key(e->id - VB_K1);
     break;
   default: break;
@@ -1314,7 +1370,8 @@ static void header(uint32_t rgb, uint32_t step, uint32_t now)
   else {
     int w = vg_text(pad_name(sel), 46, 6, VG_BIG, TEXT, VG_LEFT);
     if (pad_preset[sel] >= 0) vg_text(ENGINE_SHORT[patches[sel].engine], 54 + w, 12, VG_SMALL, rgb, VG_LEFT);
-    vg_text("MENU: TOUR", 366, 10, VG_SMALL, 0x48526A, VG_RIGHT);
+    vg_round(318, 8, 50, 18, 4, kit == KIT_SFX ? 0x3A2A22 : 0x22324A);                  /* the kit (SHIFT + K1) */
+    vg_text(KIT_NAME[kit], 343, 9, VG_SMALL, kit == KIT_SFX ? 0xFF8A5C : 0x7FC4FF, VG_CENTER);
   }
   t[0] = (char)('A' + (step != NO_STEP ? (int)now : edit_pat)); t[1] = t[2] = ' '; vg_itoa(SONG.bpm, t + 3);
   vg_circle(467, 17, 4, linked ? 0x6EE7A8 : 0x2A3348);
@@ -1393,7 +1450,7 @@ static void draw_song(uint32_t step, uint32_t now, int heat)
     uint32_t c = ENGINE_RGB[patches[s].engine];
     int x = LX + s * LW, in = (used >> s) & 1, active = in && heat >= SONG.level[s], ly = 204 - SONG.level[s] * 78 / 127;
     if (in) vg_round(x, ly - 5, 26, 6, 2, active ? c : vg_mix(BG, c, 0.40f));
-    if (in && (playing >> s) & 1) vg_round(x, ly - 5, 26, 6, 2, 0xFFFFFF);
+    if (in && (play_k[kit] >> s) & 1) vg_round(x, ly - 5, 26, 6, 2, 0xFFFFFF);
     vg_text(vg_itoa(s + 1, buf), x + 13, 205, VG_SMALL, s == sel ? 0xFFFFFF : active ? c : 0x3A4358, VG_CENTER);
     if (s == sel) vg_frame(x - 2, 120, 30, 86, 2, 0xFFFFFF);
   }
@@ -1449,7 +1506,7 @@ static int silent(int s) { return (SONG.mute >> s) & 1 || (SONG.solo && !((SONG.
 static const char *auto_name(int to, int track)
 {
   static const char *const M[5] = { "DELAY TIME", "FEEDBACK", "ROOM SIZE", "DAMPING", "DRIVE" };
-  return !to ? "OFF" : to >= SFX_AT_MASTER ? M[to - SFX_AT_MASTER] : to == SFX_AT_PAN ? "PAN" : to == SFX_AT_VOL ? "VOLUME" : param_name(to - SFX_AT_PATCH, patches[track].engine);
+  return !to ? "OFF" : to >= SFX_AT_MASTER ? M[to - SFX_AT_MASTER] : to == SFX_AT_PAN ? "PAN" : to == SFX_AT_VOL ? "VOLUME" : param_name(to - SFX_AT_PATCH, kits[KIT_MUSIC][track].engine);
 }
 
 static const char *auto_text(int to, int track, int v, char *buf)
@@ -1459,7 +1516,7 @@ static const char *auto_text(int to, int track, int v, char *buf)
   if (to >= SFX_AT_MASTER) return percent(v, buf);
   if (to == SFX_AT_VOL) return vg_itoa(v, buf);
   if (to == SFX_AT_PAN) { if (v == 64) return "C"; buf[0] = v < 64 ? 'L' : 'R'; vg_itoa(v < 64 ? 64 - v : v - 64, buf + 1); return buf; }
-  sfx_patch e = patches[track];
+  sfx_patch e = kits[KIT_MUSIC][track];
   e.p[to - SFX_AT_PATCH] = (uint8_t)v;
   return param_text(to - SFX_AT_PATCH, &e, buf);
 }
@@ -1504,7 +1561,7 @@ static void draw_mix(void)
     vg_rect(x + 2, 79, 22, 1, LINE);                                          /* pan */
     vg_rect(x + 2 + SONG.pan[s] * 19 / 127, 76, 3, 7, off ? DIM : TEXT);
     vg_rect(x + 9, 202 - fh, 8, fh, off ? 0x2A3348 : vg_mix(BG, c, 0.55f));
-    vg_round(x + 2, 202 - fh - 3 < 88 ? 88 : 202 - fh - 3, 22, 6, 2, off ? 0x55607A : (playing >> s) & 1 ? 0xFFFFFF : c);
+    vg_round(x + 2, 202 - fh - 3 < 88 ? 88 : 202 - fh - 3, 22, 6, 2, off ? 0x55607A : (play_k[kit] >> s) & 1 ? 0xFFFFFF : c);
     if (solo) vg_text("S", x + 13, 186, VG_SMALL, 0xFFD23F, VG_CENTER);
     else if ((SONG.mute >> s) & 1) vg_text("M", x + 13, 186, VG_SMALL, 0xFF4040, VG_CENTER);
     vg_text(vg_itoa(s + 1, buf), x + 13, 205, VG_SMALL, s == sel ? 0xFFFFFF : off ? 0x3A4358 : c, VG_CENTER);
@@ -1558,7 +1615,7 @@ void vibe_on_draw(uint16_t *fb)
     return;
   }
   const sfx_patch *p = &patches[sel];
-  uint32_t rgb = ENGINE_RGB[p->engine], on = playing, step = seq_step, now = seq_pattern;
+  uint32_t rgb = ENGINE_RGB[p->engine], on = play_k[kit], step = seq_step, now = seq_pattern;
   int seq = page == PG_SEQ, song = page == PG_SONG, mix = page == PG_MIX, aut = page == PG_AUTO, heat = (int)(vibe_param_get(P_INTENSITY) * 127.0f + 0.5f), wt = p->engine == SFX_ENGINE_WAVETABLE;
 
   header(rgb, step, now);
@@ -1695,11 +1752,12 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
   char buf[24], t[64];
   (void)fb; (void)w; (void)h;
   const sfx_patch *p = &patches[sel];
-  uint32_t rgb = ENGINE_RGB[p->engine], on = playing, step = seq_step, now = seq_pattern;
+  uint32_t rgb = ENGINE_RGB[p->engine], on = play_k[kit], step = seq_step, now = seq_pattern;
   int heat = (int)(vibe_param_get(P_INTENSITY) * 127.0f + 0.5f), here = now == (uint32_t)edit_pat && step != NO_STEP, wt = p->engine == SFX_ENGINE_WAVETABLE;
   uint16_t used = 0;
   for (int k = 0; k < SFX_PATTERNS; k++) for (int i = 0; i < STEPS; i++) used |= SONG.pat[k].on[i];
   if (stage_page_follows()) spage = page;             /* the device's page, while it is one of these */
+  if (kit == KIT_SFX && spage >= PG_SEQ) spage = PG_OSC;
   int lanes = spage == PG_AUTO;                       /* the AUTO tab: the rows are the sounds' automation lanes */
   if (spage == PG_WAVE && !wt) spage = PG_OSC;
   vg_clear(BG);
@@ -1742,7 +1800,8 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
   vg_text(vg_itoa(sel + 1, buf), SP_X + 17, 309, VG_BOLD, BG, VG_CENTER);
   int nw = vg_text(pad_name(sel), SP_X + 44, 305, VG_BIG, TEXT, VG_LEFT);
   vg_text(ENGINE_NAME[p->engine], SP_X + 54 + nw, 311, VG_SMALL, rgb, VG_LEFT);
-  vg_text("drag a value, or the wheel", SP_X + 4 * SP_PX - 6, 311, VG_SMALL, 0x48526A, VG_RIGHT);
+  stage_button(SP_X + 312, 304, 54, 24, "SFX", VG_BOLD, kit == KIT_SFX ? TEXT : PANEL, kit == KIT_SFX ? BG : DIM);          /* the kit the pads show */
+  stage_button(SP_X + 370, 304, 56, 24, "MUSIC", VG_BOLD, kit == KIT_MUSIC ? TEXT : PANEL, kit == KIT_MUSIC ? BG : DIM);
   preview(SP_X, 334, 4 * SP_PX - 6, 64, p, rgb, spage);
   for (int i = 0; i < ST_N; i++) {
     int there = ST_PAGE[i] == spage, none = ST_PAGE[i] == PG_WAVE && !wt;
@@ -1771,11 +1830,11 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
 
   /* the song: a row a sound – dim while its layer is silent */
   for (int s = 0; s < SLOTS; s++) {
-    uint32_t c = ENGINE_RGB[patches[s].engine];
+    uint32_t c = ENGINE_RGB[kits[KIT_MUSIC][s].engine];
     int y = SG_Y + s * SG_PY, layer = heat >= SONG.level[s];
     if (s == sel) vg_round(SN_X, y, SG_X - SN_X - 6, 20, 4, c);
-    if ((on >> s) & 1) vg_rect(SN_X - 7, y + 2, 3, 16, 0xFFFFFF);
-    vg_text(lanes && SONG.auto_to[s] ? auto_name(SONG.auto_to[s], s) : pad_name(s), SN_X + 5, y + 3, VG_SMALL, s == sel ? BG : silent(s) ? 0x3A4358 : lanes ? (SONG.auto_to[s] ? TEXT : vg_mix(BG, c, 0.55f)) : layer && ((used >> s) & 1) ? c : vg_mix(BG, c, 0.55f), VG_LEFT);
+    if ((play_k[KIT_MUSIC] >> s) & 1) vg_rect(SN_X - 7, y + 2, 3, 16, 0xFFFFFF);
+    vg_text(lanes && SONG.auto_to[s] ? auto_name(SONG.auto_to[s], s) : name_of(KIT_MUSIC, s), SN_X + 5, y + 3, VG_SMALL, s == sel ? BG : silent(s) ? 0x3A4358 : lanes ? (SONG.auto_to[s] ? TEXT : vg_mix(BG, c, 0.55f)) : layer && ((used >> s) & 1) ? c : vg_mix(BG, c, 0.55f), VG_LEFT);
     if (silent(s)) { vg_rect(SN_X + 3, y + 10, SG_X - SN_X - 12, 1, s == sel ? BG : 0x55607A); layer = 0; }      /* muted: struck out, its steps dim */
     if (lanes) {                                      /* its lane: a point holds until the next one; the dots are its steps */
       int to = SONG.auto_to[s], hi = auto_hi(to), last = 0;
@@ -1813,12 +1872,12 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
   vg_text("INTENSITY", SN_X + 5, SI_Y, VG_SMALL, 0xFF5A36, VG_LEFT);
   vg_round(SG_X, SI_Y, SG_W - 2, 16, 5, PANEL);
   vg_round(SG_X, SI_Y, 6 + (SG_W - 8) * heat / 127, 16, 5, 0xFF5A36);
-  for (int s = 0; s < SLOTS; s++) if ((used >> s) & 1) vg_rect(SG_X + 2 + (SG_W - 8) * SONG.level[s] / 127, SI_Y - 6, 3, 5, heat >= SONG.level[s] ? ENGINE_RGB[patches[s].engine] : vg_mix(BG, ENGINE_RGB[patches[s].engine], 0.45f));
+  for (int s = 0; s < SLOTS; s++) if ((used >> s) & 1) vg_rect(SG_X + 2 + (SG_W - 8) * SONG.level[s] / 127, SI_Y - 6, 3, 5, heat >= SONG.level[s] ? ENGINE_RGB[kits[KIT_MUSIC][s].engine] : vg_mix(BG, ENGINE_RGB[kits[KIT_MUSIC][s].engine], 0.45f));
   vg_text(percent(heat, buf), SG_X + SG_W - 10, SI_Y + 1, VG_SMALL, TEXT, VG_RIGHT);
   vg_text("LAYER", SN_X + 5, SL_Y, VG_SMALL, DIM, VG_LEFT);
   vg_round(SG_X, SL_Y, SG_W - 2, 16, 5, PANEL);
   vg_round(SG_X, SL_Y, 6 + (SG_W - 8) * SONG.level[sel] / 127, 16, 5, vg_mix(BG, rgb, layer_on(sel) ? 0.75f : 0.35f));
-  strcpy(t, pad_name(sel)); strcpy(t + strlen(t), " plays from "); strcpy(t + strlen(t), percent(SONG.level[sel], buf));
+  strcpy(t, name_of(KIT_MUSIC, sel)); strcpy(t + strlen(t), " plays from "); strcpy(t + strlen(t), percent(SONG.level[sel], buf));
   vg_text(t, SG_X + SG_W - 10, SL_Y + 1, VG_SMALL, TEXT, VG_RIGHT);
 
   /* under it: what plays now, and the pattern's keys – or the tour's words */

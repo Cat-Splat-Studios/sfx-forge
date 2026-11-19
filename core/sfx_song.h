@@ -318,13 +318,15 @@ static inline void sfx_player_init(sfx_player *p, float sr)
   sfx_fx_init(&p->fx, sr);
 }
 
-/* a sound starts. key: what lets go of it again (a pad, a note); midi_note 0 = as designed; patch NULL = the sound's own */
+/* a sound starts. key: what lets go of it again (a pad, a note); midi_note 0 = as designed; patch NULL = the sound's own.
+   slot 0..15: one of the song's sounds, through its fader, pan and mute. slot 16..31: a sound beside the song (a game's
+   sound effect, with its patch given) – straight to the sum, whatever the mixer says. */
 static inline void sfx_player_note_on(sfx_player *p, int slot, int key, float vel, int midi_note, float note_st, const sfx_patch *patch)
 {
   int pick = 0;
   for (int i = 0; i < SFX_PLAYER_VOICES; i++) if (p->voice[i].active && p->key[i] == key && p->voice[i].gate) sfx_voice_release(&p->voice[i]);
   for (int i = 0; i < SFX_PLAYER_VOICES; i++) { if (!p->voice[i].active) { pick = i; break; } if (p->age[i] < p->age[pick]) pick = i; }
-  sfx_voice_trigger(&p->voice[pick], patch ? patch : &p->patch[slot & 15], vel, note_st, slot & 15, p->sr, p->seed += 0x9E3779B9u);
+  sfx_voice_trigger(&p->voice[pick], patch ? patch : &p->patch[slot & 15], vel, note_st, slot & 31, p->sr, p->seed += 0x9E3779B9u);
   if (midi_note > 0) sfx_voice_set_note(&p->voice[pick], midi_note);
   p->key[pick] = (int16_t)key; p->age[pick] = ++p->ages;
 }
@@ -337,8 +339,8 @@ static inline void sfx_player_note_off(sfx_player *p, int key)
 /* a sound changed: for the next time, and for the voices that play it now */
 static inline void sfx_player_set_patch(sfx_player *p, int slot, const sfx_patch *patch)
 {
-  p->patch[slot & 15] = *patch;
-  for (int i = 0; i < SFX_PLAYER_VOICES; i++) if (p->voice[i].active && p->voice[i].slot == (slot & 15)) sfx_voice_set_patch(&p->voice[i], patch);
+  if ((slot & 31) < SFX_TRACKS) p->patch[slot & 15] = *patch;
+  for (int i = 0; i < SFX_PLAYER_VOICES; i++) if (p->voice[i].active && p->voice[i].slot == (slot & 31)) sfx_voice_set_patch(&p->voice[i], patch);
 }
 
 /* the sequencer's notes are let go: all of them, or (a bar line) only those without a length of their own */
@@ -380,9 +382,9 @@ static inline void sfx__render(sfx_player *p, int from, int to)
     for (int k = 0; k < n; k++) p->one[k] = 0.0f;
     if (c > 0.0f || d > 0.0f || r > 0.0f) p->wet = 1;
     sfx_voice_render(v, &p->mods, p->one, n);
-    int t = v->slot & 15;
-    if ((s->mute >> t) & 1 || (s->solo && !((s->solo >> t) & 1))) continue;                /* (it plays on, unheard) */
-    int vol = sfx_auto(s, p->aut, SFX_AT_VOL, t, s->vol[t] & 127), pan = sfx_auto(s, p->aut, SFX_AT_PAN, t, s->pan[t] & 127);
+    int t = v->slot & 15, beside = v->slot >= SFX_TRACKS;
+    if (!beside && ((s->mute >> t) & 1 || (s->solo && !((s->solo >> t) & 1)))) continue;   /* (it plays on, unheard) */
+    int vol = beside ? 100 : sfx_auto(s, p->aut, SFX_AT_VOL, t, s->vol[t] & 127), pan = beside ? 64 : sfx_auto(s, p->aut, SFX_AT_PAN, t, s->pan[t] & 127);
     float g = (float)vol * 0.01f, pn = (float)pan * (1.0f / 127.0f);
     float gl = pan == 64 ? g : g * (pn < 0.5f ? 1.0f : 2.0f - 2.0f * pn), gr = pan == 64 ? g : g * (pn > 0.5f ? 1.0f : 2.0f * pn);
     for (int k = 0; k < n; k++) { float x = p->one[k]; p->dry[0][from + k] += x * gl; p->dry[1][from + k] += x * gr; x *= g; p->bus_c[from + k] += x * c; p->bus_d[from + k] += x * d * 0.7f; p->bus_r[from + k] += x * r; }
@@ -456,7 +458,7 @@ static inline uint32_t sfx_player_render(sfx_player *p, float *l, float *r, int 
     }
     sfx__render(p, from, n);
     on = 0;
-    for (int i = 0; i < SFX_PLAYER_VOICES; i++) if (p->voice[i].active) on |= 1u << p->voice[i].slot;
+    for (int i = 0; i < SFX_PLAYER_VOICES; i++) if (p->voice[i].active) on |= 1u << (p->voice[i].slot & 15);
     if (p->wet) p->tail = (int)(p->sr * ring); else if (!on && p->tail > 0) p->tail -= n;   /* (dry sounds leave no tail) */
     if (on || p->tail > 0) {
       sfx_fx_process(&p->fx, p->bus_c, p->bus_d, p->bus_r, p->dry[0], p->dry[1], n, echo, fx);
