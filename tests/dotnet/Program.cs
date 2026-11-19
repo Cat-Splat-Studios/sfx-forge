@@ -329,6 +329,7 @@ static class Tests
             Ok(R(other) > plain * 1.4, $"AUTOMATION of the master from any lane: DRIVE comes in at step 9 ({other[1]:0.000} -> {other[2]:0.000})");
             Bar(7, 0, (b, at) => { b[66 + 2] = 1 + 6; b[Head + 2 * Track + 35] = 6; });                              // a lane closes sound 3's CUTOFF …
             for (int i = 0; i < 80; i++) Play(1f, 10);                                                              // (the strings ring out)
+            SfxNative.PlayerSetTrack(pl, 2, 100, 64, 0);                                                            // (its fader as when it was measured)
             var untouched = Hit(2);
             Ok(Math.Abs(untouched.l / full.l - 1) < 0.01, $"and it writes nothing: sound 3 by hand is as it was made ({full.l:0.000} / {untouched.l:0.000})");
 

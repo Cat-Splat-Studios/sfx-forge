@@ -32,6 +32,7 @@ Not tried yet: receiving MIDI against a real port (it needs a loopback port or a
 | `unity/com.catsplat.sfxforge/` | the Unity package: the link, presets, a player, telemetry, editor tools |
 | `unity/Demo/` | a Unity 6.3 project using the package: a hovercraft whose every sound is synthesized live |
 | `tests/` | a scripted performance (`tour.json`) and its checks (`check.mjs`); `dotnet/` tests the Unity package's core without Unity |
+| `tests/mix-report.mjs` | measures the demo song's mix: every instrument soloed in turn – its level, its peak, how much of it is high |
 | `build.sh` | build, `vibe-check`, render the performance to `out/` |
 
 ## Build
