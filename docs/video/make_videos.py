@@ -3,8 +3,12 @@
     python docs/video/make_videos.py [tour] [song]        (after sh build.sh; needs Node, ffmpeg and Pillow)
 
 A video is a script of key presses with captions (below). The script is played to the firmware by the SDK's wasmtest,
-which renders the display 30 times a second and the sound; this file lays each frame out – the display, a drawing of
-the device with the control in use lit, the caption – and ffmpeg joins pictures and sound. Results: out/video/*.mp4.
+which renders the display 30 times a second and the sound; this file lays each frame out – the device with the
+firmware's display on its screen and the control in use lit, the display again larger, the caption – and ffmpeg joins
+pictures and sound. Results: out/video/*.mp4.
+
+device.png is the device as the VIBE FM SDK's emulator draws it (github.com/Vibe-FM-SDK/vibe-fm-sdk, Apache-2.0),
+captured from the emulator at its own size, 1600 x 860. Without that file a plain drawing of the controls is used.
 """
 import json
 import os
@@ -164,6 +168,82 @@ def device(d, ox, oy, lit):
     d.text((ox, oy - 34), "THE DEVICE", font=small, fill=DIM)
 
 
+# ---- the device as the emulator draws it: where its controls are, at its own size (1600 x 860) ----------------------------
+HW = os.path.join(os.path.dirname(os.path.abspath(__file__)), "device.png")
+HW_SCALE = 0.75
+SCREEN = (112, 54, 352, 235)
+WHITE = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23, 24]
+BLACK = {1: 548, 3: 619, 6: 759, 8: 829, 10: 900, 13: 1040, 15: 1110, 18: 1251, 20: 1321, 22: 1391}
+
+
+def control_box(name):
+    """The place of a control on the device: (x, y, w, h, kind)."""
+    fixed = {"EDATA": (1002, 52, 136, 136, "knob"), "EA": (120, 442, 96, 96, "knob"), "EB": (290, 442, 96, 96, "knob"),
+             "SHIFT": (40, 360, 84, 44, "key"), "RETURN": (40, 178, 50, 40, "key"), "HOME": (40, 230, 50, 40, "key"),
+             "LEFT": (59, 598, 120, 52, "key"), "MENU": (193, 598, 120, 52, "key"), "RIGHT": (327, 598, 120, 52, "key"),
+             "REC": (59, 668, 120, 70, "key"), "STOP": (193, 668, 120, 70, "key"), "PLAY": (327, 668, 120, 70, "key")}
+    if name in fixed:
+        return fixed[name]
+    if name[0] == "P":
+        i = int(name[1:]) - 1
+        return (1200 + (i % 4) * 92, 40 + (i // 4) * 92, 82, 82, "pad")
+    if name[0] == "F":
+        return (120 + (int(name[1:]) - 1) * 57, 314, 50, 28, "key")
+    if name[0] == "K":
+        return (480 + (int(name[1:]) - 1) * 120, 360, 84, 44, "key")
+    if name in ("E1", "E2", "E3", "E4"):
+        return (500 + (int(name[1:]) - 1) * 116, 52, 96, 96, "knob")
+    if name[0] == "N":                               # a key: the note, folded onto the two octaves the device has
+        k = (int(name[1:]) - 24) % 24
+        if k in BLACK:
+            return (BLACK[k], 452, 40, 255, "black")
+        return (500 + WHITE.index(k) * 70.2, 712, 67, 142, "white")
+    return None
+
+
+def hardware_base():
+    """The device with its screen dark and its pads unlit, at the size it has in the video."""
+    im = Image.open(HW).convert("RGB")
+    im.paste(im.crop((1282, 18, 1384, 132)), (1190, 18))    # (pad 1 was lit when the picture was taken: its glow goes)
+    im.paste(im.crop((1160, 132, 1200, 224)), (1160, 40))
+    im.paste(im.crop((1230, 46, 1252, 66)), (1206, 46))      # (… and so it is pad 2's face now: its number becomes a 1 again)
+    ImageDraw.Draw(im).text((1210, 47), "1", font=font(14), fill="#8E8A86")
+    for i in range(6):                                # (and the soft keys carried one page's captions: the display says what they are)
+        x = 120 + i * 57
+        ImageDraw.Draw(im).rectangle([x + 3, 319, x + 47, 337], fill=im.getpixel((x + 25, 317)))
+    for i in range(16):                              # (the picture was taken with one kit's colours on the pads)
+        x, y = 1200 + (i % 4) * 92, 40 + (i // 4) * 92
+        pad = im.crop((x, y, x + 82, y + 82)).convert("L").point(lambda v: int(v * 0.8)).convert("RGB")
+        im.paste(pad, (x, y))
+    ImageDraw.Draw(im).rectangle([SCREEN[0], SCREEN[1], SCREEN[0] + SCREEN[2], SCREEN[1] + SCREEN[3]], fill="#0E0B09")
+    return im.resize((int(1600 * HW_SCALE), int(860 * HW_SCALE)), Image.LANCZOS)
+
+
+def hardware(im, ox, oy, lit, shot):
+    """Draws the lit controls and the display onto the device at (ox, oy)."""
+    k = HW_SCALE
+    d = ImageDraw.Draw(im, "RGBA")
+    im.paste(shot.resize((int(SCREEN[2] * k), int(SCREEN[3] * k)), Image.LANCZOS), (ox + int(SCREEN[0] * k), oy + int(SCREEN[1] * k)))
+    for name in lit:
+        box = control_box(name)
+        if not box:
+            continue
+        x, y, w, h, kind = box
+        x0, y0, x1, y1 = ox + x * k, oy + y * k, ox + (x + w) * k, oy + (y + h) * k
+        if kind == "pad":
+            d.rounded_rectangle([x0 - 5, y0 - 5, x1 + 5, y1 + 5], 12, fill=(255, 138, 60, 70))
+            d.rounded_rectangle([x0, y0, x1, y1], 8, fill=(255, 150, 70, 255))
+            d.rounded_rectangle([x0 + 8, y0 + 8, x1 - 8, y1 - 8], 6, fill=(255, 196, 140, 255))
+        elif kind == "knob":
+            d.ellipse([x0 - 4, y0 - 4, x1 + 4, y1 + 4], outline=(255, 138, 60, 255), width=5)
+            d.ellipse([x0 - 10, y0 - 10, x1 + 10, y1 + 10], outline=(255, 138, 60, 90), width=5)
+        elif kind == "key":
+            d.rounded_rectangle([x0 - 4, y0 - 4, x1 + 4, y1 + 4], 8, fill=(255, 138, 60, 60))
+            d.rounded_rectangle([x0, y0, x1, y1], 6, fill=(255, 138, 60, 150), outline=(255, 170, 110, 255), width=3)
+        else:
+            d.rounded_rectangle([x0, y0, x1, y1], 4, fill=(255, 138, 60, 235 if kind == "black" else 215))
+
+
 def wrap(d, text, f, width):
     lines, line = [], ""
     for word in text.split():
@@ -193,10 +273,16 @@ def render(take, tail=1.5):
     print(take.name, "- playing %d s to the firmware, %d pictures" % (end, frames))
     subprocess.run(["node", os.path.join(SDK, "tools", "wasmtest.mjs"), WASM, script, out], check=True, stdout=subprocess.DEVNULL)
 
+    real = os.path.exists(HW)
     base = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(base)
-    d.rounded_rectangle([52, 142, 1268, 958], 14, fill=PANEL, outline=LINE, width=2)
     d.text((W - 60 - d.textlength("SFX FORGE  ·  " + take.title, font=font(24, False)), 62), "SFX FORGE  ·  " + take.title, font=font(24, False), fill=DIM)
+    if real:                                          # the device, and its display again, larger
+        base.paste(hardware_base(), (40, 140))
+        d.rounded_rectangle([1262, 140, 1880, 566], 12, fill=PANEL, outline=LINE, width=2)
+        d.text((1274, 574), "THE DISPLAY", font=font(18), fill=DIM)
+    else:
+        d.rounded_rectangle([52, 142, 1268, 958], 14, fill=PANEL, outline=LINE, width=2)
     big, cap, now, hint = font(54), font(40, False), font(40), font(22, False)
     mp4 = os.path.join(ROOT, "out", "video", take.name + ".mp4")
     ff = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "%dx%d" % (W, H), "-r", str(FPS), "-i", "-",
@@ -208,8 +294,7 @@ def render(take, tail=1.5):
         t = (first + k) / FPS
         im = base.copy()
         d = ImageDraw.Draw(im)
-        shot = Image.open(os.path.join(out, "f%05d.png" % k)).convert("RGB").resize((1200, 800), Image.NEAREST)
-        im.paste(shot, (60, 150))
+        shot = Image.open(os.path.join(out, "f%05d.png" % k)).convert("RGB")
         chapter, text = "", ""
         for t0, t1, c, x in take.captions:
             if t0 <= t < t1:
@@ -222,11 +307,22 @@ def render(take, tail=1.5):
         if label:
             last = label
         d.text((60, 44), chapter, font=big, fill=EMBER)
-        device(d, 1310, 190, {"E" + c[1:] if c[0] == "E" else c for c in lit})
-        d.text((1310, 720), "NOW", font=hint, fill=DIM)
-        d.text((1310, 752), label or last, font=now, fill=TEXT if label else "#5A4A3E")
-        for n, line in enumerate(wrap(d, text, cap, 1800)[:2]):
-            d.text((60, 964 + n * 48), line, font=cap, fill=TEXT)
+        if real:
+            hardware(im, 40, 140, lit, shot)
+            im.paste(shot.resize((600, 400), Image.LANCZOS), (1271, 153))
+            d = ImageDraw.Draw(im)
+            d.text((1274, 640), "NOW", font=hint, fill=DIM)
+            for n, line in enumerate(wrap(d, label or last, now, 600)[:2]):
+                d.text((1274, 672 + n * 50), line, font=now, fill=TEXT if label else "#5A4A3E")
+            for n, line in enumerate(wrap(d, text, cap, 1800)[:2]):
+                d.text((60, 842 + n * 54), line, font=cap, fill=TEXT)
+        else:
+            im.paste(shot.resize((1200, 800), Image.NEAREST), (60, 150))
+            device(d, 1310, 190, lit)
+            d.text((1310, 720), "NOW", font=hint, fill=DIM)
+            d.text((1310, 752), label or last, font=now, fill=TEXT if label else "#5A4A3E")
+            for n, line in enumerate(wrap(d, text, cap, 1800)[:2]):
+                d.text((60, 964 + n * 48), line, font=cap, fill=TEXT)
         d.rectangle([0, H - 6, int(W * k / max(1, frames - 1)), H], fill=EMBER)
         ff.stdin.write(im.tobytes())
     ff.stdin.close()
