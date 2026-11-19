@@ -312,8 +312,20 @@ The page shows one sound at a time. To see every sound's steps at once, open the
 | give a step a note | hold its pad and play a key – or turn encoder 2 NOTE (it stays in the scale) |
 | make it louder or softer | encoder 3 VELOCITY, 1 – 8 |
 | make a held note shorter | encoder 4 LENGTH: AUTO, or 1 – 15 steps |
-| record what you play | REC, then PLAY: pads and keys land on the nearest step, as hard as you hit them |
+| play a part in, live | **REC, then PLAY**: the pattern loops and what you play is recorded – see below |
 | change the tempo | A. SHIFT + A is the swing |
+
+### Playing it in, like on a groovebox
+
+Press **REC**, then **PLAY**. The pattern loops, and on the SEQ page:
+
+| | |
+|---|---|
+| **the pads are the drum kit** | hit a pad in time and its sound is recorded on the step nearest to your hit, as hard as you hit it. Kick, snare and hat can be played in together |
+| **the keys are the notes** | SHIFT + a pad selects an instrument (without recording it); then every key you play is recorded on its step, at its pitch – a bass line or a melody in one pass |
+| **the tiles follow you** | they show the steps of the sound you played last, so you see each hit land |
+
+Press **REC** again and the pads are the sixteen steps once more, to add a hit by hand or fix a note.
 
 A step **without a note** plays the sound as designed – right for drums. **LENGTH AUTO** holds a note until the sound
 plays again or the bar ends; LENGTH is for held sounds, a one-shot always plays to its own end.

@@ -1068,7 +1068,7 @@ static const char *const HELP_SOUND[] = {
   "MENU", "the tour (SHIFT + MENU twice: factory reset)",
 };
 static const char *const HELP_SEQ[] = {
-  "PADS", "the 16 steps of the selected sound",
+  "PADS", "the 16 steps (REC + PLAY: play them in)",
   "SHIFT + PAD", "hear and select that pad's sound",
   "PAD + KEY", "hold a step: it plays the key's note",
   "DATA", "select a sound (a row)",
@@ -1078,7 +1078,7 @@ static const char *const HELP_SEQ[] = {
   "F1 F2", "pattern before / after (LEFT RIGHT too)",
   "F3 FILL", "every 4th step, 2nd, every one, none",
   "F4 F5", "CLEAR the sound · COPY to next pattern",
-  "PLAY STOP REC", "the song; REC records pads and keys",
+  "REC + PLAY", "live: pads are the kit, keys the notes",
 };
 static const char *const HELP_SONG[] = {
   "PADS 1-8", "pattern A-H, from the next bar line",
@@ -1151,6 +1151,13 @@ static const char *const HELP_MIX[] = {
   "F5 F6", "PLAY · SAVE",
 };
 
+static void pick(int slot, int down)                 /* hear a pad's sound and select it – without recording it */
+{
+  if (!down) { send(M_RELEASE, slot, slot, 0, 0); return; }
+  sel = slot;
+  send(M_TRIGGER, slot, slot, 0.8f, 0);
+}
+
 void vibe_on_event(const vibe_event *e)
 {
   int id, r = vf_event(e, &id);
@@ -1161,12 +1168,13 @@ void vibe_on_event(const vibe_event *e)
   case VIBE_EV_PAD:
     if (e->id >= SLOTS) break;
     if (page == PG_SEQ) {                            /* the pads are the steps; held, a key gives the step its note */
-      if (shift) { pad(e->id, e->down, e->value); break; }                    /* SHIFT: the pad's sound – hear it, select it */
+      if (shift) { pick(e->id, e->down); break; }                             /* SHIFT: the pad's sound – hear it, select it */
+      if (rec && running) { pad(e->id, e->down, e->value); break; }           /* REC while it plays: the pads are the kit – played in, as hard as they are hit */
       if (e->down) { step_toggle(e->id, sel); held_step = e->id; } else if (held_step == e->id) held_step = -1;
       break;
     }
     if (page == PG_SONG) { if (e->down) { if (shift) arr_edit(e->id); else if (e->id < 8) pattern_pick(e->id); else intensity_set((float)(e->id - 7) / 8.0f); } break; }
-    if (page == PG_AUTO) { if (shift) pad(e->id, e->down, e->value); else if (e->down) auto_toggle(e->id); break; }     /* the pads: a point on / off */
+    if (page == PG_AUTO) { if (shift) pick(e->id, e->down); else if (e->down) auto_toggle(e->id); break; }     /* the pads: a point on / off */
     if (page == PG_MIX) { if (e->down) { sel = e->id; if (shift) SONG.solo ^= (uint16_t)(1u << sel); else SONG.mute ^= (uint16_t)(1u << sel); } break; }   /* the pads: mute, SHIFT: solo */
     pad(e->id, e->down, e->value);
     if (e->down && page == PG_WAVE && patches[sel].engine != SFX_ENGINE_WAVETABLE) set_page(PG_OSC);
@@ -1834,7 +1842,8 @@ void vibe_on_draw(uint16_t *fb)
     row(2, "VELOCITY", vg_itoa(SFX_ACC_VEL(acc) + 1, buf), (float)(SFX_ACC_VEL(acc) + 1) / 8.0f, 0, rgb);
     row(3, "LENGTH", SFX_ACC_LEN(acc) ? vg_itoa(SFX_ACC_LEN(acc), buf) : "AUTO", (float)SFX_ACC_LEN(acc) / 15.0f, 0, rgb);
     strcpy(t, "swing "); strcpy(t + 6, percent(SONG.swing * 127 / 100, buf)); strcpy(t + strlen(t), "   scale "); strcpy(t + strlen(t), SCALE_NAME[SONG.scale % SFX_SCALE_COUNT]);
-    footer(layer_on(sel) ? "PADS: THE 16 STEPS" : "ITS LAYER IS OFF NOW", layer_on(sel) ? TEXT : 0xFF8A3C, t);
+    if (rec && running) footer("REC: PADS AND KEYS PLAY IN", 0xFF4040, t);     /* played in live: each hit lands on the step it is nearest */
+    else footer(layer_on(sel) ? "PADS: THE 16 STEPS" : "ITS LAYER IS OFF NOW", layer_on(sel) ? TEXT : 0xFF8A3C, t);
   } else if (song) {
     char chain[4] = "A-A";
     draw_song(step, now, heat);

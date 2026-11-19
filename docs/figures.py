@@ -248,7 +248,7 @@ def cheat():
     y0 = y + 16
     block(30, y0, "EVERYWHERE", [
         ("PADS", "play the kit's sounds"), ("KEYS", "the selected sound, in tune"), ("DATA", "select a sound"),
-        ("PLAY  STOP  REC", "the song; REC records pads and keys"), ("LEFT  RIGHT", "page before / after - on K5 pages: pattern"),
+        ("PLAY  STOP  REC", "the song.  REC + PLAY on SEQ: play parts in live"), ("LEFT  RIGHT", "page before / after - on K5 pages: pattern"),
         ("A", "output volume - on SEQ and AUTO: tempo"), ("B", "SEQ: the scale - SONG: steps in a bar"),
         ("HOME", "this page's controls"), ("MENU", "the tour"), ("RETURN", "back to the first page")])
     block(560, y0, "WITH SHIFT", [
@@ -261,7 +261,7 @@ def cheat():
         ("SONG", "PLAY · COPY · CLR PAT · DEMO · SEND · SAVE"), ("AUTOMATION", "< PAT · PAT > · RAMP · CLEAR · COPY · SAVE"),
         ("MIXER, MASTER", "MUTE · SOLO · RESET · ALL ON · PLAY · SAVE")], kw=130)
     block(1110, y1 + 16, "A STEP", [
-        ("pad", "on / off"), ("pad held + key", "its note"), ("encoder 3", "velocity 1 - 8"), ("encoder 4", "length: AUTO, 1 - 15 steps")], kw=130)
+        ("pad", "on / off"), ("pad held + key", "its note"), ("REC + PLAY", "pads: the kit, keys: the notes - played in"), ("encoder 3", "velocity 1 - 8"), ("encoder 4", "length: AUTO, 1 - 15 steps")], kw=130)
 
     y2 = y0 + 376
     y3 = block(30, y2, "THE FIVE ENGINES  -  what A and B are", [
