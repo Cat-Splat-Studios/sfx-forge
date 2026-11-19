@@ -18,6 +18,7 @@ Everything is synthesized. There are no samples and no recordings in it.
 | work with the mouse | [14. The stage](#14-the-stage) |
 | get it into my game | [15. Into the game](#15-into-the-game) |
 | look something up | [19. Every control](#19-every-control-page-by-page) |
+| see everything on one picture | [the cheat sheet](#the-cheat-sheet) |
 
 ---
 
@@ -594,6 +595,14 @@ an earlier version is not read; the factory kits and the demo appear instead.
 ---
 
 ## 19. Every control, page by page
+
+### The cheat sheet
+
+For those who know their way around: every page and every shortcut on one picture.
+
+![The cheat sheet](img/cheatsheet.png)
+
+### The same, as tables
 
 **Everywhere:** pads play · keys play the selected sound in tune · DATA selects · SHIFT + K1 the other kit ·
 PLAY STOP REC the song · MENU the tour · HOME this page's controls · A the output volume · SHIFT + MENU twice: reset.

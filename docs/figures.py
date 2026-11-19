@@ -163,4 +163,79 @@ def layers():
 
 
 layers()
+
+
+# ---- the cheat sheet: every function and how to reach it, on one picture ------------------------------------------------
+def cheat():
+    W, H = 1640, 1120
+    bg, panel, line, text, dim, ember = "#0E0B09", "#1B1613", "#3A2E26", "#F4EBDD", "#A08E7E", "#FF8A3C"
+    key = {"K1": "#C48BFF", "K2": "#FFD23F", "K3": "#7BE07B", "K4": "#36C5FF", "K5": "#FF5A36", "K6": "#6EE7A8"}
+    im = Image.new("RGB", (W, H), bg)
+    d = ImageDraw.Draw(im)
+    big, f, b, sm = font(34), font(17, False), font(17), font(14, False)
+    d.text((30, 22), "SFX FORGE", font=big, fill=text)
+    d.text((250, 36), "cheat sheet  -  every page, and what each control does on it", font=f, fill=dim)
+    rows = [
+        ("K1", "SOUND", [("OSC", "ENGINE · FREQ · PITCH ENV · ENV TIME", ""), ("TONE", "A · B · NOISE · CRUSH", "A B: the engine's own two"),
+                         ("FILTER", "CUTOFF · RESO · FILTER ENV · F.ENV TIME", ""), ("WAVE", "TABLE · SPREAD", "wavetable sounds only")]),
+        ("K2", "ENV", [("ENVELOPE", "ATTACK · DECAY · SUSTAIN · RELEASE", "SUSTAIN off: a one-shot")]),
+        ("K3", "LFO", [("LFO", "RATE · > PITCH · > FILTER · > TIMBRE", "")]),
+        ("K4", "FX", [("EFFECT SENDS", "CHORUS · DELAY · REVERB · LEVEL", "of the selected sound"),
+                      ("MIXER", "VOLUME · PAN · DRIVE · OUTPUT", "pads: mute    SHIFT + pad: solo"),
+                      ("MASTER EFFECTS", "TIME · FEEDBACK · ROOM SIZE · DAMPING", "of the delay and the reverb")]),
+        ("K5", "SEQ", [("SEQUENCER", "STEP · NOTE · VELOCITY · LENGTH", "pads: the 16 steps    pad + key: its note"),
+                       ("SONG", "PATTERN · CHAIN · INTENSITY · LAYER", "pads 1-8: pattern    9-16: intensity"),
+                       ("AUTOMATION", "STEP · VALUE · TARGET", "pads: a point on / off")]),
+        ("K6", "LINK", [("GAME LINK", "send CC 20 · 21 · 22 · 23", "A B: CC 24 25")]),
+    ]
+    y = 92
+    d.text((30, y - 4), "THE PAGES", font=b, fill=ember)
+    d.text((150, y - 2), "press a K key again for its next page  ·  encoders 1-4 are the four values named", font=sm, fill=dim)
+    y += 30
+    for k, name, pages in rows:
+        d.rounded_rectangle([30, y, 150, y + 86], 10, fill=key[k])
+        d.text((44, y + 12), k, font=big, fill=bg)
+        d.text((44, y + 54), name, font=b, fill=bg)
+        for i, (title, enc, note) in enumerate(pages):
+            x = 166 + i * 366
+            d.rounded_rectangle([x, y, x + 352, y + 86], 10, fill=panel, outline=line)
+            d.text((x + 14, y + 9), title, font=b, fill=key[k])
+            if len(pages) > 1:
+                t = "x" + str(i + 1)
+                d.text((x + 338 - d.textlength(t, font=sm), y + 11), t, font=sm, fill=dim)
+            d.text((x + 14, y + 35), enc, font=sm, fill=text)
+            d.text((x + 14, y + 59), note, font=sm, fill=dim)
+        y += 98
+
+    def block(x, y, w, title, items, kw=150):
+        d.text((x, y), title, font=b, fill=ember)
+        y += 30
+        for a, t in items:
+            d.rounded_rectangle([x, y, x + kw, y + 26], 6, fill=panel, outline=line)
+            d.text((x + 8, y + 4), a, font=sm, fill=text)
+            d.text((x + kw + 12, y + 4), t, font=sm, fill=dim)
+            y += 32
+        return y
+
+    y0 = y + 16
+    block(30, y0, 500, "EVERYWHERE", [
+        ("PADS", "play the kit's sounds"), ("KEYS", "the selected sound, in tune"), ("DATA", "select a sound"),
+        ("PLAY  STOP  REC", "the song; REC records pads and keys"), ("LEFT  RIGHT", "page before / after - on K5 pages: pattern"),
+        ("A", "output volume - on SEQ and AUTO: tempo"), ("B", "SEQ: the scale - SONG: steps in a bar"),
+        ("HOME", "this page's controls"), ("MENU", "the tour"), ("RETURN", "back to the first page")])
+    block(560, y0, 500, "WITH SHIFT", [
+        ("K1", "the other kit: SFX / MUSIC"), ("MENU  MENU", "factory reset"), ("F1", "the preset before"),
+        ("an encoder", "turn fast"), ("A  (SEQ, AUTO)", "the swing"), ("a pad  (SEQ, AUTO)", "hear and select that sound"),
+        ("a pad  (MIX)", "solo"), ("pad 1-8  (SONG)", "add that pattern as a bar"), ("pad 9-15  (SONG)", "take the last bar away"),
+        ("pad 16  (SONG)", "no arrangement: the chain plays")], kw=170)
+    block(1110, y0, 500, "F1 - F6", [
+        ("sound pages", "PRESET · MUTATE · UNDO · RANDOM · EXPORT · SAVE"), ("SEQUENCER", "< PAT · PAT > · FILL · CLEAR · COPY · SAVE"),
+        ("SONG", "PLAY · COPY · CLR PAT · DEMO · SEND · SAVE"), ("AUTOMATION", "< PAT · PAT > · RAMP · CLEAR · COPY · SAVE"),
+        ("MIXER, MASTER", "MUTE · SOLO · RESET · ALL ON · PLAY · SAVE")], kw=130)
+    block(1110, y0 + 206, 500, "A STEP", [
+        ("pad", "on / off"), ("pad held + key", "its note"), ("encoder 3", "velocity 1 - 8"), ("encoder 4", "length: AUTO, 1 - 15 steps")], kw=130)
+    im.save(os.path.join(OUT, "cheatsheet.png"), optimize=True)
+
+
+cheat()
 print("figures written to", OUT)

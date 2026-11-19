@@ -8,7 +8,7 @@ follow the game's intensity; and a live MIDI/SysEx link to a game engine. What y
 game with the same engine.
 
 **[The manual](docs/MANUAL.md)** explains all of it: making sound effects, writing and mixing music, and getting both
-into a game.
+into a game. In a hurry: **[the cheat sheet](docs/img/cheatsheet.png)** is every page and shortcut on one picture.
 
 Everything is synthesized: there are no samples in it. Its strings, brass, choir and bells are synthesizer
 instruments in that style, not recordings of an orchestra. The wavetables are computed from sums of harmonics in
