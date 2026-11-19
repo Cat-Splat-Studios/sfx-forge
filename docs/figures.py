@@ -167,7 +167,7 @@ layers()
 
 # ---- the cheat sheet: every function and how to reach it, on one picture ------------------------------------------------
 def cheat():
-    W, H = 1640, 1500
+    W, H = 1640, 1530
     bg, panel, line, text, dim, ember = "#0E0B09", "#1B1613", "#3A2E26", "#F4EBDD", "#A08E7E", "#FF8A3C"
     key = {"K1": "#C48BFF", "K2": "#FFD23F", "K3": "#7BE07B", "K4": "#36C5FF", "K5": "#FF5A36", "K6": "#6EE7A8"}
     im = Image.new("RGB", (W, H), bg)
@@ -252,7 +252,7 @@ def cheat():
         ("A", "output volume - on SEQ and AUTO: tempo"), ("B", "SEQ: the scale - SONG: steps in a bar"),
         ("HOME", "this page's controls"), ("MENU", "the tour"), ("RETURN", "back to the first page")])
     block(560, y0, "WITH SHIFT", [
-        ("K1", "the other kit: SFX / MUSIC"), ("MENU  MENU", "factory reset"), ("F1", "the preset before"),
+        ("K1", "the other kit: SFX / MUSIC"), ("REC", "the metronome off / on"), ("MENU  MENU", "factory reset"), ("F1", "the preset before"),
         ("an encoder", "turn fast"), ("A  (SEQ, AUTO)", "the swing"), ("a pad  (SEQ, AUTO)", "hear and select that sound"),
         ("a pad  (MIX)", "solo"), ("pad 1-8  (SONG)", "add that pattern as a bar"), ("pad 9-15  (SONG)", "take the last bar away"),
         ("pad 16  (SONG)", "no arrangement: the chain plays")], kw=170)
@@ -263,7 +263,7 @@ def cheat():
     block(1110, y1 + 16, "A STEP", [
         ("pad", "on / off"), ("pad held + key", "its note"), ("REC + PLAY", "pads: the kit, keys: the notes - played in"), ("encoder 3", "velocity 1 - 8"), ("encoder 4", "length: AUTO, 1 - 15 steps")], kw=130)
 
-    y2 = y0 + 376
+    y2 = y0 + 408
     y3 = block(30, y2, "THE FIVE ENGINES  -  what A and B are", [
         ("IMPACT", "FM RATIO · FM DEPTH      hits, kicks, explosions"), ("UI BLIP", "ARP STEP · ARP SPEED     coins, menus, chiptune"),
         ("SCI-FI FM", "FM RATIO · FM DEPTH      lasers, FM bass and keys"), ("FOLEY", "GRAIN RATE · GRAIN AMT   steps, wind, hi-hats"),

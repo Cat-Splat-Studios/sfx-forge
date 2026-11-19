@@ -472,7 +472,7 @@ def song():
     v.say("BUILD A SONG", "The demo song, played in from nothing - like on a groovebox. Everything is on the K5 pages.")
     v.wait(4.0)
 
-    v.say("REC + PLAY", "REC, then PLAY: the pattern loops, and the pads are the drum kit. What you play is recorded.")
+    v.say("REC + PLAY", "REC, then PLAY: the pattern loops to a metronome, and the pads are the drum kit. What you play is recorded.")
     v.btn("REC", "REC", gap=1.2)
     t0 = v.t                                          # the bar line: PLAY is pressed here, a bar is 2 seconds
     v.btn("PLAY", "PLAY", gap=0.05)
@@ -508,6 +508,9 @@ def song():
     v.say("2  THE SNARE", "The snare on two and four - pad 2. The tiles show the sound you played last.")
     for step in (4, 12):
         drum(3, step, 2, "SNARE")
+    v.say("2  THE SNARE", "SHIFT + REC turns the metronome off and on - also while it records.")
+    until(4.0)
+    v.shift_btn("REC", "SHIFT + REC  metronome off", gap=0.3)
     until(4.5)
 
     v.say("3  THE HI-HAT", "The hi-hat - pad 13: every second step, leaning on the off-beat.")
@@ -516,6 +519,7 @@ def song():
         drum(5, step, 13, "HI-HAT", vel=0.85 if k % 2 else 0.5)
     until(7)
 
+    v.shift_btn("REC", "SHIFT + REC  metronome on", gap=0.3)
     v.say("4  THE BASS", "SHIFT + a pad selects a sound without playing it in. Now the keys record: the bass line.")
     v.shift_pad(7, "SHIFT + PAD 7  select FM BASS", gap=0.5)
     until(8)

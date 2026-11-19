@@ -324,6 +324,7 @@ Press **REC**, then **PLAY**. The pattern loops, and on the SEQ page:
 | **the pads are the drum kit** | hit a pad in time and its sound is recorded on the step nearest to your hit, as hard as you hit it. Kick, snare and hat can be played in together |
 | **the keys are the notes** | SHIFT + a pad selects an instrument (without recording it); then every key you play is recorded on its step, at its pitch – a bass line or a melody in one pass |
 | **the tiles follow you** | they show the steps of the sound you played last, so you see each hit land |
+| **a metronome keeps time** | a click on every beat, higher on the bar line, for as long as REC is on. The red REC dot in the top line beats with it. **SHIFT + REC** turns the click off and on. It is the device's own: it is not recorded and a game never hears it |
 
 Press **REC** again and the pads are the sixteen steps once more, to add a hit by hand or fix a note.
 

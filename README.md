@@ -78,7 +78,8 @@ The short version; [the manual](docs/MANUAL.md) is the long one.
   and REVERB, and the sound's LEVEL.
 - **PLAY / STOP** – the song, with a demo to start from. It follows the DAW's song position while the DAW plays, else
   its own tempo. **REC** + PLAY: what you play goes into the pattern, on the step nearest to each hit and as hard
-  as it was hit – on the SEQ page the pads are then the drum kit and the keys the notes, like on a groovebox.
+  as it was hit – on the SEQ page the pads are then the drum kit and the keys the notes, like on a groovebox. A
+  metronome clicks on every beat while REC is on (SHIFT + REC: off).
 - **K5 SEQ** – the display shows the selected sound's 16 steps, big, each with its note, and under them the whole
   pattern: a row a sound. The pads are those 16 steps (a step switched on is heard); SHIFT + pad hears and selects that
   pad's sound, DATA walks the rows. A step may carry a note: hold its pad and play a key, or turn NOTE (it moves along

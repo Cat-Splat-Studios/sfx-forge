@@ -138,6 +138,10 @@ static volatile float seq_frac;
 static volatile float scope_lo[SCOPE], scope_hi[SCOPE];
 static volatile uint32_t scope_w;
 static float sc_lo, sc_hi; static int sc_n;
+/* the metronome: a click on every beat while REC is on and the song runs – higher on the bar line. The firmware's own:
+   it is not part of the song, and a game never hears it. */
+static volatile int metro = 1, rec_on;              /* (set by the controls: SHIFT + REC, REC) */
+static float click_env, click_ph, click_f; static int click_step = -1;
 
 /* ---- the control flow's own ---------------------------------------------------------------------------------------- */
 enum { PG_OSC, PG_TIMBRE, PG_FILTER, PG_WAVE, PG_ENV, PG_LFO, PG_FX, PG_SEQ, PG_SONG, PG_AUTO, PG_MIX, PG_MASTER, PG_LINK, PG_COUNT };
@@ -253,10 +257,21 @@ void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames)
   seq_step = P.running && P.step >= 0 ? (uint32_t)P.step : NO_STEP; seq_frac = P.frac; seq_pattern = (uint32_t)P.pattern;
   seq_arr = P.running && !P.hold && P.arr_pos >= 0 ? (uint32_t)P.arr_pos : NO_STEP;
 
-  float vol = vibe_param_get(P_VOLUME), vc = vd_coef(0.01f, SR);
+  int at = P.running ? P.step : -1;
+  if (at != click_step) {                            /* a new step: on a beat, the click starts */
+    click_step = at;
+    if (at >= 0 && at % 4 == 0 && metro && rec_on) { click_env = at == 0 ? 0.30f : 0.20f; click_f = (at == 0 ? 2200.0f : 1500.0f) / SR; click_ph = 0.0f; }
+  }
+  float vol = vibe_param_get(P_VOLUME), vc = vd_coef(0.01f, SR), cc = vd_coef(0.012f, SR);
   for (int n = 0; n < frames; n++) {
     vol_s = vol + (vol_s - vol) * vc;
     float l = vd_tanh(mixl[n] * vol_s * 1.25f), r = vd_tanh(mixr[n] * vol_s * 1.25f), o = (l + r) * 0.5f;
+    if (click_env > 0.0005f) {
+      float c = vd_sin(click_ph) * click_env;
+      click_ph += click_f; if (click_ph >= 1.0f) click_ph -= 1.0f;
+      click_env *= cc;
+      l += c; r += c;
+    }
     out_l[n] = l; out_r[n] = r;
     if (o < sc_lo) sc_lo = o;
     if (o > sc_hi) sc_hi = o;
@@ -448,7 +463,7 @@ static void seq_play(int on)
   vibe_led_button(VB_PLAY, 0x6EE7A8, on ? 1.0f : 0.0f);
 }
 
-static void seq_rec(int on) { rec = on; vibe_led_button(VB_REC, 0xFF4040, on ? 1.0f : 0.0f); }
+static void seq_rec(int on) { rec = on; rec_on = on; vibe_led_button(VB_REC, 0xFF4040, on ? 1.0f : 0.0f); }
 static void pattern_pick(int p) { edit_pat = (p % SFX_PATTERNS + SFX_PATTERNS) % SFX_PATTERNS; send(M_CUE, edit_pat, 0, 0, 0); }
 static void intensity_set(float v) { vibe_param_set(P_INTENSITY, vd_clamp(v, 0.0f, 1.0f)); }
 static void step_toggle(int step, int slot)
@@ -1078,7 +1093,7 @@ static const char *const HELP_SEQ[] = {
   "F1 F2", "pattern before / after (LEFT RIGHT too)",
   "F3 FILL", "every 4th step, 2nd, every one, none",
   "F4 F5", "CLEAR the sound · COPY to next pattern",
-  "REC + PLAY", "live: pads are the kit, keys the notes",
+  "REC + PLAY", "play it in, to a click (SHIFT + REC: off)",
 };
 static const char *const HELP_SONG[] = {
   "PADS 1-8", "pattern A-H, from the next bar line",
@@ -1211,7 +1226,7 @@ void vibe_on_event(const vibe_event *e)
     else if (e->id == VB_RETURN) { if (help) help = 0; else set_page(PG_OSC); }
     else if (e->id == VB_PLAY) seq_play(!running);
     else if (e->id == VB_STOP) seq_play(0);
-    else if (e->id == VB_REC) seq_rec(!rec);
+    else if (e->id == VB_REC) { if (shift) { metro = !metro; say(metro ? "METRONOME ON" : "METRONOME OFF"); } else seq_rec(!rec); }
     else if (e->id == VB_MENU) { if (shift) factory_reset(); else tour_start(); }
     else if (e->id == VB_LEFT || e->id == VB_RIGHT) arrow(e->id == VB_LEFT ? -1 : 1);
     else if (e->id >= VB_F1 && e->id <= VB_F6) { int f = e->id - VB_F1; if (page == PG_SEQ) soft_seq(f); else if (page == PG_SONG) soft_song(f); else if (page == PG_AUTO) soft_auto(f); else if (mix_page()) soft_mix(f); else soft_sound(f); }
@@ -1557,7 +1572,7 @@ static void header(uint32_t rgb, uint32_t step, uint32_t now)
   t[0] = (char)('A' + (step != NO_STEP ? (int)now : edit_pat)); t[1] = t[2] = ' '; vg_itoa(SONG.bpm, t + 3);
   vg_circle(467, 17, 4, linked ? 0x6EE7A8 : 0x48332A);
   int ix = 454 - vg_text(t, 454, 10, VG_BOLD, step != NO_STEP ? TEXT : DIM, VG_RIGHT) - 17;
-  if (rec) vg_circle((float)ix + 5.0f, 17.0f, 5.0f, 0xFF4040);
+  if (rec) vg_circle((float)ix + 5.0f, 17.0f, step != NO_STEP && step % 4 == 0 && seq_frac < 0.6f ? 7.5f : 5.0f, 0xFF4040);   /* (it beats with the metronome) */
   else if (step != NO_STEP) vg_tri((float)ix, 11.0f, (float)ix, 23.0f, (float)ix + 10.0f, 17.0f, 0x6EE7A8);
   else vg_rect(ix, 12, 10, 10, 0x6A5248);
 }
@@ -1842,7 +1857,7 @@ void vibe_on_draw(uint16_t *fb)
     row(2, "VELOCITY", vg_itoa(SFX_ACC_VEL(acc) + 1, buf), (float)(SFX_ACC_VEL(acc) + 1) / 8.0f, 0, rgb);
     row(3, "LENGTH", SFX_ACC_LEN(acc) ? vg_itoa(SFX_ACC_LEN(acc), buf) : "AUTO", (float)SFX_ACC_LEN(acc) / 15.0f, 0, rgb);
     strcpy(t, "swing "); strcpy(t + 6, percent(SONG.swing * 127 / 100, buf)); strcpy(t + strlen(t), "   scale "); strcpy(t + strlen(t), SCALE_NAME[SONG.scale % SFX_SCALE_COUNT]);
-    if (rec && running) footer("REC: PADS AND KEYS PLAY IN", 0xFF4040, t);     /* played in live: each hit lands on the step it is nearest */
+    if (rec && running) footer(metro ? "REC: PLAY IT IN - CLICK ON" : "REC: PLAY IT IN - CLICK OFF", 0xFF4040, t);   /* (SHIFT + REC: the click, also while it records) */     /* played in live: each hit lands on the step it is nearest */
     else footer(layer_on(sel) ? "PADS: THE 16 STEPS" : "ITS LAYER IS OFF NOW", layer_on(sel) ? TEXT : 0xFF8A3C, t);
   } else if (song) {
     char chain[4] = "A-A";
