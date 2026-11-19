@@ -34,6 +34,7 @@ Not tried yet: receiving MIDI against a real port (it needs a loopback port or a
 | `tests/` | a scripted performance (`tour.json`) and its checks (`check.mjs`); `dotnet/` tests the Unity package's core without Unity |
 | `tests/mix-report.mjs` | measures the demo song's mix: every instrument soloed in turn – its level, its peak, how much of it is high |
 | `docs/` | the manual, and `figures.py`, which builds its pictures from the firmware's own screenshots |
+| `docs/video/make_videos.py` | makes the two videos (a feature tour, and building the demo song piece by piece) from scripts of key presses: the firmware renders its own display and sound, ffmpeg joins them. Results in `out/video/` |
 | `build.sh` | build, `vibe-check`, render the performance to `out/` |
 
 ## Build
