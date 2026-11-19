@@ -17,7 +17,14 @@ namespace CatSplat.SfxForge
         [HideInInspector] public byte[] data = new byte[0];
 
         public bool IsValid => data != null && sounds != null && sounds.Length == SfxProtocol.Slots
-            && ((data.Length == SfxProtocol.SongBytes && data[0] == 3) || (data.Length == SfxProtocol.SongBytesV2 && data[0] == 2) || (data.Length == SfxProtocol.SongBytesV1 && data[0] == 1));
+            && ((data.Length == SfxProtocol.SongBytes && data[0] == 4) || (data.Length == SfxProtocol.SongBytesV3 && data[0] == 3)
+                || (data.Length == SfxProtocol.SongBytesV2 && data[0] == 2) || (data.Length == SfxProtocol.SongBytesV1 && data[0] == 1));
+        /// <summary>Bars in its arrangement (0: none, it walks its chain).</summary>
+        public int ArrangementBars => IsValid && data[0] >= 4 ? data[66 + SfxProtocol.Slots] : 0;
+        /// <summary>The pattern (0..7) of a bar of the arrangement.</summary>
+        public int ArrangementPattern(int bar) => bar >= 0 && bar < ArrangementBars ? data[67 + SfxProtocol.Slots + bar] : -1;
+        /// <summary>What a sound's automation lane moves (SfxAutoTarget; 0: nothing).</summary>
+        public int AutomationTarget(int sound) => IsValid && data[0] >= 4 && sound >= 0 && sound < SfxProtocol.Slots ? data[66 + sound] : 0;
         /// <summary>It carries a mix (faders, pans, mutes, master effects): a song from firmware 0.6 on.</summary>
         public bool HasMix => IsValid && data[0] >= 2;
         /// <summary>A sound's fader: 1 = as designed, up to 1.27.</summary>

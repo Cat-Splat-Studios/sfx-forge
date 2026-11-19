@@ -45,7 +45,7 @@ ok(full > sparse * 3 && full > 0.05, `INTENSITY (CC 14) brings the layers in (${
 ok(rms(24.6, 25.4) > 0.05 && rms(27.0, 27.4) < 0.01, `a cued pattern takes over on the next bar line (${rms(24.6, 25.4).toFixed(3)}, then ${rms(27.0, 27.4).toFixed(3)} once the echoes have faded)`);
 const chunks = midi.filter((m) => m[0] === 0xF0 && m[4] === 0x05), dumps = midi.filter((m) => m[0] === 0xF0 && m[4] === 0x01);
 const bytes = chunks.reduce((a, m) => a + m.length - 8, 0);
-ok(chunks.length === 23 && chunks.every((m, i) => m[5] === i && m[6] === 23) && bytes === 4546 && dumps.length === 17, `SEND gives the 16 sounds and the song in 23 pieces (${dumps.length - 1} dumps, ${chunks.length} pieces, ${bytes} bytes)`);
+ok(chunks.length === 34 && chunks.every((m, i) => m[5] === i && m[6] === 34) && bytes === 6643 && dumps.length === 17, `SEND gives the 16 sounds and the song in 34 pieces (${dumps.length - 1} dumps, ${chunks.length} pieces, ${bytes} bytes)`);
 ok(rms(33.5, 34.0) < 0.01, 'silence at the end');
 console.log(failed ? `FAILED (${failed})` : 'tour PASSED');
 process.exit(failed ? 1 : 0);

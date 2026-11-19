@@ -80,13 +80,23 @@ the VIBE FM VST window), then runs `vibe-check` and two test performances: `out/
   - **PATTERN** A–H (also pads 1–8): a cued pattern takes over on the next bar line. **CHAIN**: walk patterns A…n by
     itself. Pads 9–16 set the intensity. Encoder B: steps in a pattern. F2 COPY makes the next pattern a variation.
   - **SEND** (F5): the 16 sounds and the song to the game.
-- **K5 a third time: MIX** – the mixer: a fader and a pan for every sound (encoders 1 and 2, for the selected one), DRIVE
+- **The arrangement** (SONG page) – up to 32 bars, a pattern each, played in order and again from the top: SHIFT + pad
+  1–8 adds that pattern as a bar, SHIFT + pad 9–15 takes the last bar away, SHIFT + pad 16 all of them (then the chain
+  plays again). A cued pattern that is in the arrangement goes on from its bar; one that is not – a boss, a menu –
+  takes over and stays until the next cue.
+- **K5 a third time: AUTO** – automation. Every sound has a lane, and TARGET (encoder 3) says which knob it moves: any
+  of the sound's own 25 values, its fader, its pan, or the master's delay time, feedback, room size, damping and drive.
+  A pad puts a point on its step (where the knob stands), VALUE (encoder 2) moves it; a point holds until the next one
+  or the bar's end. F3 RAMP draws a straight line from point to point, F4 clears the lane. Nothing is written into the
+  sound or the mix: at every bar line each knob is back where you made it. In the engine it is one function
+  (`sfx_auto` in `core/sfx_song.h`), asked wherever a knob's value is used – in the game as on the device.
+- **K4 again: MIX** – the mixer: a fader and a pan for every sound (encoders 1 and 2, for the selected one), DRIVE
   on the sum, the OUTPUT volume. The pads mute a sound, SHIFT + pad solos it; F1 MUTE, F2 SOLO, F3 RESET, F4 ALL ON.
-- **K4 again: MASTER** – the effects every sound sends to: the delay's TIME (1/16 to 1/2) and FEEDBACK, the reverb's ROOM
+- **K4 a third time: MASTER** – the effects every sound sends to: the delay's TIME (1/16 to 1/2) and FEEDBACK, the reverb's ROOM
   SIZE and DAMPING, drawn as the echoes and the fading they give.
   The mix belongs to the song: it is saved with it, sent with it, and is the mix in the game.
-- **The demo song** – our own: funk in E minor the way a 16-bit console's FM chip played it, four patterns in a chain
-  (the groove, its answer, a breakdown, a turnaround). Only the kick plays at intensity 0.
+- **The demo song** – our own: funk in E minor the way a 16-bit console's FM chip played it, four patterns (the groove, its answer, a breakdown, a turnaround)
+  arranged over eight bars, the bass opening its filter through the last two. Only the kick plays at intensity 0.
 - **K6 LINK** – the game engine's side (below).
 - **The stage** (browser and plugin) – the whole instrument for the mouse, on one picture:
   - left: the 16 pads with their names; the selected sound's picture, its pages (OSC TONE FILTER WAVE ENV LFO FX, and MIX and MASTER)
@@ -116,7 +126,7 @@ Plain MIDI, so it works over USB, the plugin's MIDI ports and Web MIDI. SysEx us
 | game → device | `F0 7D 56 42 02 <slot> <28 patch bytes> F7` | load a patch into a pad |
 | game → device | `F0 7D 56 42 03 <ASCII, ≤ 24> F7` | text for the top line |
 | game → device | `F0 7D 56 42 04 <slot> F7` | request a dump of a pad |
-| both ways | `F0 7D 56 42 05 <piece> <pieces> <≤ 200 bytes> F7` | the song with its mix, in 23 pieces (4546 bytes, `sfx_song_pack`; the older 2498- and 2455-byte songs are still taken) |
+| both ways | `F0 7D 56 42 05 <piece> <pieces> <≤ 200 bytes> F7` | the song with its mix, in 34 pieces (6643 bytes, `sfx_song_pack`; the older 4546-, 2498- and 2455-byte songs are still taken) |
 | game → device | `F0 7D 56 42 06 F7` | request the 16 sounds and the song (as SEND does) |
 
 `<slot>` is 0–15. Telemetry also arrives as the DAW parameters Mod Pitch / Cutoff / FM / Level and Intensity.
