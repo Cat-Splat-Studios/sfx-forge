@@ -99,13 +99,17 @@ the VIBE FM VST window), then runs `vibe-check` and two test performances: `out/
   arranged over eight bars, the bass opening its filter through the last two. Only the kick plays at intensity 0.
 - **K6 LINK** – the game engine's side (below).
 - **The stage** (browser and plugin) – the whole instrument for the mouse, on one picture:
-  - left: the 16 pads with their names; the selected sound's picture, its pages (OSC TONE FILTER WAVE ENV LFO FX, and MIX and MASTER)
+  - left: the 16 pads with their names; the selected sound's picture, its pages (OSC TONE FILTER WAVE ENV LFO FX, and MIX, MASTER and AUTO)
     and their four values – drag one, or turn the wheel over it (SHIFT: fast; UNDO takes a drag back); PRESET (SHIFT or
     the right button: the one before), MUTATE, UNDO, RANDOM, EXPORT, SAVE.
   - right: the pattern, a row a sound, every step with its note; rows are dim while their layer is silent. Click a step
     to set it, the wheel gives it a note (SHIFT + wheel: its velocity, CTRL + wheel: its length), click a row's name to hear and select the sound (SHIFT or the right button: mute it). INTENSITY and the selected
     sound's LAYER are sliders; the marks over INTENSITY are where each sound comes in. FILL, CLEAR, COPY, DEMO.
-  - top: PLAY, REC, the tempo (click its halves, or the wheel), the patterns A–H (SHIFT + click: the chain ends there),
+  - the AUTO tab turns the rows into the sounds' automation lanes: choose a TARGET for the selected sound (drag the
+    cell or turn the wheel over it), then click or drag in its row to draw points – the height is the value. SHIFT or
+    the right button takes a point away; RAMP joins the points with straight lines. VALUE sets one point finely.
+  - top: PLAY, REC, the tempo (click its halves, or the wheel), the patterns A–H (SHIFT or right-click: one more bar of that pattern in the arrangement) with the
+    arrangement under them (click a bar: its pattern; SHIFT or right-click: the arrangement ends before it),
     TOUR.
 - **HOME** – what every control does on the page open now.
 
