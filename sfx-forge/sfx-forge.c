@@ -170,6 +170,7 @@ static int kit = KIT_SFX;
 #define undo_preset undo_preset_k[kit]
 static int sel, page, help, shift, rec, running;
 static int edit_pat, cur_step, held_step = -1;      /* the pattern and the step being edited; the step pad held */
+static int touch_i = -1; static uint64_t touch_t;    /* the encoder (1-4) turned last, and when */
 static float acc[VE_COUNT];                         /* encoder turns not yet a whole step */
 static uint32_t rng = 0x5F3759DFu;
 static uint8_t telemetry[8], cc_out[6] = { 64, 64, 64, 64, 64, 64 };
@@ -606,9 +607,11 @@ static void encoder(int id, float turn)
   int d = (int)acc[id];
   if (!d) return;
   acc[id] -= (float)d;
+  if (id <= VE_4) { touch_i = id; touch_t = vibe_frames(); }
   if (id == VE_DATA) { sel = wrap(sel, d, SLOTS); return; }
   if (id == VE_A && (page == PG_SEQ || page == PG_AUTO)) {                /* SEQ: A is the tempo, with SHIFT the swing */
-    if (shift) SONG.swing = (uint8_t)clampi(SONG.swing + (d > 0 ? 2 : -2), 0, 100); else SONG.bpm = (uint16_t)clampi(SONG.bpm + d, 40, 240);
+    if (shift) { static char t[12] = "SWING "; SONG.swing = (uint8_t)clampi(SONG.swing + (d > 0 ? 2 : -2), 0, 100); vg_itoa(SONG.swing, t + 6); strcpy(t + strlen(t), "%"); say(t); }
+    else SONG.bpm = (uint16_t)clampi(SONG.bpm + d, 40, 240);
     return;
   }
   if (id == VE_A && page != PG_LINK) { vibe_param_set(P_VOLUME, vd_clamp(vibe_param_get(P_VOLUME) + (float)d * 0.02f, 0.0f, 1.0f)); return; }
@@ -630,7 +633,7 @@ static void encoder(int id, float turn)
     if (id == VE_2) note_turn(d);
     if (id == VE_3) vel_turn(d > 0 ? 1 : -1);
     if (id == VE_4) len_turn(d > 0 ? 1 : -1);
-    if (id == VE_B) SONG.scale = (uint8_t)wrap(SONG.scale, d, SFX_SCALE_COUNT);
+    if (id == VE_B) { SONG.scale = (uint8_t)wrap(SONG.scale, d, SFX_SCALE_COUNT); say(SCALE_NAME[SONG.scale]); }   /* (said in the top line) */
     return;
   }
   if (page == PG_SONG) {
@@ -1004,7 +1007,7 @@ void vibe_on_init(float sample_rate)
   vibe_notes(VIBE_NOTES);
   vibe_params(PARAMS, P_COUNT);
   vibe_param_groups(GROUPS);
-  vibe_stage(stage_fb, SW, SH, 0x0B0F18, 0);
+  vibe_stage(stage_fb, SW, SH, 0x180F0B, 0);
   vf_mode(VF_ON_HOLD);                               /* DATA chooses the sound; ENTER held = FOCUS */
   vf_clicks(1);
   for (int i = 0; i < TAB_COUNT; i++) vibe_label(VB_K1 + i, TAB_NAME[i]);
@@ -1173,11 +1176,11 @@ void vibe_on_event(const vibe_event *e)
 }
 
 /* ---- the display ------------------------------------------------------------------------------------------------------ */
-#define BG     0x0B0F18
-#define PANEL  0x151C2B
-#define LINE   0x26304A
-#define DIM    0x6F7A90
-#define TEXT   0xE8ECF4
+#define BG     0x180F0B
+#define PANEL  0x2B1C15
+#define LINE   0x4A3026
+#define DIM    0x907A6F
+#define TEXT   0xF4ECE8
 
 static const char *param_name(int k, int engine)
 {
@@ -1238,24 +1241,83 @@ static const char *note_text(int note, char *buf)    /* "A#3", or "--": the soun
 static const char *percent(int v127, char *buf) { return with(vg_itoa((v127 * 100 + 63) / 127, buf), "%"); }
 static int layer_on(int slot) { return (int)(vibe_param_get(P_INTENSITY) * 127.0f + 0.5f) >= SONG.level[slot]; }
 
-/* one of the four values over encoders 1-4. centre: its bar grows from the middle (64 = none) */
-#define EY 222
-static void cell(int i, const char *name, const char *value, float bar, int centre, uint32_t rgb)
+#define LOC_X 364                                    /* the six marks of K1-K6 */
+
+/* a piece of a circle: from a0 to a1 in turns, 0 = the top, clockwise */
+static void arc(float cx, float cy, float r, float a0, float a1, float w, uint32_t rgb)
+{
+  int n = (int)((a1 - a0) * 28.0f) + 1;
+  float px = cx + r * vd_sin(a0 + 1.0f), py = cy - r * vd_sin(a0 + 1.25f);
+  for (int k = 1; k <= n; k++) {
+    float a = a0 + (a1 - a0) * (float)k / (float)n, x = cx + r * vd_sin(a + 1.0f), y = cy - r * vd_sin(a + 1.25f);
+    vg_line(px, py, x, y, w, rgb);
+    px = x; py = y;
+  }
+}
+
+/* A page is one of two kinds, and nothing else:
+     a PICTURE of what the knobs shape, with their four values in its corners (the sound's pages, MASTER) – the knob
+     you turn is written large across the middle for a moment;
+     the 16 PADS as tiles, laid out as the pads are, with the four values in a column beside them (SEQ, SONG, AUTO, MIX). */
+#define CY 58                                       /* a page's own room: from here … */
+#define CH 228                                      /* … this high, down to the soft keys */
+static int16_t enc_rect[4][4];                      /* where each encoder's value is drawn (for FOCUS and the mouse) */
+static int touched(int i) { return touch_i == i && vibe_frames() - touch_t < (uint64_t)(1.3f * SR); }
+
+static void dial(float cx, float cy, float r, int i, float bar, int centre, uint32_t rgb)   /* a ring as the knob stands, its number inside */
 {
   static const char *const NUM[4] = { "1", "2", "3", "4" };
-  int x = 12 + i * 116;
-  vg_round(x, EY, 108, 58, 6, PANEL);
-  vg_text(NUM[i], x + 7, EY + 4, VG_SMALL, 0x48526A, VG_LEFT);
-  vg_text(name, x + 54, EY + 4, VG_SMALL, DIM, VG_CENTER);
-  vg_text(value, x + 54, EY + 20, VG_BIG, TEXT, VG_CENTER);
-  vg_rect(x + 10, EY + 48, 88, 5, LINE);
+  float to = -0.375f + 0.75f * vd_clamp(bar, 0.0f, 1.0f);
+  arc(cx, cy, r, -0.375f, 0.375f, 3.0f, LINE);
   if (bar >= 0.0f) {
-    int at = (int)(88.0f * vd_clamp(bar, 0.0f, 1.0f));
-    if (!centre) vg_rect(x + 10, EY + 48, at, 5, rgb);
-    else { vg_rect(x + 10 + (at < 44 ? at : 44), EY + 48, at < 44 ? 44 - at : at - 44, 5, rgb); vg_rect(x + 53, EY + 46, 2, 9, TEXT); }
+    if (!centre) arc(cx, cy, r, -0.375f, to, 3.0f, rgb);
+    else if (to > 0.0f) arc(cx, cy, r, 0.0f, to, 3.0f, rgb);
+    else arc(cx, cy, r, to, 0.0f, 3.0f, rgb);
+    vg_circle(cx + r * vd_sin(to + 1.0f), cy - r * vd_sin(to + 1.25f), 3.5f, TEXT);
   }
-  vibe_link_encoder(VE_1 + i, name, value);
+  vg_text(NUM[i], (int)cx, (int)cy - 7, VG_SMALL, DIM, VG_CENTER);
 }
+
+/* a value in a corner of the picture: 0 top left, 1 top right, 2 bottom left, 3 bottom right. i: its encoder */
+static void hud(int corner, int i, const char *name, const char *value, float bar, int centre, uint32_t rgb)
+{
+  int right = corner & 1, w = 150, x = right ? 462 - w : 18, y = (corner >> 1) ? CY + CH - 52 : CY + 6;
+  float cx = (float)(right ? x + w - 20 : x + 20);
+  vibe_link_encoder(VE_1 + i, name, value);
+  if (!name[0]) return;
+  enc_rect[i][0] = (int16_t)x; enc_rect[i][1] = (int16_t)y; enc_rect[i][2] = (int16_t)w; enc_rect[i][3] = 46;
+  vg_rect_a(x, y, w, 46, BG, 0.66f);
+  dial(cx, (float)y + 23.0f, 15.0f, i, bar, centre, rgb);
+  vg_text(name, right ? x + w - 42 : x + 42, y + 4, VG_SMALL, touched(i) ? rgb : DIM, right ? VG_RIGHT : VG_LEFT);
+  vg_text(value, right ? x + w - 42 : x + 42, y + 20, VG_BIG, TEXT, right ? VG_RIGHT : VG_LEFT);
+  if (touched(i)) {                                   /* the knob in the hand: large, in the middle */
+    vg_rect_a(120, CY + CH / 2 - 40, 240, 80, BG, 0.82f);
+    vg_text(name, 240, CY + CH / 2 - 34, VG_BOLD, rgb, VG_CENTER);
+    vg_text(value, 240, CY + CH / 2 - 14, VG_BIG | VG_X2, TEXT, VG_CENTER);
+  }
+}
+
+/* a value in the column beside the tiles */
+static void row(int i, const char *name, const char *value, float bar, int centre, uint32_t rgb)
+{
+  int x = 256, y = CY + i * 47;
+  vibe_link_encoder(VE_1 + i, name, value);
+  if (!name[0]) return;
+  enc_rect[i][0] = (int16_t)x; enc_rect[i][1] = (int16_t)y; enc_rect[i][2] = 212; enc_rect[i][3] = 43;
+  vg_round(x, y, 212, 43, 8, touched(i) ? vg_mix(PANEL, rgb, 0.22f) : PANEL);
+  dial((float)x + 24.0f, (float)y + 22.0f, 14.0f, i, bar, centre, rgb);
+  vg_text(name, x + 48, y + 3, VG_SMALL, touched(i) ? TEXT : DIM, VG_LEFT);
+  vg_text(value, x + 48, y + 18, VG_BIG, TEXT, VG_LEFT);
+}
+
+/* two lines under the column: what else there is to know here */
+static void footer(const char *a, uint32_t rgb, const char *b)
+{
+  vg_text(a, 262, CY + 191, VG_BOLD, rgb, VG_LEFT);
+  vg_text(b, 262, CY + 209, VG_SMALL, DIM, VG_LEFT);
+}
+
+static void tile_at(int s, int *x, int *y) { *x = 12 + (s % 4) * 59; *y = CY + (s / 4) * 58; }   /* the tile of pad s: 55 x 54 */
 
 static void scope(int x, int y, int w, int h, uint32_t rgb)
 {
@@ -1322,7 +1384,8 @@ static void preview(int x, int y, int w, int h, const sfx_patch *p, uint32_t rgb
   vg_rect(x + sw, y + 6, 1, h - 12, LINE);
   for (int i = 0; i < sw - 6; i++) {
     int c = i * PV_COLS / (sw - 6), y0 = mid - (int)(pv_hi[c] * gain), y1 = mid - (int)(pv_lo[c] * gain);
-    vg_rect(x + 3 + i, y0, 1, y1 - y0 + 1, rgb);
+    vg_rect(x + 3 + i, y0, 1, y1 - y0 + 1, vg_mix(PANEL, rgb, 0.42f));
+    vg_rect(x + 3 + i, mid - (mid - y0) * 6 / 10, 1, (y1 - y0) * 6 / 10 + 1, rgb);
   }
   vg_text(with(vg_ftoa((float)pv_n / PV_SR, 2, buf), "s"), x + sw - 6, y + h - 18, VG_SMALL, DIM, VG_RIGHT);       /* (where a sound has faded) */
 
@@ -1364,9 +1427,60 @@ static void preview(int x, int y, int w, int h, const sfx_patch *p, uint32_t rgb
   vg_text(label, x + w - 6, y + h - 18, VG_SMALL, DIM, VG_RIGHT);
 }
 
+/* a sound page's picture: the sound's whole shape – and over it, in white, what this page's knobs shape */
+static void scene(const sfx_patch *p, uint32_t rgb, int pg)
+{
+  char buf[16];
+  preview_render(p);
+  int x = 12, y = CY, w = 456, h = CH, mid = y + h / 2, own = pg == PG_OSC || pg == PG_FX, from = 48;
+  float gain = 58.0f / pv_peak, x0 = (float)x + 44.0f, pw = (float)w - 88.0f, top = (float)mid - 58.0f, bot = (float)mid + 58.0f;
+  const char *what = "the whole sound";
+  vg_round(x, y, w, h, 8, PANEL);
+  vg_rect(x + 4, mid, w - 8, 1, LINE);
+  for (int i = 0; i < w - 8; i++) {
+    int c = i * PV_COLS / (w - 8), y0 = mid - (int)(pv_hi[c] * gain), y1 = mid - (int)(pv_lo[c] * gain);
+    vg_rect(x + 4 + i, y0, 1, y1 - y0 + 1, vg_mix(PANEL, rgb, own ? 0.42f : 0.18f));
+    if (own) vg_rect(x + 4 + i, mid - (mid - y0) * 6 / 10, 1, (y1 - y0) * 6 / 10 + 1, rgb);
+  }
+  if (pg == PG_ENV) {
+    float a = (float)p->p[SFX_P_ATTACK] / 127.0f, d = (float)p->p[SFX_P_AMP_DECAY] / 127.0f, su = (float)p->p[SFX_P_SUSTAIN] / 127.0f, r = (float)p->p[SFX_P_RELEASE] / 127.0f;
+    int hold = p->p[SFX_P_SUSTAIN] > 0;
+    float seg = pw * 0.24f, xa = x0 + 6.0f + a * seg, xd = xa + 10.0f + d * seg, xs = hold ? xd + pw * 0.16f : xd, xr = hold ? xs + 10.0f + r * seg : xd, ys = hold ? bot - (bot - top) * su : bot;
+    float xy[10] = { x0, bot, xa, top, xd, ys, xs, ys, xr, bot };
+    path(xy, 5, 0xFFFFFF);
+    if (hold) vg_rect((int)xs, (int)top, 1, (int)(bot - top), LINE);                 /* (the pad is let go here) */
+    what = hold ? "held, then released" : "a one-shot";
+  } else if (pg == PG_FILTER) {
+    float cx = x0 + 20.0f + (float)p->p[SFX_P_FILTER_CUTOFF] / 127.0f * (pw - 70.0f), base = top + (bot - top) * 0.45f, peak = base - (float)p->p[SFX_P_FILTER_RES] / 127.0f * (bot - top) * 0.42f;
+    if (p->engine == SFX_ENGINE_FOLEY_NOISE) { float xy[6] = { cx - 26.0f, bot, cx, peak, cx + 44.0f, bot }; path(xy, 3, 0xFFFFFF); what = "the noise's band"; }
+    else { float xy[8] = { x0, base, cx - 20.0f > x0 ? cx - 20.0f : x0, base, cx, peak, cx + 44.0f, bot }; path(xy, 4, 0xFFFFFF); what = "the filter"; }
+  } else if (pg == PG_LFO) {
+    int depth = p->p[SFX_P_LFO_PITCH] > p->p[SFX_P_LFO_FILTER] ? p->p[SFX_P_LFO_PITCH] : p->p[SFX_P_LFO_FILTER];
+    if (p->p[SFX_P_LFO_TIMBRE] > depth) depth = p->p[SFX_P_LFO_TIMBRE];
+    float cyc = 1.0f + (float)p->p[SFX_P_LFO_RATE] / 127.0f * 7.0f, amp = (bot - top) * 0.5f * (float)depth / 127.0f, py = (float)mid;
+    for (int i = 1; i < (int)pw; i++) {
+      float ny = (float)mid - vd_sin((float)i / pw * cyc) * amp;
+      vg_line(x0 + (float)i - 1.0f, py, x0 + (float)i, ny, 2.0f, depth ? 0xFFFFFF : DIM);
+      py = ny;
+    }
+    what = depth ? "the slow wave" : "LFO: off";
+  } else if (pg == PG_TIMBRE || pg == PG_WAVE) {      /* the wave itself: 10 ms, where the sound is loudest */
+    for (int i = 48; i < pv_n - 240; i += 16) if (vd_absf(pv_buf[i]) > pv_peak * 0.7f) { from = i; break; }
+    int prev = mid - (int)(pv_buf[from] * gain);
+    for (int i = 0; i < (int)pw; i++) {
+      int now = mid - (int)(pv_buf[from + i * 240 / (int)pw] * gain), a = now < prev ? now : prev, b = now < prev ? prev : now;
+      vg_rect((int)x0 + i, a, 2, b - a + 1, 0xFFFFFF);
+      prev = now;
+    }
+    what = "its wave, 10 ms";
+  }
+  vg_text(what, 240, y + 12, VG_SMALL, DIM, VG_CENTER);
+  vg_text(with(vg_ftoa((float)pv_n / PV_SR, 2, buf), "s long"), 240, y + h - 26, VG_SMALL, DIM, VG_CENTER);
+}
+
 static void tour_caption(void)                       /* where F1-F6 are, while the tour runs */
 {
-  vg_round(2, 286, 476, 30, 5, 0x1C2436);
+  vg_round(2, 286, 476, 30, 5, 0x36241C);
   vg_text(tour_line, 240, 293, VG_MED, TEXT, VG_CENTER);
   vg_rect(2, 282, (int)(476.0f * vd_clamp(tour_progress, 0.0f, 1.0f)), 2, 0x36C5FF);
 }
@@ -1389,121 +1503,85 @@ static void header(uint32_t rgb, uint32_t step, uint32_t now)
   else if (toast_frames > 0) { toast_frames--; vg_text(toast, 46, 6, VG_BIG, TEXT, VG_LEFT); }
   else {
     int w = vg_text(pad_name(sel), 46, 6, VG_BIG, TEXT, VG_LEFT);
-    if (pad_preset[sel] >= 0) vg_text(ENGINE_SHORT[patches[sel].engine], 54 + w, 12, VG_SMALL, rgb, VG_LEFT);
-    vg_round(318, 8, 50, 18, 4, kit == KIT_SFX ? 0x3A2A22 : 0x22324A);                  /* the kit (SHIFT + K1) */
+    if (pad_preset[sel] >= 0 && 54 + w < 230) vg_text(ENGINE_NAME[patches[sel].engine], 54 + w, 12, VG_SMALL, rgb, VG_LEFT);
+    vg_round(318, 8, 50, 18, 4, kit == KIT_SFX ? 0x3A2A22 : 0x4A3222);                  /* the kit (SHIFT + K1) */
     vg_text(KIT_NAME[kit], 343, 9, VG_SMALL, kit == KIT_SFX ? 0xFF8A5C : 0x7FC4FF, VG_CENTER);
   }
   t[0] = (char)('A' + (step != NO_STEP ? (int)now : edit_pat)); t[1] = t[2] = ' '; vg_itoa(SONG.bpm, t + 3);
-  vg_circle(467, 17, 4, linked ? 0x6EE7A8 : 0x2A3348);
+  vg_circle(467, 17, 4, linked ? 0x6EE7A8 : 0x48332A);
   int ix = 454 - vg_text(t, 454, 10, VG_BOLD, step != NO_STEP ? TEXT : DIM, VG_RIGHT) - 17;
   if (rec) vg_circle((float)ix + 5.0f, 17.0f, 5.0f, 0xFF4040);
   else if (step != NO_STEP) vg_tri((float)ix, 11.0f, (float)ix, 23.0f, (float)ix + 10.0f, 17.0f, 0x6EE7A8);
-  else vg_rect(ix, 12, 10, 10, 0x48526A);
+  else vg_rect(ix, 12, 10, 10, 0x6A5248);
 }
 
-/* ---- SEQ: the selected sound's 16 steps, big, with their notes – and under them the whole pattern, a row a sound ------ */
-#define LX 16                                       /* 16 columns: steps (SEQ) and sounds (SONG) */
-#define LW 28
-static void draw_seq(uint32_t rgb, uint32_t step, uint32_t now, int heat)
+/* ---- SEQ: the selected sound's 16 steps as the 16 pads – a row is a beat ------------------------------------------- */
+static void draw_seq(uint32_t rgb, uint32_t step, uint32_t now)
 {
-  char buf[16], t[40];
+  char buf[16];
   int here = now == (uint32_t)edit_pat && step != NO_STEP;
-  strcpy(t, "PATTERN  "); t[8] = (char)('A' + edit_pat);
-  int w = vg_text(t, 14, 58, VG_BOLD, 0x36C5FF, VG_LEFT);
-  w += vg_text(pad_name(sel), 26 + w, 58, VG_BOLD, rgb, VG_LEFT);
-  if (!layer_on(sel)) vg_text("layer off", 38 + w, 58, VG_SMALL, DIM, VG_LEFT);
-  strcpy(t, "A: "); vg_itoa(SONG.bpm, t + 3); strcpy(t + strlen(t), " BPM   SHIFT+A: SWING "); strcpy(t + strlen(t), percent(SONG.swing * 127 / 100, buf));
-  strcpy(t + strlen(t), "   B: "); strcpy(t + strlen(t), SCALE_NAME[SONG.scale % SFX_SCALE_COUNT]);
-  vg_text(t, 466, 58, VG_SMALL, DIM, VG_RIGHT);
-  for (int i = 0; i < STEPS; i++) {                   /* a step is as high as it is hard; a line under it: how long it holds */
-    int x = LX + i * LW, set = (pat()->on[i] >> sel) & 1, head = here && step == (uint32_t)i, off = i >= SONG.len, note = pat()->note[sel][i];
-    int hgt = 11 + SFX_ACC_VEL(pat()->acc[sel][i]) * 3, len = SFX_ACC_LEN(pat()->acc[sel][i]);
-    vg_round(x, 76, 26, 32, 4, head && !set ? 0x3A4664 : set ? vg_mix(BG, rgb, 0.28f) : off ? 0x10141E : (i / 4) & 1 ? 0x1A2233 : 0x242F47);
-    if (set) vg_round(x, 108 - hgt, 26, hgt, 4, head ? 0xFFFFFF : rgb);
-    if (set && note) vg_text(note_text(note, buf), x + 13, 92, VG_SMALL, BG, VG_CENTER);
-    else if (set) vg_circle((float)x + 13.0f, 101.0f, 3.0f, BG);
-    else if (i % 4 == 0 && !off) vg_text(vg_itoa(i + 1, buf), x + 13, 85, VG_SMALL, 0x55607A, VG_CENTER);
-    if (set && len) vg_rect(x, 110, (i + len > STEPS ? STEPS - i : len) * LW - 2, 3, 0xFFFFFF);
-    if (i == cur_step) vg_frame(x - 2, 74, 30, 36, 2, 0xFFFFFF);
-  }
-  for (int s = 0; s < SLOTS; s++) {
-    uint32_t c = ENGINE_RGB[patches[s].engine];
-    int y = 118 + s * 6, layer = heat >= SONG.level[s];
-    if (s == sel) vg_tri(7.0f, (float)y - 1.0f, 7.0f, (float)y + 6.0f, 13.0f, (float)y + 2.5f, 0xFFFFFF);
-    for (int i = 0; i < STEPS; i++) {
-      int set = (pat()->on[i] >> s) & 1, head = here && step == (uint32_t)i, off = i >= SONG.len;
-      vg_rect(LX + i * LW, y, 26, 5, set ? (head && layer ? 0xFFFFFF : layer ? c : vg_mix(BG, c, 0.35f)) : head ? 0x34415F : off ? 0x0F131C : s == sel ? 0x2C3854 : (i / 4) & 1 ? 0x151B28 : 0x1B2334);
-    }
+  for (int s = 0; s < STEPS; s++) {                   /* a step is as high as it is hard, and says its note */
+    int x, y, set = (pat()->on[s] >> sel) & 1, head = here && step == (uint32_t)s, off = s >= SONG.len, note = pat()->note[sel][s];
+    int hgt = 24 + SFX_ACC_VEL(pat()->acc[sel][s]) * 4, len = SFX_ACC_LEN(pat()->acc[sel][s]);
+    tile_at(s, &x, &y);
+    vg_round(x, y, 55, 54, 7, head && !set ? 0x64463A : set ? vg_mix(BG, rgb, 0.25f) : off ? 0x1A120E : (s / 4) & 1 ? 0x2A1D17 : 0x35251D);
+    if (set) vg_round(x, y + 54 - hgt, 55, hgt, 7, head ? 0xFFFFFF : rgb);
+    if (set && note) vg_text(note_text(note, buf), x + 27, y + 33, VG_BOLD, BG, VG_CENTER);
+    else if (set) vg_circle((float)x + 27.0f, (float)y + 41.0f, 4.0f, BG);
+    else if (!off) vg_text(vg_itoa(s + 1, buf), x + 27, y + 20, VG_SMALL, 0x6A5248, VG_CENTER);
+    if (set && len) { buf[0] = '>'; vg_itoa(len, buf + 1); vg_text(buf, x + 51, y + 2, VG_SMALL, hgt > 46 ? BG : TEXT, VG_RIGHT); }   /* (it holds this many steps) */
+    if (s == cur_step) vg_frame(x - 2, y - 2, 59, 58, 2, 0xFFFFFF);
   }
 }
 
-/* ---- SONG: the patterns and their chain – and the layers: a sound plays once INTENSITY reaches its mark ------------- */
+/* ---- SONG: pads 1-8 are the patterns, pads 9-16 the intensity – as on the device -------------------------------------- */
 static void draw_song(uint32_t step, uint32_t now, int heat)
 {
   char buf[16];
-  uint16_t used = 0;
-  for (int k = 0; k < SFX_PATTERNS; k++) {
-    int x = 12 + k * 57, playing_it = (uint32_t)k == now && step != NO_STEP, mine = k == edit_pat;
-    uint32_t bg = playing_it ? 0xFFFFFF : mine ? 0x36C5FF : k < SONG.chain ? 0x1F3A52 : PANEL, fg = playing_it || mine ? BG : k < SONG.chain ? TEXT : DIM;
-    char letter[2] = { (char)('A' + k), 0 };
-    vg_round(x, 58, 53, 38, 5, bg);
-    vg_text(letter, x + 6, 60, VG_BOLD, fg, VG_LEFT);
-    for (int i = 0; i < STEPS; i++) {                /* what is in it: how many sounds on each step */
-      int n = 0;
-      for (uint16_t m = SONG.pat[k].on[i]; m; m &= (uint16_t)(m - 1)) n++;
-      used |= SONG.pat[k].on[i];
-      if (n) vg_rect(x + 3 + i * 3, 58 + 35 - (n > 8 ? 18 : 2 + n * 2), 2, n > 8 ? 18 : 2 + n * 2, vg_mix(bg, fg, 0.75f));
+  for (int s = 0; s < SLOTS; s++) {
+    int x, y;
+    tile_at(s, &x, &y);
+    if (s < SFX_PATTERNS) {
+      int playing_it = (uint32_t)s == now && step != NO_STEP, mine = s == edit_pat;
+      uint32_t bg = playing_it ? 0xFFFFFF : mine ? 0x36C5FF : s < SONG.chain || SONG.arr_len ? 0x3A2A22 : 0x1A120E, fg = playing_it || mine ? BG : TEXT;
+      char letter[2] = { (char)('A' + s), 0 };
+      vg_round(x, y, 55, 54, 7, bg);
+      vg_text(letter, x + 7, y + 3, VG_BIG, fg, VG_LEFT);
+      for (int i = 0; i < STEPS; i++) {              /* what is in it: how many sounds on each step */
+        int n = 0;
+        for (uint16_t m = SONG.pat[s].on[i]; m; m &= (uint16_t)(m - 1)) n++;
+        if (n) vg_rect(x + 4 + i * 3, y + 50 - (n > 9 ? 20 : 2 + n * 2), 2, n > 9 ? 20 : 2 + n * 2, vg_mix(bg, fg, 0.7f));
+      }
+    } else {
+      int lit = heat >= (s - 7) * 127 / 8;
+      vg_round(x, y, 55, 54, 7, lit ? 0xFF5A36 : 0x2E1A12);
+      vg_text(vg_itoa((s - 7) * 100 / 8, buf), x + 27, y + 18, VG_BIG, lit ? BG : 0x7A4A38, VG_CENTER);
     }
   }
-  vg_rect(12, 99, SONG.chain * 57 - 4, 2, 0x36C5FF);  /* the chain: these play one after another */
-  if (!SONG.arr_len) vg_text("ARRANGEMENT: none - the chain plays.  SHIFT + pad 1-8 adds a bar", 14, 104, VG_SMALL, 0x55607A, VG_LEFT);
+  if (!SONG.arr_len) footer("NO ARRANGEMENT", DIM, "SHIFT + pad 1-8 adds a bar");
   else for (int i = 0; i < SONG.arr_len && i < SFX_ARR_MAX; i++) {     /* the arrangement: a pattern a bar */
     char letter[2] = { (char)('A' + SONG.arr[i] % SFX_PATTERNS), 0 };
-    int at = seq_arr == (uint32_t)i;
-    vg_round(12 + i * 14, 103, 13, 16, 3, at ? 0xFFFFFF : SONG.arr[i] == edit_pat ? 0x36C5FF : 0x1F3A52);
-    vg_text(letter, 18 + i * 14, 104, VG_SMALL, at || SONG.arr[i] == edit_pat ? BG : TEXT, VG_CENTER);
+    int at = seq_arr == (uint32_t)i, x = 258 + (i % 16) * 13, y = CY + 190 + (i / 16) * 19;
+    vg_round(x, y, 12, 17, 3, at ? 0xFFFFFF : SONG.arr[i] == edit_pat ? 0x36C5FF : 0x3A2A22);
+    vg_text(letter, x + 6, y + 1, VG_SMALL, at || SONG.arr[i] == edit_pat ? BG : TEXT, VG_CENTER);
   }
-  int iy = 204 - heat * 78 / 127;                    /* the intensity: a level that rises … */
-  for (int s = 0; s < SLOTS; s++) vg_rect(LX + s * LW, 122, 26, 82, 0x121824);
-  vg_rect_a(LX - 4, iy, STEPS * LW + 6, 204 - iy, 0xFF5A36, 0.16f);
-  for (int s = 0; s < SLOTS; s++) {                  /* … over each sound's mark: from there on it plays */
-    uint32_t c = ENGINE_RGB[patches[s].engine];
-    int x = LX + s * LW, in = (used >> s) & 1, active = in && heat >= SONG.level[s], ly = 204 - SONG.level[s] * 78 / 127;
-    if (in) vg_round(x, ly - 5, 26, 6, 2, active ? c : vg_mix(BG, c, 0.40f));
-    if (in && (play_k[kit] >> s) & 1) vg_round(x, ly - 5, 26, 6, 2, 0xFFFFFF);
-    vg_text(vg_itoa(s + 1, buf), x + 13, 205, VG_SMALL, s == sel ? 0xFFFFFF : active ? c : 0x3A4358, VG_CENTER);
-    if (s == sel) vg_frame(x - 2, 120, 30, 86, 2, 0xFFFFFF);
-  }
-  vg_rect(LX - 4, iy - 1, STEPS * LW + 6, 2, 0xFF5A36);
-  vg_tri(4.0f, (float)iy - 5.0f, 4.0f, (float)iy + 5.0f, 12.0f, (float)iy, 0xFF5A36);
 }
 
-/* ---- LINK: what the game sends, what goes to the game ---------------------------------------------------------------- */
+/* ---- LINK: what the game sends ----------------------------------------------------------------------------------- */
 static void draw_link(void)
 {
   static const char *const IN[6] = { "PITCH", "CUTOFF", "TIMBRE", "LEVEL", "INTENSITY", "PATTERN" };
-  static const char *const OUT[3][2] = { { "ENCODERS 1-4, A, B", "CC 20-25" }, { "PADS", "NOTES 36-51" }, { "EXPORT, SEND", "SYSEX" } };
   char buf[16];
-  vg_round(12, 58, 226, 160, 6, PANEL);
-  vg_text("FROM THE GAME", 22, 64, VG_BOLD, 0xFFD23F, VG_LEFT);
-  vg_text("CC 10-15, CH 2", 228, 64, VG_SMALL, DIM, VG_RIGHT);
+  vg_round(12, CY, 232, CH, 8, PANEL);
+  vg_text("FROM THE GAME", 24, CY + 10, VG_BOLD, 0xFFD23F, VG_LEFT);
   for (int k = 0; k < 6; k++) {
-    int y = 88 + k * 21;
-    vg_text(IN[k], 22, y, VG_SMALL, TEXT, VG_LEFT);
-    vg_rect(96, y + 5, 100, 5, LINE);
-    vg_rect(96, y + 5, telemetry[k] * 100 / 127, 5, 0xFFD23F);
-    vg_text(vg_itoa(telemetry[k], buf), 228, y, VG_SMALL, DIM, VG_RIGHT);
+    int y = CY + 40 + k * 31;
+    vg_text(IN[k], 24, y, VG_SMALL, TEXT, VG_LEFT);
+    vg_text(vg_itoa(telemetry[k], buf), 232, y, VG_SMALL, DIM, VG_RIGHT);
+    vg_rect(24, y + 17, 208, 5, LINE);
+    vg_rect(24, y + 17, telemetry[k] * 208 / 127, 5, 0xFFD23F);
   }
-  vg_round(246, 58, 222, 160, 6, PANEL);
-  vg_text("TO THE GAME", 256, 64, VG_BOLD, 0x6EE7A8, VG_LEFT);
-  for (int k = 0; k < 3; k++) {
-    vg_text(OUT[k][0], 256, 88 + k * 21, VG_SMALL, TEXT, VG_LEFT);
-    vg_text(OUT[k][1], 458, 88 + k * 21, VG_SMALL, DIM, VG_RIGHT);
-  }
-  vg_rect(256, 156, 202, 1, LINE);
-  vg_circle(262.0f, 174.0f, 5.0f, linked ? 0x6EE7A8 : 0x2A3348);
-  vg_text(linked ? "LINKED" : "WAITING FOR A GAME", 274, 167, VG_BOLD, linked ? 0x6EE7A8 : DIM, VG_LEFT);
-  if (link_text[0]) vg_text(link_text, 256, 190, VG_MED, TEXT, VG_LEFT);
+  footer(linked ? "LINKED" : "WAITING FOR A GAME", linked ? 0x6EE7A8 : DIM, link_text[0] ? link_text : "the knobs send CC 20-23 to it");
 }
 
 /* the name, text and bar of value i on MIX or MASTER */
@@ -1541,51 +1619,48 @@ static const char *auto_text(int to, int track, int v, char *buf)
   return param_text(to - SFX_AT_PATCH, &e, buf);
 }
 
-/* ---- AUTO: the selected sound's lane – a point holds until the next one ------------------------------------------------ */
+/* ---- AUTO: the selected sound's lane as the 16 pads – a point holds until the next one --------------------------------- */
 static void draw_auto(uint32_t rgb, uint32_t step, uint32_t now)
 {
-  char t[16];
+  char buf[16];
   int here = now == (uint32_t)edit_pat && step != NO_STEP, to = SONG.auto_to[sel], hi = auto_hi(to), last = 0;
-  strcpy(t, "PATTERN  "); t[8] = (char)('A' + edit_pat);
-  int w = vg_text(t, 14, 58, VG_BOLD, 0x36C5FF, VG_LEFT);
-  w += vg_text(pad_name(sel), 26 + w, 58, VG_BOLD, rgb, VG_LEFT);
-  w += vg_text(">", 36 + w, 58, VG_BOLD, DIM, VG_LEFT);
-  vg_text(auto_name(to, sel), 46 + w, 58, VG_BOLD, to ? TEXT : DIM, VG_LEFT);
-  vg_text("pads: a point on / off", 466, 58, VG_SMALL, 0x55607A, VG_RIGHT);
-  for (int i = 0; i < STEPS; i++) {
-    int x = LX + i * LW, a = pat()->aut[sel][i], off = i >= SONG.len, head = here && step == (uint32_t)i;
-    vg_rect(x, 76, 26, 118, off ? 0x0F131C : head ? 0x2E3A56 : (i / 4) & 1 ? 0x151B28 : 0x1B2334);
+  for (int s = 0; s < STEPS; s++) {
+    int x, y, a = pat()->aut[sel][s], off = s >= SONG.len, head = here && step == (uint32_t)s;
+    tile_at(s, &x, &y);
+    vg_round(x, y, 55, 54, 7, off ? 0x1A120E : head ? 0x563A2E : (s / 4) & 1 ? 0x2A1D17 : 0x35251D);
     if (a) last = a;
     if (to && last && !off) {
-      int hgt = 4 + (last - 1 > hi ? hi : last - 1) * 112 / hi;
-      vg_rect(x, 194 - hgt, 26, hgt, a ? rgb : vg_mix(BG, rgb, 0.35f));
-      if (a) vg_rect(x, 194 - hgt, 26, 3, 0xFFFFFF);
+      int hgt = 6 + (last - 1 > hi ? hi : last - 1) * 48 / hi;
+      vg_round(x, y + 54 - hgt, 55, hgt, 7, a ? rgb : vg_mix(BG, rgb, 0.30f));
+      if (a) vg_rect(x + 6, y + 54 - hgt + 3, 43, 3, 0xFFFFFF);
     }
-    if ((pat()->on[i] >> sel) & 1) vg_circle((float)x + 13.0f, 202.0f, 3.0f, head ? 0xFFFFFF : rgb);     /* the sound plays here */
-    if (i == cur_step) vg_frame(x - 2, 74, 30, 122, 2, 0xFFFFFF);
+    vg_text(vg_itoa(s + 1, buf), x + 5, y + 2, VG_SMALL, to && last && last - 1 > hi * 3 / 4 ? BG : 0x6A5248, VG_LEFT);
+    if ((pat()->on[s] >> sel) & 1) vg_circle((float)x + 46.0f, (float)y + 9.0f, 3.5f, head ? 0xFFFFFF : TEXT);   /* the sound plays here */
+    if (s == cur_step) vg_frame(x - 2, y - 2, 59, 58, 2, 0xFFFFFF);
   }
-  if (!to) vg_text("turn TARGET (encoder 3): any knob of this sound, its fader, the master", 240, 126, VG_SMALL, TEXT, VG_CENTER);
 }
 
-/* ---- MIX: a fader a sound, its pan over it; muted ones grey --------------------------------------------------------- */
+/* ---- MIX: every sound a tile, where its pad is – its fader, its pan under it; muted ones grey ----------------------- */
 static void draw_mix(void)
 {
   char buf[16];
-  vg_text("MIXER", 14, 58, VG_BOLD, DIM, VG_LEFT);
-  vg_text("pads: mute     SHIFT + pad: solo", 466, 58, VG_SMALL, 0x55607A, VG_RIGHT);
-  for (int s = 0; s < SLOTS; s++) vg_rect(LX + s * LW, 88, 26, 114, 0x121824);
-  vg_rect(LX - 4, 202 - 100 * 114 / 127, STEPS * LW + 6, 1, 0x3A4664);          /* 100: as designed */
   for (int s = 0; s < SLOTS; s++) {
     uint32_t c = ENGINE_RGB[patches[s].engine];
-    int x = LX + s * LW, off = silent(s), fh = SONG.vol[s] * 114 / 127, solo = (SONG.solo >> s) & 1;
-    vg_rect(x + 2, 79, 22, 1, LINE);                                          /* pan */
-    vg_rect(x + 2 + SONG.pan[s] * 19 / 127, 76, 3, 7, off ? DIM : TEXT);
-    vg_rect(x + 9, 202 - fh, 8, fh, off ? 0x2A3348 : vg_mix(BG, c, 0.55f));
-    vg_round(x + 2, 202 - fh - 3 < 88 ? 88 : 202 - fh - 3, 22, 6, 2, off ? 0x55607A : (play_k[kit] >> s) & 1 ? 0xFFFFFF : c);
-    if (solo) vg_text("S", x + 13, 186, VG_SMALL, 0xFFD23F, VG_CENTER);
-    else if ((SONG.mute >> s) & 1) vg_text("M", x + 13, 186, VG_SMALL, 0xFF4040, VG_CENTER);
-    vg_text(vg_itoa(s + 1, buf), x + 13, 205, VG_SMALL, s == sel ? 0xFFFFFF : off ? 0x3A4358 : c, VG_CENTER);
-    if (s == sel) vg_frame(x - 2, 73, 30, 133, 2, 0xFFFFFF);
+    int x, y, off = silent(s), solo = (SONG.solo >> s) & 1, k = 0;
+    const char *n = pad_name(s);
+    tile_at(s, &x, &y);
+    vg_round(x, y, 55, 54, 7, s == sel ? 0x3E2C23 : PANEL);
+    while (k < 6 && n[k]) { buf[k] = n[k]; k++; }
+    buf[k] = 0;
+    vg_text(buf, x + 5, y + 3, VG_SMALL, off ? 0x6A5248 : TEXT, VG_LEFT);
+    vg_rect(x + 5, y + 26, 45, 7, LINE);                                       /* the fader; the mark: 100, as designed */
+    vg_rect(x + 5, y + 26, SONG.vol[s] * 45 / 127, 7, off ? 0x6A5248 : (play_k[KIT_MUSIC] >> s) & 1 ? 0xFFFFFF : c);
+    vg_rect(x + 5 + 100 * 45 / 127, y + 23, 1, 13, DIM);
+    vg_rect(x + 5, y + 43, 45, 1, LINE);                                       /* the pan */
+    vg_rect(x + 4 + SONG.pan[s] * 43 / 127, y + 39, 3, 9, off ? DIM : TEXT);
+    if (solo) vg_text("S", x + 50, y + 3, VG_SMALL, 0xFFD23F, VG_RIGHT);
+    else if ((SONG.mute >> s) & 1) vg_text("M", x + 50, y + 3, VG_SMALL, 0xFF4040, VG_RIGHT);
+    if (s == sel) vg_frame(x - 2, y - 2, 59, 58, 2, 0xFFFFFF);
   }
 }
 
@@ -1594,32 +1669,28 @@ static void draw_master(void)
 {
   static const uint8_t SIX[SFX_DELAY_TIMES] = { 1, 2, 3, 4, 6, 8 };
   float fb = (float)SONG.fx[SFX_M_DELAY_FB] * (0.45f / 64.0f), a = 1.0f, tau = 14.0f + (float)SONG.fx[SFX_M_REVERB_SIZE] * 0.9f;
-  int gap = 8 * SIX[SONG.fx[SFX_M_DELAY_TIME] % SFX_DELAY_TIMES];
-  vg_round(12, 58, 226, 160, 6, PANEL);
-  vg_text("DELAY", 22, 64, VG_BOLD, 0x36C5FF, VG_LEFT);
-  vg_text("every sound's DELAY send", 228, 64, VG_SMALL, DIM, VG_RIGHT);
-  vg_rect(22, 206, 206, 1, LINE);
-  for (int k = 0, x = 24; x < 222 && a > 0.02f; k++, x += gap) {                /* the sound, then its echoes: left, right, left … */
-    int hgt = (int)(112.0f * a);
-    vg_rect(x, 206 - hgt, 5, hgt, k == 0 ? 0xFFFFFF : (k & 1) ? 0x36C5FF : 0xFFD23F);
+  int gap = 8 * SIX[SONG.fx[SFX_M_DELAY_TIME] % SFX_DELAY_TIMES], base = CY + CH - 62;
+  vg_round(12, CY, 226, CH, 8, PANEL);
+  vg_round(242, CY, 226, CH, 8, PANEL);
+  vg_text("DELAY", 125, CY + 60, VG_BOLD, 0x36C5FF, VG_CENTER);
+  vg_text("REVERB", 355, CY + 60, VG_BOLD, 0xC48BFF, VG_CENTER);
+  vg_rect(24, base, 202, 1, LINE);
+  for (int k = 0, x = 26; x < 222 && a > 0.02f; k++, x += gap) {                /* the sound, then its echoes: left, right, left … */
+    int hgt = (int)(84.0f * a);
+    vg_rect(x, base - hgt, 5, hgt, k == 0 ? 0xFFFFFF : (k & 1) ? 0x36C5FF : 0xFFD23F);
     a *= k == 0 ? 0.7f : fb;
   }
-  vg_round(246, 58, 222, 160, 6, PANEL);
-  vg_text("REVERB", 256, 64, VG_BOLD, 0xC48BFF, VG_LEFT);
-  vg_text("every sound's REVERB send", 458, 64, VG_SMALL, DIM, VG_RIGHT);
-  vg_rect(256, 206, 202, 1, LINE);
+  vg_rect(254, base, 202, 1, LINE);
   uint32_t tone = vg_mix(0xE9D6FF, 0x5B3F86, (float)SONG.fx[SFX_M_REVERB_DAMP] / 127.0f);   /* bright .. damped */
   for (int i = 0; i < 200; i += 2) {
-    int hgt = (int)(112.0f * vd_exp2(-(float)i / tau));
-    if (hgt > 0) vg_rect(257 + i, 206 - hgt, 2, hgt, vg_mix(tone, 0x5B3F86, (float)i / 200.0f * (float)SONG.fx[SFX_M_REVERB_DAMP] / 127.0f));
+    int hgt = (int)(84.0f * vd_exp2(-(float)i / tau));
+    if (hgt > 0) vg_rect(255 + i, base - hgt, 2, hgt, vg_mix(tone, 0x5B3F86, (float)i / 200.0f * (float)SONG.fx[SFX_M_REVERB_DAMP] / 127.0f));
   }
 }
 
 void vibe_on_draw(uint16_t *fb)
 {
   static const char *const SUB[4] = { "OSC", "TONE", "FILTER", "WAVE" };
-  static const char *const HINT[PG_SEQ] = { 0, 0, 0, 0, "SUSTAIN off: a one-shot. Above: held while pressed",
-                                            "A slow wave that moves pitch, filter and timbre", "Sends to chorus, delay and reverb - and the level" };
   char buf[24];
   (void)fb;
   if (export_at >= 0) export_pump();
@@ -1640,10 +1711,21 @@ void vibe_on_draw(uint16_t *fb)
 
   header(rgb, step, now);
 
-  for (int i = 0; i < TAB_COUNT; i++) {                /* the pages (K1-K6) */
-    int x = 12 + i * 77, here = TAB_OF[page] == i;
-    vg_round(x, 34, 72, 20, 5, here ? rgb : PANEL);
-    vg_text(i == TAB_SEQ && song ? "SONG" : i == TAB_SEQ && aut ? "AUTO" : i == TAB_FX && mix ? "MIX" : i == TAB_FX && page == PG_MASTER ? "MASTER" : TAB_NAME[i], x + 36, 37, VG_BOLD, here ? BG : DIM, VG_CENTER);
+  {                                                   /* where you are: the page's name – and K1-K6 as six marks, with a dot for each page of the key you are on */
+    static const char *const TITLE[PG_COUNT] = { "SOUND   OSC", "SOUND   TONE", "SOUND   FILTER", "SOUND   WAVE", "ENVELOPE", "LFO", "EFFECT SENDS",
+                                                 "SEQUENCER", "SONG", "AUTOMATION", "MIXER", "MASTER EFFECTS", "GAME LINK" };
+    static const uint8_t FIRST[PG_COUNT] = { PG_OSC, PG_OSC, PG_OSC, PG_OSC, PG_ENV, PG_LFO, PG_FX, PG_SEQ, PG_SEQ, PG_SEQ, PG_FX, PG_FX, PG_LINK };
+    int tab = TAB_OF[page], pages = tab == TAB_SOUND ? (wt ? 4 : 3) : tab == TAB_FX || tab == TAB_SEQ ? 3 : 1;
+    int at = tab == TAB_FX ? (page == PG_FX ? 0 : page == PG_MIX ? 1 : 2) : page - FIRST[page];
+    int tw = vg_text(TITLE[page], 12, 36, VG_BOLD, rgb, VG_LEFT);
+    if (seq || song || aut) {                         /* … and the pattern; on AUTO the knob the lane moves */
+      char t[40] = "PATTERN  "; t[8] = (char)('A' + edit_pat);
+      tw += vg_text(t, 26 + tw, 36, VG_BOLD, TEXT, VG_LEFT);
+      if (aut) vg_text(auto_name(SONG.auto_to[sel], sel), 40 + tw, 36, VG_BOLD, SONG.auto_to[sel] ? TEXT : DIM, VG_LEFT);
+      else if (seq && !layer_on(sel)) vg_text("layer off", 40 + tw, 36, VG_SMALL, DIM, VG_LEFT);
+    }
+    for (int i = 0; i < TAB_COUNT; i++) vg_round(LOC_X + i * 18, 37, 12, 9, 2, i == tab ? rgb : LINE);
+    for (int i = 0; pages > 1 && i < pages; i++) vg_rect(LOC_X + tab * 18 + 6 - pages * 2 + i * 4, 49, 3, 3, i == at ? TEXT : DIM);
   }
 
   /* the 16 pads as they are on this page: sounds, the selected sound's steps, or patterns and intensity */
@@ -1663,69 +1745,70 @@ void vibe_on_draw(uint16_t *fb)
     } else {
       base = ENGINE_RGB[patches[s].engine]; state = (on >> s) & 1 ? 3 : s == sel ? 2 : 1; frame = s == sel;
     }
-    if (sound_page()) {
-      int x = 356 + (s % 4) * 29, y = 58 + (s / 4) * 34;
-      vg_round(x, y, 26, 30, 4, state == 3 ? 0xFFFFFF : state == 2 ? base : vg_mix(BG, base, 0.30f));
-      vg_text(vg_itoa(s + 1, buf), x + 13, y + 8, VG_SMALL, state >= 2 ? BG : vg_mix(BG, base, 0.85f), VG_CENTER);
-      if (frame && state != 3) vg_frame(x - 1, y - 1, 28, 32, 1, 0xFFFFFF);
-    }
+    (void)frame;                                     /* (the pads themselves show it: their lights) */
     uint32_t led = (base & 0xFFFFFF) | (uint32_t)(state + 4 * (seq + 2 * song + 3 * mix + 4 * aut)) << 24;
     if (led != led_cache[s]) { led_cache[s] = led; vibe_led_pad(s, state == 3 ? 0xFFFFFF : base, state == 3 ? 1.0f : state == 2 ? 0.75f : state == 1 ? 0.12f : 0.0f); }
   }
 
   /* the page itself, and the four values over encoders 1-4 */
   vibe_link_page(page <= PG_WAVE ? SUB[page] : song ? "SONG" : aut ? "AUTO" : mix ? "MIX" : page == PG_MASTER ? "MASTER" : TAB_NAME[TAB_OF[page]]);
+  for (int i = 0; i < 4; i++) enc_rect[i][2] = 0;
   if (aut) {
     int to = SONG.auto_to[sel], a = pat()->aut[sel][cur_step];
     draw_auto(rgb, step, now);
-    cell(0, "STEP", vg_itoa(cur_step + 1, buf), (float)(cur_step + 1) / (float)STEPS, 0, rgb);
-    cell(1, "VALUE", a && to ? auto_text(to, sel, a - 1, buf) : "--", a && to ? (float)(a - 1) / (float)auto_hi(to) : 0.0f, 0, rgb);
-    cell(2, "TARGET", auto_name(to, sel), (float)to / (float)(SFX_AT_COUNT - 1), 0, to ? TEXT : DIM);
-    cell(3, "", "", -1.0f, 0, rgb);
-  } else if (mix_page()) {
-    if (mix) draw_mix(); else draw_master();
+    row(0, "STEP", vg_itoa(cur_step + 1, buf), (float)(cur_step + 1) / (float)STEPS, 0, rgb);
+    row(1, "VALUE", a && to ? auto_text(to, sel, a - 1, buf) : "--", a && to ? (float)(a - 1) / (float)auto_hi(to) : 0.0f, 0, rgb);
+    row(2, "TARGET", auto_name(to, sel), (float)to / (float)(SFX_AT_COUNT - 1), 0, to ? TEXT : DIM);
+    footer(to ? "PADS: A POINT ON / OFF" : "TURN TARGET FIRST", to ? TEXT : 0xFF8A3C, to ? "F3 RAMP joins the points" : "knob 3: any knob of the sound, the mix");
+  } else if (mix) {
+    draw_mix();
     for (int i = 0; i < 4; i++) {
       const char *name; float bar; int centre;
       const char *value = mix_text(page, i, &name, buf, &bar, &centre);
-      cell(i, name, value, bar, centre, mix && i < 2 ? rgb : page == PG_MASTER ? (i < 2 ? 0x36C5FF : 0xC48BFF) : TEXT);
+      row(i, name, value, bar, centre, i < 2 ? rgb : TEXT);
+    }
+    footer("PADS: MUTE", TEXT, "SHIFT + pad: solo");
+  } else if (page == PG_MASTER) {
+    static const uint8_t CORNER[4] = { 0, 2, 1, 3 };  /* the delay's two on the left, the reverb's on the right */
+    draw_master();
+    for (int i = 0; i < 4; i++) {
+      const char *name; float bar; int centre;
+      const char *value = mix_text(page, i, &name, buf, &bar, &centre);
+      hud(CORNER[i], i, name, value, bar, centre, i < 2 ? 0x36C5FF : 0xC48BFF);
     }
   } else if (page == PG_LINK) {
     draw_link();
     for (int i = 0; i < 4; i++) {
       char n[8] = "CC "; vg_itoa(CC_ENCODERS + i, n + 3);
-      cell(i, n, vg_itoa(cc_out[i], buf), (float)cc_out[i] / 127.0f, 0, 0x6EE7A8);
+      row(i, n, vg_itoa(cc_out[i], buf), (float)cc_out[i] / 127.0f, 0, 0x6EE7A8);
     }
   } else if (seq) {
-    int note = pat()->note[sel][cur_step];
-    draw_seq(rgb, step, now, heat);
-    cell(0, "STEP", vg_itoa(cur_step + 1, buf), (float)(cur_step + 1) / (float)STEPS, 0, rgb);
-    cell(1, "NOTE", note_text(note, buf), note ? (float)(note - 24) / 84.0f : 0.0f, 0, rgb);
-    int acc = pat()->acc[sel][cur_step];
-    cell(2, "VELOCITY", vg_itoa(SFX_ACC_VEL(acc) + 1, buf), (float)(SFX_ACC_VEL(acc) + 1) / 8.0f, 0, rgb);
-    cell(3, "LENGTH", SFX_ACC_LEN(acc) ? vg_itoa(SFX_ACC_LEN(acc), buf) : "AUTO", (float)SFX_ACC_LEN(acc) / 15.0f, 0, rgb);
+    char t[48];
+    int note = pat()->note[sel][cur_step], acc = pat()->acc[sel][cur_step];
+    draw_seq(rgb, step, now);
+    row(0, "STEP", vg_itoa(cur_step + 1, buf), (float)(cur_step + 1) / (float)STEPS, 0, rgb);
+    row(1, "NOTE", note_text(note, buf), note ? (float)(note - 24) / 84.0f : 0.0f, 0, rgb);
+    row(2, "VELOCITY", vg_itoa(SFX_ACC_VEL(acc) + 1, buf), (float)(SFX_ACC_VEL(acc) + 1) / 8.0f, 0, rgb);
+    row(3, "LENGTH", SFX_ACC_LEN(acc) ? vg_itoa(SFX_ACC_LEN(acc), buf) : "AUTO", (float)SFX_ACC_LEN(acc) / 15.0f, 0, rgb);
+    strcpy(t, "swing "); strcpy(t + 6, percent(SONG.swing * 127 / 100, buf)); strcpy(t + strlen(t), "   scale "); strcpy(t + strlen(t), SCALE_NAME[SONG.scale % SFX_SCALE_COUNT]);
+    footer(layer_on(sel) ? "PADS: THE 16 STEPS" : "ITS LAYER IS OFF NOW", layer_on(sel) ? TEXT : 0xFF8A3C, t);
   } else if (song) {
     char chain[4] = "A-A";
     draw_song(step, now, heat);
     chain[2] = (char)('A' + SONG.chain - 1); if (SONG.chain == 1) chain[1] = 0;
     buf[0] = (char)('A' + edit_pat); buf[1] = 0;
-    cell(0, "PATTERN", buf, (float)(edit_pat + 1) / (float)SFX_PATTERNS, 0, 0x36C5FF);
-    if (SONG.arr_len) cell(1, "(CHAIN)", chain, (float)SONG.chain / (float)SFX_PATTERNS, 0, DIM);   /* (the arrangement plays, not the chain) */
-    else cell(1, "CHAIN", chain, (float)SONG.chain / (float)SFX_PATTERNS, 0, 0x36C5FF);
-    cell(2, "INTENSITY", percent(heat, buf), (float)heat / 127.0f, 0, 0xFF5A36);
-    cell(3, "LAYER", percent(SONG.level[sel], buf), (float)SONG.level[sel] / 127.0f, 0, layer_on(sel) ? rgb : DIM);
+    row(0, "PATTERN", buf, (float)(edit_pat + 1) / (float)SFX_PATTERNS, 0, 0x36C5FF);
+    row(1, SONG.arr_len ? "CHAIN (unused)" : "CHAIN", chain, (float)SONG.chain / (float)SFX_PATTERNS, 0, SONG.arr_len ? DIM : 0x36C5FF);
+    row(2, "INTENSITY", percent(heat, buf), (float)heat / 127.0f, 0, 0xFF5A36);
+    row(3, "LAYER of this sound", percent(SONG.level[sel], buf), (float)SONG.level[sel] / 127.0f, 0, layer_on(sel) ? rgb : DIM);
   } else {
-    preview(12, 58, 332, 136, p, rgb, page);
-    vg_text(ENGINE_NAME[p->engine], 411, 198, VG_SMALL, rgb, VG_CENTER);
-    if (page <= PG_WAVE) for (int i = 0; i < 4; i++) {     /* SOUND's pages: K1 again walks them */
-      vg_round(12 + i * 84, 199, 80, 18, 5, i == page ? vg_mix(BG, rgb, 0.45f) : PANEL);
-      vg_text(SUB[i], 52 + i * 84, 201, VG_SMALL, i == page ? TEXT : i == 3 && !wt ? 0x333C52 : DIM, VG_CENTER);
-    } else vg_text(HINT[page], 14, 200, VG_SMALL, DIM, VG_LEFT);
+    scene(p, rgb, page);
     for (int i = 0; i < 4; i++) {
       int k = PAGE_PARAMS[page][i];
-      if (k == ENGINE_KNOB) cell(i, "ENGINE", ENGINE_SHORT[p->engine], (float)(p->engine + 1) / (float)SFX_ENGINE_COUNT, 0, rgb);
-      else if (k == SFX_P_TABLE) cell(i, "TABLE", param_text(k, p, buf), (float)(p->p[k] % SFX_WT_TABLES + 1) / (float)SFX_WT_TABLES, 0, rgb);
-      else if (k >= 0) cell(i, param_name(k, p->engine), param_text(k, p, buf), (float)p->p[k] / 127.0f, k == SFX_P_PITCH_ENV_AMT || k == SFX_P_FILTER_ENV, rgb);
-      else cell(i, "", "", -1.0f, 0, rgb);
+      if (k == ENGINE_KNOB) hud(i, i, "ENGINE", ENGINE_NAME[p->engine], (float)(p->engine + 1) / (float)SFX_ENGINE_COUNT, 0, rgb);
+      else if (k == SFX_P_TABLE) hud(i, i, "TABLE", param_text(k, p, buf), (float)(p->p[k] % SFX_WT_TABLES + 1) / (float)SFX_WT_TABLES, 0, rgb);
+      else if (k >= 0) hud(i, i, param_name(k, p->engine), param_text(k, p, buf), (float)p->p[k] / 127.0f, k == SFX_P_PITCH_ENV_AMT || k == SFX_P_FILTER_ENV, rgb);
+      else hud(i, i, "", "", -1.0f, 0, rgb);
     }
   }
 
@@ -1733,15 +1816,15 @@ void vibe_on_draw(uint16_t *fb)
   if (tour_on) tour_caption();
   else for (int i = 0; i < 6; i++) {
     int lit = ((song && i == 0) || (mix_page() && i == 4)) && running, dim = sound_page() && i == 2 && !has_undo[sel];
-    vg_round(2 + i * 80, 286, 76, 30, 5, lit ? 0x6EE7A8 : 0x1C2436);
-    vg_text(SOFT[soft_set()][i], 40 + i * 80, 294, VG_BOLD, lit ? BG : dim ? 0x48526A : TEXT, VG_CENTER);
+    vg_round(4 + i * 79, 292, 73, 24, 12, lit ? 0x6EE7A8 : 0x36241C);
+    vg_text(SOFT[soft_set()][i], 40 + i * 79, 297, VG_BOLD, lit ? BG : dim ? 0x6A5248 : TEXT, VG_CENTER);
   }
 
   /* FOCUS: everything above with DATA + ENTER (and the mouse) */
   vf_begin();
-  for (int i = 0; i < TAB_COUNT; i++) vf_key(VB_K1 + i, 12 + i * 77, 34, 72, 20);
-  for (int i = 0; i < 4; i++) vf_encoder(VE_1 + i, 12 + i * 116, EY, 108, 58);
-  for (int i = 0; i < 6; i++) vf_key(VB_F1 + i, 2 + i * 80, 286, 76, 30);
+  for (int i = 0; i < TAB_COUNT; i++) vf_key(VB_K1 + i, LOC_X - 3 + i * 18, 34, 18, 20);
+  for (int i = 0; i < 4; i++) if (enc_rect[i][2]) vf_encoder(VE_1 + i, enc_rect[i][0], enc_rect[i][1], enc_rect[i][2], enc_rect[i][3]);
+  for (int i = 0; i < 6; i++) vf_key(VB_F1 + i, 4 + i * 79, 292, 73, 24);
   vf_end(0xFFFFFF);
 }
 
@@ -1754,7 +1837,7 @@ static void stage_button(int x, int y, int w, int h, const char *name, int font,
 static void stage_value(int i, const char *name, const char *value, float bar, int centre, uint32_t rgb)
 {
   int x = SP_X + i * SP_PX, bw = SP_W - 16;
-  vg_round(x, SC_Y, SP_W, SC_H, 6, stage_drag == SD_PARAM && stage_drag_i == i ? 0x1E2840 : PANEL);
+  vg_round(x, SC_Y, SP_W, SC_H, 6, stage_drag == SD_PARAM && stage_drag_i == i ? 0x40281E : PANEL);
   vg_text(name, x + SP_W / 2, SC_Y + 3, VG_SMALL, DIM, VG_CENTER);
   vg_text(value, x + SP_W / 2, SC_Y + 18, VG_BIG, TEXT, VG_CENTER);
   vg_rect(x + 8, SC_Y + 45, bw, 6, LINE);
@@ -1784,8 +1867,8 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
 
   /* the top row */
   vg_text(toast_frames > 0 && !tour_on ? toast : "SFX FORGE", 24, 21, VG_BIG, TEXT, VG_LEFT);
-  stage_button(190, TB_Y, 76, 36, running ? "STOP" : "PLAY", VG_BIG, running ? 0x6EE7A8 : 0x1C2436, running ? BG : TEXT);
-  stage_button(272, TB_Y, 64, 36, "REC", VG_BIG, rec ? 0xFF4040 : 0x1C2436, rec ? BG : TEXT);
+  stage_button(190, TB_Y, 76, 36, running ? "STOP" : "PLAY", VG_BIG, running ? 0x6EE7A8 : 0x36241C, running ? BG : TEXT);
+  stage_button(272, TB_Y, 64, 36, "REC", VG_BIG, rec ? 0xFF4040 : 0x36241C, rec ? BG : TEXT);
   vg_round(342, TB_Y, 104, 36, 6, PANEL);             /* the tempo: click its left or right half, or the wheel */
   vg_text("-", 351, TB_Y + 10, VG_BOLD, DIM, VG_LEFT); vg_text("+", 438, TB_Y + 10, VG_BOLD, DIM, VG_RIGHT);
   vg_text(vg_itoa(SONG.bpm, buf), 395, TB_Y + 7, VG_BIG, TEXT, VG_RIGHT);
@@ -1793,18 +1876,18 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
   for (int k = 0; k < SFX_PATTERNS; k++) {
     int playing_it = (uint32_t)k == now && step != NO_STEP, mine = k == edit_pat;
     char letter[2] = { (char)('A' + k), 0 };
-    stage_button(TP_X + k * TP_PX, TB_Y, 36, 20, letter, VG_BOLD, playing_it ? 0xFFFFFF : mine ? 0x36C5FF : k < SONG.chain ? 0x1F3A52 : PANEL, playing_it || mine ? BG : k < SONG.chain ? TEXT : DIM);
+    stage_button(TP_X + k * TP_PX, TB_Y, 36, 20, letter, VG_BOLD, playing_it ? 0xFFFFFF : mine ? 0x36C5FF : k < SONG.chain ? 0x523A1F : PANEL, playing_it || mine ? BG : k < SONG.chain ? TEXT : DIM);
   }
-  if (!SONG.arr_len) vg_text("right-click a pattern: a bar of the arrangement", TP_X, TA_Y, VG_SMALL, 0x48526A, VG_LEFT);
+  if (!SONG.arr_len) vg_text("right-click a pattern: a bar of the arrangement", TP_X, TA_Y, VG_SMALL, 0x6A5248, VG_LEFT);
   else for (int i = 0; i < SONG.arr_len && i < SFX_ARR_MAX; i++) {     /* the arrangement: a pattern a bar */
     char letter[2] = { (char)('A' + SONG.arr[i] % SFX_PATTERNS), 0 };
     int at = seq_arr == (uint32_t)i;
-    vg_round(TP_X + i * TA_PX, TA_Y, 9, 15, 2, at ? 0xFFFFFF : SONG.arr[i] == edit_pat ? 0x36C5FF : 0x1F3A52);
+    vg_round(TP_X + i * TA_PX, TA_Y, 9, 15, 2, at ? 0xFFFFFF : SONG.arr[i] == edit_pat ? 0x36C5FF : 0x523A1F);
     vg_text(letter, TP_X + i * TA_PX + 4, TA_Y, VG_SMALL, at || SONG.arr[i] == edit_pat ? BG : TEXT, VG_CENTER);
   }
-  vg_circle(800.0f, 32.0f, 5.0f, linked ? 0x6EE7A8 : 0x2A3348);
-  vg_text("LINK", 810, 25, VG_SMALL, linked ? 0x6EE7A8 : 0x48526A, VG_LEFT);
-  stage_button(856, TB_Y, 80, 36, "TOUR", VG_BIG, tour_on ? 0x36C5FF : 0x1C2436, tour_on ? BG : TEXT);
+  vg_circle(800.0f, 32.0f, 5.0f, linked ? 0x6EE7A8 : 0x48332A);
+  vg_text("LINK", 810, 25, VG_SMALL, linked ? 0x6EE7A8 : 0x6A5248, VG_LEFT);
+  stage_button(856, TB_Y, 80, 36, "TOUR", VG_BIG, tour_on ? 0x36C5FF : 0x36241C, tour_on ? BG : TEXT);
 
   /* the pads */
   for (int s = 0; s < SLOTS; s++) {
@@ -1826,7 +1909,7 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
   for (int i = 0; i < ST_N; i++) {
     int there = ST_PAGE[i] == spage, none = ST_PAGE[i] == PG_WAVE && !wt;
     vg_round(SP_X + i * ST_PX, ST_Y, 41, 20, 5, there ? rgb : PANEL);
-    vg_text(TAB[i], SP_X + i * ST_PX + 20, ST_Y + 3, VG_SMALL, there ? BG : none ? 0x333C52 : DIM, VG_CENTER);
+    vg_text(TAB[i], SP_X + i * ST_PX + 20, ST_Y + 3, VG_SMALL, there ? BG : none ? 0x523C33 : DIM, VG_CENTER);
   }
   for (int i = 0; i < 4; i++) {
     int k = spage < PG_SEQ ? PAGE_PARAMS[spage][i] : -1;
@@ -1846,7 +1929,7 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
     else stage_value(i, "", "", -1.0f, 0, rgb);
   }
   for (int i = 0; i < 6; i++)
-    stage_button(SP_X + i * SA_PX, SA_Y, 68, 32, SOFT[0][i], VG_BOLD, 0x1C2436, i == 2 && !has_undo[sel] ? 0x48526A : TEXT);
+    stage_button(SP_X + i * SA_PX, SA_Y, 68, 32, SOFT[0][i], VG_BOLD, 0x36241C, i == 2 && !has_undo[sel] ? 0x6A5248 : TEXT);
 
   /* the song: a row a sound – dim while its layer is silent */
   for (int s = 0; s < SLOTS; s++) {
@@ -1854,13 +1937,13 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
     int y = SG_Y + s * SG_PY, layer = heat >= SONG.level[s];
     if (s == sel) vg_round(SN_X, y, SG_X - SN_X - 6, 20, 4, c);
     if ((play_k[KIT_MUSIC] >> s) & 1) vg_rect(SN_X - 7, y + 2, 3, 16, 0xFFFFFF);
-    vg_text(lanes && SONG.auto_to[s] ? auto_name(SONG.auto_to[s], s) : name_of(KIT_MUSIC, s), SN_X + 5, y + 3, VG_SMALL, s == sel ? BG : silent(s) ? 0x3A4358 : lanes ? (SONG.auto_to[s] ? TEXT : vg_mix(BG, c, 0.55f)) : layer && ((used >> s) & 1) ? c : vg_mix(BG, c, 0.55f), VG_LEFT);
-    if (silent(s)) { vg_rect(SN_X + 3, y + 10, SG_X - SN_X - 12, 1, s == sel ? BG : 0x55607A); layer = 0; }      /* muted: struck out, its steps dim */
+    vg_text(lanes && SONG.auto_to[s] ? auto_name(SONG.auto_to[s], s) : name_of(KIT_MUSIC, s), SN_X + 5, y + 3, VG_SMALL, s == sel ? BG : silent(s) ? 0x58433A : lanes ? (SONG.auto_to[s] ? TEXT : vg_mix(BG, c, 0.55f)) : layer && ((used >> s) & 1) ? c : vg_mix(BG, c, 0.55f), VG_LEFT);
+    if (silent(s)) { vg_rect(SN_X + 3, y + 10, SG_X - SN_X - 12, 1, s == sel ? BG : 0x7A6055); layer = 0; }      /* muted: struck out, its steps dim */
     if (lanes) {                                      /* its lane: a point holds until the next one; the dots are its steps */
       int to = SONG.auto_to[s], hi = auto_hi(to), last = 0;
       for (int i = 0; i < STEPS; i++) {
         int x = SG_X + i * SG_PX, a = pat()->aut[s][i], head = here && step == (uint32_t)i, off = i >= SONG.len;
-        vg_round(x, y, 22, 20, 3, head ? 0x34415F : off ? 0x0F131C : s == sel ? 0x283350 : (i / 4) & 1 ? 0x171D2B : 0x1E2638);
+        vg_round(x, y, 22, 20, 3, head ? 0x5F4134 : off ? 0x1C130F : s == sel ? 0x503328 : (i / 4) & 1 ? 0x2B1D17 : 0x38261E);
         if (a) last = a;
         if (to && last && !off) {
           int hgt = 2 + (last - 1 > hi ? hi : last - 1) * 18 / hi;
@@ -1874,7 +1957,7 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
     }
     for (int i = 0; i < STEPS; i++) {
       int x = SG_X + i * SG_PX, set = (pat()->on[i] >> s) & 1, head = here && step == (uint32_t)i, off = i >= SONG.len, note = pat()->note[s][i];
-      uint32_t cell = set ? (head && layer ? 0xFFFFFF : layer ? c : vg_mix(BG, c, 0.35f)) : head ? 0x34415F : off ? 0x0F131C : (i / 4) & 1 ? 0x171D2B : 0x1E2638;
+      uint32_t cell = set ? (head && layer ? 0xFFFFFF : layer ? c : vg_mix(BG, c, 0.35f)) : head ? 0x5F4134 : off ? 0x1C130F : (i / 4) & 1 ? 0x2B1D17 : 0x38261E;
       int hgt = 6 + SFX_ACC_VEL(pat()->acc[s][i]) * 2, len = SFX_ACC_LEN(pat()->acc[s][i]);
       if (!set) vg_round(x, y, 22, 20, 3, s == sel && !head && !off ? vg_mix(cell, 0xFFFFFF, 0.08f) : cell);
       else { vg_round(x, y, 22, 20, 3, vg_mix(BG, cell, 0.30f)); vg_round(x, y + 20 - hgt, 22, hgt, 3, cell); }   /* as high as it is hard */
@@ -1884,7 +1967,7 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
     }
     for (int i = 0; i < STEPS; i++) {                 /* a step with a length: a line as far as it holds */
       int len = SFX_ACC_LEN(pat()->acc[s][i]);
-      if (((pat()->on[i] >> s) & 1) && len > 1) vg_rect(SG_X + i * SG_PX + 22, y + 16, (i + len > STEPS ? STEPS - i : len) * SG_PX - 24, 3, layer ? 0xFFFFFF : 0x55607A);
+      if (((pat()->on[i] >> s) & 1) && len > 1) vg_rect(SG_X + i * SG_PX + 22, y + 16, (i + len > STEPS ? STEPS - i : len) * SG_PX - 24, 3, layer ? 0xFFFFFF : 0x7A6055);
     }
   }
 
@@ -1902,17 +1985,17 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
 
   /* under it: what plays now, and the pattern's keys – or the tour's words */
   if (tour_on) {
-    vg_round(SN_X, SF_Y, 470, 52, 6, 0x1C2436);
+    vg_round(SN_X, SF_Y, 470, 52, 6, 0x36241C);
     vg_text(tour_title, SN_X + 12, SF_Y + 4, VG_BIG, 0x36C5FF, VG_LEFT);
     vg_text(tour_line, SN_X + 12, SF_Y + 30, VG_MED, TEXT, VG_LEFT);
     vg_rect(SN_X, SF_Y + 50, (int)(470.0f * vd_clamp(tour_progress, 0.0f, 1.0f)), 2, 0x36C5FF);
   } else {
     scope(SN_X, SF_Y, 238, 52, rgb);
-    for (int k = 0; k < 4; k++) stage_button(SF_X + k * SF_PX, SF_Y, 53, 30, FILLS[lanes][k], VG_BOLD, 0x1C2436, TEXT);
-    if (lanes) vg_text("drag in a lane: points   right-click: none", SF_X + 4 * SF_PX - 4, SF_Y + 35, VG_SMALL, 0x55607A, VG_RIGHT);
+    for (int k = 0; k < 4; k++) stage_button(SF_X + k * SF_PX, SF_Y, 53, 30, FILLS[lanes][k], VG_BOLD, 0x36241C, TEXT);
+    if (lanes) vg_text("drag in a lane: points   right-click: none", SF_X + 4 * SF_PX - 4, SF_Y + 35, VG_SMALL, 0x7A6055, VG_RIGHT);
     else {
     strcpy(t, "wheel: note "); strcpy(t + strlen(t), note_text(pat()->note[sel][cur_step], buf)); strcpy(t + strlen(t), "  SHIFT: vel  CTRL: len");
-    vg_text(t, SF_X + 4 * SF_PX - 4, SF_Y + 35, VG_SMALL, 0x55607A, VG_RIGHT);
+    vg_text(t, SF_X + 4 * SF_PX - 4, SF_Y + 35, VG_SMALL, 0x7A6055, VG_RIGHT);
     }
   }
 }
