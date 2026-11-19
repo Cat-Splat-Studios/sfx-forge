@@ -48,7 +48,9 @@ the VIBE FM VST window), then runs `vibe-check` and two test performances: `out/
   one, MUTATE, notes, instruments, wavetables, the song, its layers, cued patterns, the link). Any touch ends it;
   everything it changed is put back. On the stage: the TOUR button.
 - **The display** – on the sound pages it shows the selected sound itself: its whole shape from start to end, and its
-  wave (10 ms of it). It redraws as the knobs turn. The other pages show what plays now.
+  wave (10 ms of it) – or, on ENV, FILTER and LFO, the envelope, the filter and the LFO as their knobs set them. It
+  redraws as the knobs turn. Values read in their units (Hz, ms, %). The top line always shows the selected sound and
+  the song: playing or not, its pattern and tempo. **LEFT / RIGHT**: the sound page before / after.
 - **Pads** – 16 sounds. **Keys** – the selected sound as an instrument, in tune, up to 16 notes. **DATA** selects a sound.
 - **F1 PRESET** – the next of 32 named sounds onto the selected pad (SHIFT: the one before): the sound effects, and
   STRINGS, BRASS, CHOIR, PIZZICATO, HARP, TIMPANI, BELLS, CELESTA, FLUTE, ORGAN, PAD, wavetable sweeps and basses.
@@ -63,10 +65,14 @@ the VIBE FM VST window), then runs `vibe-check` and two test performances: `out/
   and REVERB, and the sound's LEVEL.
 - **PLAY / STOP** – the song, with a demo to start from. It follows the DAW's song position while the DAW plays, else
   its own tempo. **REC**: pads and keys you play go into the pattern.
-- **K5 SEQ** – the pads are the 16 steps of the selected sound. A step may carry a note: hold its pad and play a
-  key, or turn NOTE (it moves along the scale chosen with encoder B). Encoders: STEP · NOTE · TEMPO · SWING. A sustained
-  sound holds until it plays again or the bar ends.
-- **K5 again: SONG** – what makes it game music:
+- **K5 SEQ** – the display shows the selected sound's 16 steps, big, each with its note, and under them the whole
+  pattern: a row a sound. The pads are those 16 steps (a step switched on is heard); SHIFT + pad hears and selects that
+  pad's sound, DATA walks the rows. A step may carry a note: hold its pad and play a key, or turn NOTE (it moves along
+  the scale chosen with encoder B). Encoders: STEP · NOTE · TEMPO · SWING. F1 / F2 (and LEFT / RIGHT): the pattern
+  before / after. F3 FILL: every 4th step, every 2nd, every one, none. F4 CLEAR the sound's steps. F5 COPY the pattern
+  to the next one. A sustained sound holds until it plays again or the bar ends.
+- **K5 again: SONG** – what makes it game music. The display shows the eight patterns (what is in each, and the
+  chain), and the layers: INTENSITY as a level that rises over each sound's mark.
   - **LAYER**: every sound has a threshold and plays only while **INTENSITY** is at or above it. Low intensity: the
     kick alone. High: bass, snare, strings, lead, effects.
   - **PATTERN** A–H (also pads 1–8): a cued pattern takes over on the next bar line. **CHAIN**: walk patterns A…n by
@@ -76,7 +82,7 @@ the VIBE FM VST window), then runs `vibe-check` and two test performances: `out/
 - **The stage** (browser and plugin) – the same, big: the pads, patterns, intensity, the whole 16 × 16 step grid (dim
   rows are layers that are silent now), the sound's wave and the scope. Click to play and to set steps; the wheel sets
   a step's note.
-- **HOME** – what every control does.
+- **HOME** – what every control does on the page open now.
 
 ## The link (device ⇄ game engine)
 
