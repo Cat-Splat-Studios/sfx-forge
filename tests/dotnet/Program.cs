@@ -170,7 +170,7 @@ static class Tests
                 if (SfxProtocol.TryParsePatch(msg, out int slot, out var patch)) { sounds[slot] = patch; seen |= 1 << slot; }
                 else if (SfxProtocol.TryTakeSongChunk(msg, song, ref next)) whole = true;
             }
-            Ok(whole && seen == 0xFFFF, "the firmware's song arrives whole: 16 sounds and 13 pieces");
+            Ok(whole && seen == 0xFFFF, "the firmware's song arrives whole: 16 sounds and 23 pieces");
             Ok(whole && SfxProtocol.BuildSong(song).SelectMany(c => c).SequenceEqual(msgs.Where(b => b[0] == 0xF0 && b[4] == SfxProtocol.SongChunk).SelectMany(c => c)), "and packs back to the same messages");
 
             IntPtr pl = Marshal.AllocHGlobal(SfxNative.PlayerSize);
@@ -259,9 +259,33 @@ static class Tests
             Ok(SfxNative.PlayerSetSong(pl, mixed), "a song with another mix is taken");
             var fromSong = Hit(2);
             Ok(fromSong.l < full.l * 0.001 && Math.Abs(fromSong.r / full.l - 0.5) < 0.02, $"the mix is part of the song: fader and pan come with it ({fromSong.l:0.000} / {fromSong.r:0.000})");
-            var old = new byte[SfxProtocol.SongBytesV1];                               // a song from before the mixer: its head, then the patterns
-            Array.Copy(song, 0, old, 0, 23); Array.Copy(song, SfxProtocol.SongBytes - 2432, old, 23, 2432); old[0] = 1;
-            Ok(SfxNative.PlayerSetSong(pl, old) && Math.Abs(Hit(2).l - full.l) < full.l * 0.01, "a song from before the mixer still loads, with every fader as designed");
+            // songs from before: format 2 (no velocity, no length) and format 1 (no mixer either) – a track is 3 + 16 bytes there, 3 + 32 here
+            var v2 = new byte[SfxProtocol.SongBytesV2]; var old = new byte[SfxProtocol.SongBytesV1];
+            Array.Copy(mixed, 0, v2, 0, 66); Array.Copy(song, 0, old, 0, 23); v2[0] = 2; old[0] = 1;
+            for (int k = 0; k < 128; k++) { Array.Copy(song, 66 + k * 35, v2, 66 + k * 19, 19); Array.Copy(song, 66 + k * 35, old, 23 + k * 19, 19); }
+            bool took2 = SfxNative.PlayerSetSong(pl, v2); var from2 = Hit(2);
+            Ok(took2 && from2.l < full.l * 0.001 && Math.Abs(from2.r / full.l - 0.5) < 0.02, "a format 2 song still loads, with its mix");
+            Ok(SfxNative.PlayerSetSong(pl, old) && Math.Abs(Hit(2).l - full.l) < full.l * 0.01, "a format 1 song still loads, with every fader as designed");
+
+            // velocity and length: a step of the strings, soft and loud, held for 2 steps and for 8
+            double[] Bar(int vel, int len)
+            {
+                var one = (byte[])song.Clone();
+                for (int i = 66; i < one.Length; i++) one[i] = 0;                      // no steps at all …
+                for (int k = 0; k < 128; k++) for (int i = 0; i < 16; i++) one[66 + k * 35 + 19 + i] = 5;
+                int at = 66 + 15 * 35;                                                 // … but pattern A, sound 16, step 1: the note A3
+                one[at] = 1; one[at + 3] = 57; one[at + 19] = (byte)(len << 3 | vel); one[6] = 1;
+                SfxNative.PlayerSetSong(pl, one);
+                for (int i = 0; i < 40; i++) Play(1f, 10);
+                SfxNative.PlayerStart(pl, 0);
+                var a = Play(1f, 375);                                                 // one bar: 2 s
+                SfxNative.PlayerStop(pl);
+                return new[] { Rms(a, 0.15, 0.24), Rms(a, 0.6, 0.9), Rms(a, 1.75, 1.95) };
+            }
+            var soft = Bar(1, 8); var loud = Bar(7, 8); var shortNote = Bar(7, 2); var auto = Bar(7, 0);
+            Ok(loud[0] > soft[0] * 2.5, $"VELOCITY: a hard step is louder than a soft one ({soft[0]:0.000} -> {loud[0]:0.000})");
+            Ok(shortNote[1] < loud[1] * 0.25 && loud[1] > 0.02, $"LENGTH: 2 steps is over where 8 steps still sounds ({shortNote[1]:0.000} against {loud[1]:0.000} at 0.6 s)");
+            Ok(auto[2] > loud[2] * 3, $"LENGTH AUTO holds to the bar line, 8 steps ends before it ({auto[2]:0.000} against {loud[2]:0.000} at 1.8 s)");
             SfxNative.PlayerSetSong(pl, song);
             Marshal.FreeHGlobal(pl);
 

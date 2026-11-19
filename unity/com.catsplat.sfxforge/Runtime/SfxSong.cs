@@ -17,9 +17,9 @@ namespace CatSplat.SfxForge
         [HideInInspector] public byte[] data = new byte[0];
 
         public bool IsValid => data != null && sounds != null && sounds.Length == SfxProtocol.Slots
-            && ((data.Length == SfxProtocol.SongBytes && data[0] == 2) || (data.Length == SfxProtocol.SongBytesV1 && data[0] == 1));
+            && ((data.Length == SfxProtocol.SongBytes && data[0] == 3) || (data.Length == SfxProtocol.SongBytesV2 && data[0] == 2) || (data.Length == SfxProtocol.SongBytesV1 && data[0] == 1));
         /// <summary>It carries a mix (faders, pans, mutes, master effects): a song from firmware 0.6 on.</summary>
-        public bool HasMix => IsValid && data[0] == 2;
+        public bool HasMix => IsValid && data[0] >= 2;
         /// <summary>A sound's fader: 1 = as designed, up to 1.27.</summary>
         public float Volume(int sound) => HasMix && sound >= 0 && sound < SfxProtocol.Slots ? data[7 + SfxProtocol.Slots + sound] / 100f : 1f;
         /// <summary>A sound's pan: -1 left .. 0 the middle .. 1 right.</summary>

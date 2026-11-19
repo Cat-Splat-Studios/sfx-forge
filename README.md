@@ -68,7 +68,9 @@ the VIBE FM VST window), then runs `vibe-check` and two test performances: `out/
 - **K5 SEQ** – the display shows the selected sound's 16 steps, big, each with its note, and under them the whole
   pattern: a row a sound. The pads are those 16 steps (a step switched on is heard); SHIFT + pad hears and selects that
   pad's sound, DATA walks the rows. A step may carry a note: hold its pad and play a key, or turn NOTE (it moves along
-  the scale chosen with encoder B). Encoders: STEP · NOTE · TEMPO · SWING. F1 / F2 (and LEFT / RIGHT): the pattern
+  the scale chosen with encoder B). Encoders: STEP · NOTE · VELOCITY (1–8: a step is drawn as high as it is hard) ·
+  LENGTH (AUTO, or 1–15 steps: a line shows how far it holds). A: the tempo, SHIFT + A: the swing. REC keeps how hard
+  a pad or key was hit. F1 / F2 (and LEFT / RIGHT): the pattern
   before / after. F3 FILL: every 4th step, every 2nd, every one, none. F4 CLEAR the sound's steps. F5 COPY the pattern
   to the next one. A sustained sound holds until it plays again or the bar ends.
 - **K5 again: SONG** – what makes it game music. The display shows the eight patterns (what is in each, and the
@@ -91,7 +93,7 @@ the VIBE FM VST window), then runs `vibe-check` and two test performances: `out/
     and their four values – drag one, or turn the wheel over it (SHIFT: fast; UNDO takes a drag back); PRESET (SHIFT or
     the right button: the one before), MUTATE, UNDO, RANDOM, EXPORT, SAVE.
   - right: the pattern, a row a sound, every step with its note; rows are dim while their layer is silent. Click a step
-    to set it, the wheel gives it a note, click a row's name to hear and select the sound (SHIFT or the right button: mute it). INTENSITY and the selected
+    to set it, the wheel gives it a note (SHIFT + wheel: its velocity, CTRL + wheel: its length), click a row's name to hear and select the sound (SHIFT or the right button: mute it). INTENSITY and the selected
     sound's LAYER are sliders; the marks over INTENSITY are where each sound comes in. FILL, CLEAR, COPY, DEMO.
   - top: PLAY, REC, the tempo (click its halves, or the wheel), the patterns A–H (SHIFT + click: the chain ends there),
     TOUR.
@@ -114,7 +116,7 @@ Plain MIDI, so it works over USB, the plugin's MIDI ports and Web MIDI. SysEx us
 | game → device | `F0 7D 56 42 02 <slot> <28 patch bytes> F7` | load a patch into a pad |
 | game → device | `F0 7D 56 42 03 <ASCII, ≤ 24> F7` | text for the top line |
 | game → device | `F0 7D 56 42 04 <slot> F7` | request a dump of a pad |
-| both ways | `F0 7D 56 42 05 <piece> <pieces> <≤ 200 bytes> F7` | the song with its mix, in 13 pieces (2498 bytes, `sfx_song_pack`; a 2455-byte song from before the mixer is still taken) |
+| both ways | `F0 7D 56 42 05 <piece> <pieces> <≤ 200 bytes> F7` | the song with its mix, in 23 pieces (4546 bytes, `sfx_song_pack`; the older 2498- and 2455-byte songs are still taken) |
 | game → device | `F0 7D 56 42 06 F7` | request the 16 sounds and the song (as SEND does) |
 
 `<slot>` is 0–15. Telemetry also arrives as the DAW parameters Mod Pitch / Cutoff / FM / Level and Intensity.

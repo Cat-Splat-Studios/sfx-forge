@@ -29,7 +29,8 @@ namespace CatSplat.SfxForge
 
         public const byte Dump = 0x01, Load = 0x02, Text = 0x03, Request = 0x04, SongChunk = 0x05, RequestSong = 0x06;
         public const int SongBytesV1 = 2455;        // a song from before the mixer: still played
-        public const int SongBytes = 2498;          // a packed song (core/sfx_song.h)
+        public const int SongBytesV2 = 2498;        // … and one from before velocity and length
+        public const int SongBytes = 4546;          // a packed song (core/sfx_song.h)
         public const int SongChunkBytes = 200;
         public const int SongChunks = (SongBytes + SongChunkBytes - 1) / SongChunkBytes;
         public const int Patterns = 8;
