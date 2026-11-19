@@ -1,0 +1,9 @@
+{
+  "name": "SfxShowcase.Tests",
+  "rootNamespace": "SfxShowcase.Tests",
+  "references": [ "SfxShowcase.Core", "SfxShowcase.Gameplay", "SfxShowcase.Audio", "SfxShowcase.Level", "SfxShowcase.Art", "CatSplat.SfxForge", "UnityEngine.TestRunner" ],
+  "overrideReferences": true,
+  "precompiledReferences": [ "nunit.framework.dll" ],
+  "defineConstraints": [ "UNITY_INCLUDE_TESTS" ],
+  "autoReferenced": false
+}

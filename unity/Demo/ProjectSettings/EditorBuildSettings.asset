@@ -8,5 +8,8 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/SfxDemo/SfxDemo.unity
     guid: 6400b0333ac27964daa1e4256ecdc85a
+  - enabled: 1
+    path: Assets/Showcase/Showcase.unity
+    guid: 3d8a8517cae09d54e85fcfe5cc56a29d
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0
