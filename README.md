@@ -79,9 +79,15 @@ the VIBE FM VST window), then runs `vibe-check` and two test performances: `out/
     itself. Pads 9–16 set the intensity. Encoder B: steps in a pattern. F2 COPY makes the next pattern a variation.
   - **SEND** (F5): the 16 sounds and the song to the game.
 - **K6 LINK** – the game engine's side (below).
-- **The stage** (browser and plugin) – the same, big: the pads, patterns, intensity, the whole 16 × 16 step grid (dim
-  rows are layers that are silent now), the sound's wave and the scope. Click to play and to set steps; the wheel sets
-  a step's note.
+- **The stage** (browser and plugin) – the whole instrument for the mouse, on one picture:
+  - left: the 16 pads with their names; the selected sound's picture, its seven pages (OSC TONE FILTER WAVE ENV LFO FX)
+    and their four values – drag one, or turn the wheel over it (SHIFT: fast; UNDO takes a drag back); PRESET (SHIFT or
+    the right button: the one before), MUTATE, UNDO, RANDOM, EXPORT, SAVE.
+  - right: the pattern, a row a sound, every step with its note; rows are dim while their layer is silent. Click a step
+    to set it, the wheel gives it a note, click a row's name to hear and select the sound. INTENSITY and the selected
+    sound's LAYER are sliders; the marks over INTENSITY are where each sound comes in. FILL, CLEAR, COPY, DEMO.
+  - top: PLAY, REC, the tempo (click its halves, or the wheel), the patterns A–H (SHIFT + click: the chain ends there),
+    TOUR.
 - **HOME** – what every control does on the page open now.
 
 ## The link (device ⇄ game engine)

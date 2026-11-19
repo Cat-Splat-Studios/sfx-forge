@@ -14,7 +14,8 @@
  *                while INTENSITY is at or above it; a cued pattern takes over on the next bar line
  *   LINK         the game engine's side: telemetry in (CC 10-15, channel 2: pitch, cutoff, timbre, level, intensity,
  *                pattern), encoders out as CC 20-25, patches and the song as SysEx (README.md)
- *   the stage    the same, big (plugin and browser)
+ *   the stage    the whole instrument for the mouse (plugin and browser): pads, the sound's pages with values to
+ *                drag, the song as 16 rows of steps with their notes, intensity and layer as sliders
  *   MENU         the tour: it plays and names what SFX FORGE can do, a caption at a time
  * On the sound pages the display shows the selected sound itself – its whole shape and its wave – as the knobs change it.
  *
@@ -410,6 +411,28 @@ static void arrow(int d)
   set_page(to);
 }
 
+/* one of the four values of a sound page, by steps (an encoder, the wheel) or to a place (dragged on the stage) */
+static void param_nudge(int pg, int i, int d)
+{
+  sfx_patch *p = &patches[sel];
+  int k = pg < PG_SEQ && i >= 0 && i < 4 ? PAGE_PARAMS[pg][i] : -1;
+  if (k == ENGINE_KNOB) { p->engine = (uint8_t)wrap(p->engine, d, SFX_ENGINE_COUNT); pad_preset[sel] = -1; }
+  else if (k == SFX_P_TABLE) p->p[k] = (uint8_t)wrap(p->p[k] % SFX_WT_TABLES, d, SFX_WT_TABLES);
+  else if (k >= 0) p->p[k] = (uint8_t)clampi(p->p[k] + d, 0, 127);
+  else return;
+  changed(sel);
+}
+
+static void param_put(int pg, int i, float u)
+{
+  const sfx_patch *p = &patches[sel];
+  int k = pg < PG_SEQ && i >= 0 && i < 4 ? PAGE_PARAMS[pg][i] : -1, d = 0;
+  if (k == ENGINE_KNOB) d = clampi((int)(u * (float)SFX_ENGINE_COUNT), 0, SFX_ENGINE_COUNT - 1) - p->engine;
+  else if (k == SFX_P_TABLE) d = clampi((int)(u * (float)SFX_WT_TABLES), 0, SFX_WT_TABLES - 1) - p->p[k] % SFX_WT_TABLES;
+  else if (k >= 0) d = (int)(u * 127.0f + 0.5f) - p->p[k];
+  if (d) param_nudge(pg, i, d);
+}
+
 static void encoder(int id, float turn)
 {
   acc[id] += turn * (shift ? 8.0f : 1.0f);
@@ -441,14 +464,7 @@ static void encoder(int id, float turn)
     if (id == VE_B) SONG.len = (uint8_t)clampi(SONG.len + d, 1, STEPS);
     return;
   }
-  if (id > VE_4) return;
-  sfx_patch *p = &patches[sel];
-  int k = PAGE_PARAMS[page][id];
-  if (k == ENGINE_KNOB) { p->engine = (uint8_t)wrap(p->engine, d, SFX_ENGINE_COUNT); pad_preset[sel] = -1; }
-  else if (k == SFX_P_TABLE) p->p[k] = (uint8_t)wrap(p->p[k] % SFX_WT_TABLES, d, SFX_WT_TABLES);
-  else if (k >= 0) p->p[k] = (uint8_t)clampi(p->p[k] + d, 0, 127);
-  else return;
-  changed(sel);
+  if (id <= VE_4) param_nudge(page, id, d);
 }
 
 static void audition(void)                           /* hear the selected sound: a moment of it if it would hold */
@@ -635,47 +651,95 @@ static void tour_pump(void)                          /* from the display: the to
 }
 #undef S
 
-/* ---- the stage: 960 x 540, every element one of the device's controls ------------------------------------------------ */
+/* ---- the stage: 960 x 540 – the whole instrument for the mouse. Left: the pads and the selected sound (its picture,
+        its pages, four values to drag, its keys). Right: the song – every sound a row of 16 steps, intensity, the layer. --- */
 #define SW 960
 #define SH 540
 static uint16_t stage_fb[SW * SH];
 #define SP_X 24                                     /* the pads */
-#define SP_Y 92
-#define SP_W 104
-#define SP_H 74
-#define SP_GAP 8
-#define SG_X 500                                    /* the step grid: 16 x 16 */
-#define SG_Y 216
-#define SG_W 27
-#define SG_H 12
-#define PB_Y 160                                    /* the patterns A-H, and INTENSITY right of them */
-#define PB_W 36
-#define IN_X (SG_X + 8 * (PB_W + 4) + 8)
-#define IN_W (SG_X + STEPS * SG_W - 2 - IN_X)
-#define SB_Y 456                                    /* the buttons */
-#define SB_W 92
-#define SB_N 8
-static const char *const STAGE_BTN[SB_N][2] = { { "PLAY", "PLAY key" }, { "REC", "REC key" }, { "MUTATE", "F2" }, { "UNDO", "F3" }, { "RANDOM", "F4" }, { "PRESET", "F1" }, { "SAVE", "F6" }, { "TOUR", "MENU key" } };
+#define SP_Y 64
+#define SP_W 102
+#define SP_H 54
+#define SP_PX 108
+#define SP_PY 60
+#define ST_Y 404                                    /* the sound's pages, seven of them */
+#define ST_PX 61
+#define SC_Y 430                                    /* its four values */
+#define SC_H 56
+#define SA_Y 494                                    /* PRESET MUTATE UNDO RANDOM EXPORT SAVE */
+#define SA_PX 72
+#define SN_X 466                                    /* the song: names, then the steps */
+#define SG_X 552
+#define SG_Y 64
+#define SG_PX 24
+#define SG_PY 22
+#define SG_W (STEPS * SG_PX)
+#define SI_Y 426                                    /* INTENSITY, and under it the selected sound's LAYER */
+#define SL_Y 450
+#define SF_X 712                                    /* FILL CLEAR COPY DEMO */
+#define SF_Y 476
+#define SF_PX 57
+#define TB_Y 14                                     /* the top row: PLAY REC, tempo, the patterns, TOUR */
+#define TP_X 462
+#define TP_PX 40
+enum { SD_NONE, SD_HEAT, SD_LAYER, SD_PARAM };
+static int stage_drag, stage_drag_i, stage_x, stage_y, spage;   /* what the mouse drags; where it is; the sound page shown */
+
+static int inside(int x, int y, int rx, int ry, int rw, int rh) { return x >= rx && y >= ry && x < rx + rw && y < ry + rh; }
+static int stage_cell_at(int x, int y) { return inside(x, y, SP_X, SC_Y, 4 * SP_PX, SC_H) && (x - SP_X) % SP_PX < SP_W ? (x - SP_X) / SP_PX : -1; }
+
+static void stage_dragged(int x)
+{
+  float u = vd_clamp((float)(x - SG_X) / (float)(SG_W - 2), 0.0f, 1.0f);
+  if (stage_drag == SD_HEAT) intensity_set(u);
+  if (stage_drag == SD_LAYER) SONG.level[sel] = (uint8_t)(u * 127.0f + 0.5f);
+  if (stage_drag == SD_PARAM) param_put(spage, stage_drag_i, vd_clamp((float)(x - SP_X - stage_drag_i * SP_PX - 8) / (float)(SP_W - 16), 0.0f, 1.0f));
+}
 
 static void stage_event(const vibe_event *e)
 {
-  int x = VIBE_STAGE_X(e), y = VIBE_STAGE_Y(e);
-  if (e->id == VIBE_STAGE_WHEEL) { note_turn(e->value > 0.0f ? 1 : -1); return; }   /* the note of the step clicked last */
-  if (e->id == VIBE_STAGE_UP) { if (stage_pad >= 0) pad(stage_pad, 0, 0), stage_pad = -1; return; }
-  if (e->id != VIBE_STAGE_DOWN) return;
+  int x = VIBE_STAGE_X(e), y = VIBE_STAGE_Y(e), was = shift;
+  if (e->id == VIBE_STAGE_WHEEL) {                   /* the wheel: the value under the mouse – over the steps, the step's note */
+    int d = e->value > 0.0f ? 1 : -1, c = stage_cell_at(stage_x, stage_y);
+    if (c >= 0) param_nudge(spage, c, d * ((e->midi[1] & VIBE_STAGE_MOD_SHIFT) ? 8 : 1));
+    else if (inside(stage_x, stage_y, 342, TB_Y, 104, 36)) SONG.bpm = (uint16_t)clampi(SONG.bpm + d, 40, 240);
+    else if (inside(stage_x, stage_y, SG_X, SI_Y, SG_W, 18)) intensity_set(vibe_param_get(P_INTENSITY) + (float)d * 0.02f);
+    else if (inside(stage_x, stage_y, SG_X, SL_Y, SG_W, 18)) SONG.level[sel] = (uint8_t)clampi(SONG.level[sel] + d * 2, 0, 127);
+    else note_turn(d);
+    return;
+  }
+  if (e->id != VIBE_STAGE_DOWN && e->id != VIBE_STAGE_MOVE && e->id != VIBE_STAGE_UP) return;
+  stage_x = x; stage_y = y;
+  if (e->id == VIBE_STAGE_UP) { if (stage_pad >= 0) pad(stage_pad, 0, 0), stage_pad = -1; stage_drag = SD_NONE; return; }
+  if (e->id == VIBE_STAGE_MOVE) { if (e->down && stage_drag) stage_dragged(x); return; }
   if (tour_on) { tour_end(); return; }
-  int px = x - SP_X, py = y - SP_Y, gx = x - SG_X, gy = y - SG_Y;
-  if (px >= 0 && py >= 0 && px < 4 * (SP_W + SP_GAP) && py < 4 * (SP_H + SP_GAP) && px % (SP_W + SP_GAP) < SP_W && py % (SP_H + SP_GAP) < SP_H) {
-    stage_pad = py / (SP_H + SP_GAP) * 4 + px / (SP_W + SP_GAP);
+  int px = x - SP_X, py = y - SP_Y, gx = x - SG_X, gy = y - SG_Y, c = stage_cell_at(x, y);
+  if (inside(x, y, SP_X, SP_Y, 4 * SP_PX, 4 * SP_PY) && px % SP_PX < SP_W && py % SP_PY < SP_H) {
+    stage_pad = py / SP_PY * 4 + px / SP_PX;
     pad(stage_pad, 1, 0.9f);
-  } else if (gx >= 0 && gy >= 0 && gx < STEPS * SG_W && gy < SLOTS * SG_H) {
-    sel = gy / SG_H; step_toggle(gx / SG_W, sel);
-  } else if (y >= PB_Y && y < PB_Y + 36 && gx >= 0 && gx < 8 * (PB_W + 4)) pattern_pick(gx / (PB_W + 4));
-  else if (y >= PB_Y && y < PB_Y + 36 && x >= IN_X && x <= IN_X + IN_W) intensity_set((float)(x - IN_X) / (float)(IN_W - 4));
-  else if (y >= SB_Y && y < SB_Y + 44 && x >= 24 && x < 24 + SB_N * (SB_W + 8) && (x - 24) % (SB_W + 8) < SB_W) {
-    static const int8_t SOUND_KEY[SB_N] = { -1, -1, 1, 2, 3, 0, 5, -1 };
-    int b = (x - 24) / (SB_W + 8);
-    if (b == 0) seq_play(!running); else if (b == 1) seq_rec(!rec); else if (b == 7) tour_start(); else soft_sound(SOUND_KEY[b]);
+  } else if (gx >= 0 && gy >= 0 && gx < SG_W && gy < SLOTS * SG_PY) { sel = gy / SG_PY; step_toggle(gx / SG_PX, sel); }
+  else if (inside(x, y, SN_X, SG_Y, SG_X - SN_X, SLOTS * SG_PY)) { stage_pad = gy / SG_PY; pad(stage_pad, 1, 0.9f); }       /* a row's name: that sound */
+  else if (inside(x, y, SG_X, SI_Y - 4, SG_W, 22)) { stage_drag = SD_HEAT; stage_dragged(x); }
+  else if (inside(x, y, SG_X, SL_Y, SG_W, 20)) { stage_drag = SD_LAYER; stage_dragged(x); }
+  else if (c >= 0) { keep_undo(sel); stage_drag = SD_PARAM; stage_drag_i = c; stage_dragged(x); }   /* (UNDO takes a drag back) */
+  else if (inside(x, y, SP_X, ST_Y, 7 * ST_PX, 20)) {
+    int k = (x - SP_X) / ST_PX;
+    if (k == PG_WAVE && patches[sel].engine != SFX_ENGINE_WAVETABLE) return;
+    spage = k; if (sound_page()) set_page(k);
+  } else if (inside(x, y, SP_X, SA_Y, 6 * SA_PX, 32)) {                                    /* (PRESET: SHIFT or the right button = the one before) */
+    shift = (e->midi[1] & (VIBE_STAGE_MOD_SHIFT | VIBE_STAGE_MOD_RIGHT)) != 0;
+    soft_sound((x - SP_X) / SA_PX);
+    shift = was;
+  } else if (inside(x, y, 190, TB_Y, 76, 36)) seq_play(!running);
+  else if (inside(x, y, 272, TB_Y, 64, 36)) seq_rec(!rec);
+  else if (inside(x, y, 342, TB_Y, 104, 36)) SONG.bpm = (uint16_t)clampi(SONG.bpm + (x < 394 ? -1 : 1), 40, 240);
+  else if (inside(x, y, TP_X, TB_Y, 8 * TP_PX, 36)) {
+    int k = (x - TP_X) / TP_PX;
+    if (e->midi[1] & (VIBE_STAGE_MOD_SHIFT | VIBE_STAGE_MOD_RIGHT)) SONG.chain = (uint8_t)(k + 1); else pattern_pick(k);   /* SHIFT: the chain ends here */
+  } else if (inside(x, y, 856, TB_Y, 80, 36)) tour_start();
+  else if (inside(x, y, SF_X, SF_Y, 4 * SF_PX, 30)) {
+    int k = (x - SF_X) / SF_PX;
+    if (k == 0) fill(); else if (k == 1) soft_seq(3); else if (k == 2) pattern_copy(); else demo();
   }
 }
 
@@ -994,6 +1058,7 @@ static void preview(int x, int y, int w, int h, const sfx_patch *p, uint32_t rgb
       prev = now;
     }
   }
+  vg_rect(x + w - 10 - vg_text_width(label, VG_SMALL), y + h - 18, vg_text_width(label, VG_SMALL) + 8, 15, PANEL);
   vg_text(label, x + w - 6, y + h - 18, VG_SMALL, DIM, VG_RIGHT);
 }
 
@@ -1237,65 +1302,128 @@ void vibe_on_draw(uint16_t *fb)
   vf_end(0xFFFFFF);
 }
 
+static void stage_button(int x, int y, int w, int h, const char *name, int font, uint32_t bg, uint32_t fg)
+{
+  vg_round(x, y, w, h, 6, bg);
+  vg_text(name, x + w / 2, y + (h - vg_font_height(font)) / 2, font, fg, VG_CENTER);
+}
+
+static void stage_value(int i, const char *name, const char *value, float bar, int centre, uint32_t rgb)
+{
+  int x = SP_X + i * SP_PX, bw = SP_W - 16;
+  vg_round(x, SC_Y, SP_W, SC_H, 6, stage_drag == SD_PARAM && stage_drag_i == i ? 0x1E2840 : PANEL);
+  vg_text(name, x + SP_W / 2, SC_Y + 3, VG_SMALL, DIM, VG_CENTER);
+  vg_text(value, x + SP_W / 2, SC_Y + 18, VG_BIG, TEXT, VG_CENTER);
+  vg_rect(x + 8, SC_Y + 45, bw, 6, LINE);
+  if (bar < 0.0f) return;
+  int at = (int)((float)bw * vd_clamp(bar, 0.0f, 1.0f));
+  if (!centre) vg_rect(x + 8, SC_Y + 45, at, 6, rgb);
+  else vg_rect(x + 8 + (at < bw / 2 ? at : bw / 2), SC_Y + 45, at < bw / 2 ? bw / 2 - at : at - bw / 2, 6, rgb);
+  vg_rect(x + 7 + at, SC_Y + 42, 3, 12, TEXT);
+}
+
 void vibe_on_stage(uint16_t *fb, int w, int h)
 {
-  char buf[16], t[48];
+  static const char *const TAB[7] = { "OSC", "TONE", "FILTER", "WAVE", "ENV", "LFO", "FX" };
+  static const char *const FILLS[4] = { "FILL", "CLEAR", "COPY", "DEMO" };
+  char buf[24], t[64];
   (void)fb; (void)w; (void)h;
   const sfx_patch *p = &patches[sel];
   uint32_t rgb = ENGINE_RGB[p->engine], on = playing, step = seq_step, now = seq_pattern;
-  int heat = (int)(vibe_param_get(P_INTENSITY) * 127.0f + 0.5f), here = now == (uint32_t)edit_pat;
+  int heat = (int)(vibe_param_get(P_INTENSITY) * 127.0f + 0.5f), here = now == (uint32_t)edit_pat && step != NO_STEP, wt = p->engine == SFX_ENGINE_WAVETABLE;
+  uint16_t used = 0;
+  for (int k = 0; k < SFX_PATTERNS; k++) for (int i = 0; i < STEPS; i++) used |= SONG.pat[k].on[i];
+  if (sound_page()) spage = page;                     /* the device's page, while it is one of the sound's */
+  if (spage == PG_WAVE && !wt) spage = PG_OSC;
   vg_clear(BG);
-  vg_text("SFX FORGE", 24, 20, VG_BIG | VG_X2, TEXT, VG_LEFT);
-  if (tour_on) {
-    vg_text(tour_title, SW - 24, 14, VG_BIG | VG_X2, TEXT, VG_RIGHT);
-    vg_text(tour_line, SW - 24, 62, VG_BIG, 0x36C5FF, VG_RIGHT);
-  } else vg_text(toast_frames > 0 ? toast : sound_title(t), SW - 24, 20, VG_BIG | VG_X2, toast_frames > 0 ? TEXT : rgb, VG_RIGHT);
 
-  for (int s = 0; s < SLOTS; s++) {                   /* the pads */
-    int x = SP_X + (s % 4) * (SP_W + SP_GAP), y = SP_Y + (s / 4) * (SP_H + SP_GAP), lit = (on >> s) & 1;
-    uint32_t c = ENGINE_RGB[patches[s].engine];
-    vg_round(x, y, SP_W, SP_H, 8, lit ? 0xFFFFFF : vg_mix(BG, c, s == sel ? 0.9f : 0.4f));
-    if (s == sel && !lit) vg_frame(x, y, SP_W, SP_H, 2, 0xFFFFFF);
-    vg_text(vg_itoa(s + 1, buf), x + 10, y + 8, VG_BIG, lit || s == sel ? BG : TEXT, VG_LEFT);
-    vg_text(pad_name(s), x + SP_W / 2, y + SP_H - 24, VG_SMALL, lit || s == sel ? BG : vg_mix(BG, TEXT, 0.7f), VG_CENTER);
-  }
-  vg_text("PADS  -  click to play, as the 16 pads", SP_X, SP_Y + 4 * (SP_H + SP_GAP) + 2, VG_SMALL, DIM, VG_LEFT);
-
-  preview(SG_X, SP_Y, 262, 60, p, rgb, PG_OSC);                /* the selected sound, and beside it what plays now */
-  scope(SG_X + 268, SP_Y, STEPS * SG_W - 2 - 268, 60, rgb);
-
-  for (int k = 0; k < SFX_PATTERNS; k++) {            /* the patterns: SONG page, pads 1-8 */
-    int x = SG_X + k * (PB_W + 4), playing_it = (uint32_t)k == now && step != NO_STEP;
+  /* the top row */
+  vg_text(toast_frames > 0 && !tour_on ? toast : "SFX FORGE", 24, 21, VG_BIG, TEXT, VG_LEFT);
+  stage_button(190, TB_Y, 76, 36, running ? "STOP" : "PLAY", VG_BIG, running ? 0x6EE7A8 : 0x1C2436, running ? BG : TEXT);
+  stage_button(272, TB_Y, 64, 36, "REC", VG_BIG, rec ? 0xFF4040 : 0x1C2436, rec ? BG : TEXT);
+  vg_round(342, TB_Y, 104, 36, 6, PANEL);             /* the tempo: click its left or right half, or the wheel */
+  vg_text("-", 351, TB_Y + 10, VG_BOLD, DIM, VG_LEFT); vg_text("+", 438, TB_Y + 10, VG_BOLD, DIM, VG_RIGHT);
+  vg_text(vg_itoa(SONG.bpm, buf), 395, TB_Y + 7, VG_BIG, TEXT, VG_RIGHT);
+  vg_text("BPM", 399, TB_Y + 13, VG_SMALL, DIM, VG_LEFT);
+  for (int k = 0; k < SFX_PATTERNS; k++) {
+    int playing_it = (uint32_t)k == now && step != NO_STEP, mine = k == edit_pat;
     char letter[2] = { (char)('A' + k), 0 };
-    vg_round(x, PB_Y, PB_W, 36, 6, playing_it ? 0xFFFFFF : k == edit_pat ? 0x36C5FF : k < SONG.chain ? 0x1F3A52 : 0x1C2436);
-    vg_text(letter, x + PB_W / 2, PB_Y + 7, VG_BIG, playing_it || k == edit_pat ? BG : TEXT, VG_CENTER);
+    stage_button(TP_X + k * TP_PX, TB_Y, 36, 36, letter, VG_BIG, playing_it ? 0xFFFFFF : mine ? 0x36C5FF : k < SONG.chain ? 0x1F3A52 : PANEL, playing_it || mine ? BG : k < SONG.chain ? TEXT : DIM);
   }
-  vg_round(IN_X, PB_Y, IN_W, 36, 6, 0x1C2436);         /* INTENSITY: SONG page, encoder 3 */
-  vg_round(IN_X + 2, PB_Y + 2, 4 + (IN_W - 8) * heat / 127, 32, 5, 0xFF5A36);
-  vg_text("INTENSITY", IN_X + IN_W / 2, PB_Y + 10, VG_SMALL, TEXT, VG_CENTER);
+  vg_rect(TP_X, TB_Y + 39, SONG.chain * TP_PX - 4, 2, 0x36C5FF);
+  vg_circle(800.0f, 32.0f, 5.0f, linked ? 0x6EE7A8 : 0x2A3348);
+  vg_text("LINK", 810, 25, VG_SMALL, linked ? 0x6EE7A8 : 0x48526A, VG_LEFT);
+  stage_button(856, TB_Y, 80, 36, "TOUR", VG_BIG, tour_on ? 0x36C5FF : 0x1C2436, tour_on ? BG : TEXT);
 
-  for (int s = 0; s < SLOTS; s++) {                   /* the pattern: a row per sound, dim while its layer is silent */
+  /* the pads */
+  for (int s = 0; s < SLOTS; s++) {
+    int x = SP_X + (s % 4) * SP_PX, y = SP_Y + (s / 4) * SP_PY, lit = (on >> s) & 1;
     uint32_t c = ENGINE_RGB[patches[s].engine];
-    int y = SG_Y + s * SG_H, layer = heat >= SONG.level[s];
-    vg_text(vg_itoa(s + 1, buf), SG_X - 8, y - 2, VG_SMALL, s == sel ? 0xFFFFFF : DIM, VG_RIGHT);
+    vg_round(x, y, SP_W, SP_H, 7, lit ? 0xFFFFFF : s == sel ? c : vg_mix(BG, c, 0.32f));
+    vg_text(vg_itoa(s + 1, buf), x + 8, y + 5, VG_BOLD, lit || s == sel ? BG : vg_mix(BG, c, 0.9f), VG_LEFT);
+    vg_text(pad_name(s), x + SP_W / 2, y + 29, VG_MED, lit || s == sel ? BG : TEXT, VG_CENTER);
+  }
+
+  /* the selected sound: its name, its picture, its pages and their four values, its keys */
+  vg_round(SP_X, 304, 34, 24, 5, rgb);
+  vg_text(vg_itoa(sel + 1, buf), SP_X + 17, 309, VG_BOLD, BG, VG_CENTER);
+  int nw = vg_text(pad_name(sel), SP_X + 44, 305, VG_BIG, TEXT, VG_LEFT);
+  vg_text(ENGINE_NAME[p->engine], SP_X + 54 + nw, 311, VG_SMALL, rgb, VG_LEFT);
+  vg_text("drag a value, or the wheel", SP_X + 4 * SP_PX - 6, 311, VG_SMALL, 0x48526A, VG_RIGHT);
+  preview(SP_X, 334, 4 * SP_PX - 6, 64, p, rgb, spage);
+  for (int i = 0; i < 7; i++) {
+    int there = i == spage, none = i == PG_WAVE && !wt;
+    vg_round(SP_X + i * ST_PX, ST_Y, 58, 20, 5, there ? rgb : PANEL);
+    vg_text(TAB[i], SP_X + i * ST_PX + 29, ST_Y + 3, VG_BOLD, there ? BG : none ? 0x333C52 : DIM, VG_CENTER);
+  }
+  for (int i = 0; i < 4; i++) {
+    int k = PAGE_PARAMS[spage][i];
+    if (k == ENGINE_KNOB) stage_value(i, "ENGINE", ENGINE_SHORT[p->engine], ((float)p->engine + 0.5f) / (float)SFX_ENGINE_COUNT, 0, rgb);
+    else if (k == SFX_P_TABLE) stage_value(i, "TABLE", param_text(k, p, buf), ((float)(p->p[k] % SFX_WT_TABLES) + 0.5f) / (float)SFX_WT_TABLES, 0, rgb);
+    else if (k >= 0) stage_value(i, param_name(k, p->engine), param_text(k, p, buf), (float)p->p[k] / 127.0f, k == SFX_P_PITCH_ENV_AMT || k == SFX_P_FILTER_ENV, rgb);
+    else stage_value(i, "", "", -1.0f, 0, rgb);
+  }
+  for (int i = 0; i < 6; i++)
+    stage_button(SP_X + i * SA_PX, SA_Y, 68, 32, SOFT[0][i], VG_BOLD, 0x1C2436, i == 2 && !has_undo[sel] ? 0x48526A : TEXT);
+
+  /* the song: a row a sound – dim while its layer is silent */
+  for (int s = 0; s < SLOTS; s++) {
+    uint32_t c = ENGINE_RGB[patches[s].engine];
+    int y = SG_Y + s * SG_PY, layer = heat >= SONG.level[s];
+    if (s == sel) vg_round(SN_X, y, SG_X - SN_X - 6, 20, 4, c);
+    if ((on >> s) & 1) vg_rect(SN_X - 7, y + 2, 3, 16, 0xFFFFFF);
+    vg_text(pad_name(s), SN_X + 5, y + 3, VG_SMALL, s == sel ? BG : layer && ((used >> s) & 1) ? c : vg_mix(BG, c, 0.55f), VG_LEFT);
     for (int i = 0; i < STEPS; i++) {
-      int set = (pat()->on[i] >> s) & 1, head = here && step == (uint32_t)i, off = i >= SONG.len;
-      uint32_t cell = set ? (head && layer ? 0xFFFFFF : layer ? c : vg_mix(BG, c, 0.35f)) : head ? 0x3A4664 : off ? 0x0F131C : (i & 4) ? 0x1A2233 : 0x202A3E;
-      vg_rect(SG_X + i * SG_W, y, SG_W - 2, SG_H - 2, s == sel && !set ? vg_mix(cell, 0xFFFFFF, 0.10f) : cell);
-      if (set && pat()->note[s][i]) vg_rect(SG_X + i * SG_W, y, SG_W - 2, 2, 0xFFFFFF);                  /* it carries a note */
-      if (s == sel && i == cur_step) vg_frame(SG_X + i * SG_W - 1, y - 1, SG_W, SG_H, 1, 0xFFFFFF);
+      int x = SG_X + i * SG_PX, set = (pat()->on[i] >> s) & 1, head = here && step == (uint32_t)i, off = i >= SONG.len, note = pat()->note[s][i];
+      uint32_t cell = set ? (head && layer ? 0xFFFFFF : layer ? c : vg_mix(BG, c, 0.35f)) : head ? 0x34415F : off ? 0x0F131C : (i / 4) & 1 ? 0x171D2B : 0x1E2638;
+      vg_round(x, y, 22, 20, 3, s == sel && !set && !head && !off ? vg_mix(cell, 0xFFFFFF, 0.08f) : cell);
+      if (set && note) vg_text(note_text(note, buf), x + 11, y + 3, VG_SMALL, layer ? BG : TEXT, VG_CENTER);
+      if (s == sel && i == cur_step) vg_frame(x - 2, y - 2, 26, 24, 2, 0xFFFFFF);
     }
   }
-  strcpy(t, "STEPS  -  click a cell, wheel = its note: "); strcpy(t + strlen(t), note_text(pat()->note[sel][cur_step], buf));
-  vg_text(t, SG_X, SG_Y + SLOTS * SG_H + 4, VG_SMALL, DIM, VG_LEFT);
-  vg_text("(device: SEQ page)", SG_X + STEPS * SG_W - 2, SG_Y + SLOTS * SG_H + 4, VG_SMALL, DIM, VG_RIGHT);
 
-  for (int b = 0; b < SB_N; b++) {                    /* the buttons, each named after its key */
-    int x = 24 + b * (SB_W + 8), lit = (b == 0 && running) || (b == 1 && rec) || (b == 7 && tour_on);
-    vg_round(x, SB_Y, SB_W, 44, 8, lit ? (b == 0 ? 0x6EE7A8 : b == 1 ? 0xFF4040 : 0x36C5FF) : 0x1C2436);
-    vg_text(STAGE_BTN[b][0], x + SB_W / 2, SB_Y + 11, VG_BIG, lit ? BG : TEXT, VG_CENTER);
-    vg_text(STAGE_BTN[b][1], x + SB_W / 2, SB_Y + 50, VG_SMALL, DIM, VG_CENTER);
+  /* INTENSITY with every sound's mark over it, and the selected sound's own mark: its LAYER */
+  vg_text("INTENSITY", SN_X + 5, SI_Y, VG_SMALL, 0xFF5A36, VG_LEFT);
+  vg_round(SG_X, SI_Y, SG_W - 2, 16, 5, PANEL);
+  vg_round(SG_X, SI_Y, 6 + (SG_W - 8) * heat / 127, 16, 5, 0xFF5A36);
+  for (int s = 0; s < SLOTS; s++) if ((used >> s) & 1) vg_rect(SG_X + 2 + (SG_W - 8) * SONG.level[s] / 127, SI_Y - 6, 3, 5, heat >= SONG.level[s] ? ENGINE_RGB[patches[s].engine] : vg_mix(BG, ENGINE_RGB[patches[s].engine], 0.45f));
+  vg_text(percent(heat, buf), SG_X + SG_W - 10, SI_Y + 1, VG_SMALL, TEXT, VG_RIGHT);
+  vg_text("LAYER", SN_X + 5, SL_Y, VG_SMALL, DIM, VG_LEFT);
+  vg_round(SG_X, SL_Y, SG_W - 2, 16, 5, PANEL);
+  vg_round(SG_X, SL_Y, 6 + (SG_W - 8) * SONG.level[sel] / 127, 16, 5, vg_mix(BG, rgb, layer_on(sel) ? 0.75f : 0.35f));
+  strcpy(t, pad_name(sel)); strcpy(t + strlen(t), " plays from "); strcpy(t + strlen(t), percent(SONG.level[sel], buf));
+  vg_text(t, SG_X + SG_W - 10, SL_Y + 1, VG_SMALL, TEXT, VG_RIGHT);
+
+  /* under it: what plays now, and the pattern's keys – or the tour's words */
+  if (tour_on) {
+    vg_round(SN_X, SF_Y, 470, 52, 6, 0x1C2436);
+    vg_text(tour_title, SN_X + 12, SF_Y + 4, VG_BIG, 0x36C5FF, VG_LEFT);
+    vg_text(tour_line, SN_X + 12, SF_Y + 30, VG_MED, TEXT, VG_LEFT);
+    vg_rect(SN_X, SF_Y + 50, (int)(470.0f * vd_clamp(tour_progress, 0.0f, 1.0f)), 2, 0x36C5FF);
+  } else {
+    scope(SN_X, SF_Y, 238, 52, rgb);
+    for (int k = 0; k < 4; k++) stage_button(SF_X + k * SF_PX, SF_Y, 53, 30, FILLS[k], VG_BOLD, 0x1C2436, TEXT);
+    strcpy(t, "click steps - wheel: the note "); strcpy(t + strlen(t), note_text(pat()->note[sel][cur_step], buf));
+    vg_text(t, SF_X + 4 * SF_PX - 4, SF_Y + 35, VG_SMALL, 0x55607A, VG_RIGHT);
   }
-  vg_text(vg_itoa(SONG.bpm, buf), SW - 24, SB_Y - 2, VG_BIG | VG_X2, TEXT, VG_RIGHT);
-  vg_text("BPM (SEQ page)", SW - 24, SB_Y + 50, VG_SMALL, DIM, VG_RIGHT);
 }
