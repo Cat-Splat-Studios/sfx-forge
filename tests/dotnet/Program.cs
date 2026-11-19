@@ -185,7 +185,7 @@ static class Tests
                 if (SfxProtocol.TryParsePatch(msg, out int slot, out var patch)) { sounds[slot] = patch; seen |= 1 << slot; }
                 else if (SfxProtocol.TryTakeSongChunk(msg, song, ref next)) whole = true;
             }
-            Ok(whole && seen == 0xFFFF, "the firmware's song arrives whole: 16 sounds and 34 pieces");
+            Ok(whole && seen == 0xFFFF, "the firmware's song arrives whole: 16 sounds and 39 pieces");
             Ok(whole && SfxProtocol.BuildSong(song).SelectMany(c => c).SequenceEqual(msgs.Where(b => b[0] == 0xF0 && b[4] == SfxProtocol.SongChunk).SelectMany(c => c)), "and packs back to the same messages");
 
             IntPtr pl = Marshal.AllocHGlobal(SfxNative.PlayerSize);
@@ -285,9 +285,10 @@ static class Tests
             Ok(SfxNative.PlayerSetSong(pl, mixed), "a song with another mix is taken");
             var fromSong = Hit(2);
             Ok(fromSong.l < full.l * 0.001 && Math.Abs(fromSong.r / full.l - 0.5) < 0.02, $"the mix is part of the song: fader and pan come with it ({fromSong.l:0.000} / {fromSong.r:0.000})");
-            // songs from before: format 3 (no automation, no arrangement), 2 (no velocity, no length) and 1 (no mixer either).
-            // The head is 115 bytes here, 66 in formats 2 and 3, 23 in format 1; a track is 3 + 48 bytes here, 3 + 32 in format 3, 3 + 16 before
-            const int Head = 115, Track = 51;
+            // songs from before: format 4 (one lane a sound), 3 (no automation, no arrangement), 2 (no velocity, no length) and 1 (no mixer either).
+            // The head is 147 bytes here (66, the arrangement's 33, 24 lanes of 2), 115 in format 4, 66 in formats 2 and 3, 23 in format 1; a track is
+            // 3 + 32 bytes here and in format 3, 3 + 48 in format 4, 3 + 16 before. The lanes' points follow the tracks: 16 for each lane of each pattern.
+            const int Head = 147, Track = 35, Lanes = Head - 48, Points = Head + 128 * Track;
             var v3 = new byte[SfxProtocol.SongBytesV3]; var v2 = new byte[SfxProtocol.SongBytesV2]; var old = new byte[SfxProtocol.SongBytesV1];
             Array.Copy(mixed, 0, v3, 0, 66); Array.Copy(mixed, 0, v2, 0, 66); Array.Copy(song, 0, old, 0, 23); v3[0] = 3; v2[0] = 2; old[0] = 1;
             for (int k = 0; k < 128; k++) { Array.Copy(song, Head + k * Track, v3, 66 + k * 35, 35); Array.Copy(song, Head + k * Track, v2, 66 + k * 19, 19); Array.Copy(song, Head + k * Track, old, 23 + k * 19, 19); }
@@ -318,16 +319,20 @@ static class Tests
             Ok(shortNote[1] < loud[1] * 0.25 && loud[1] > 0.02, $"LENGTH: 2 steps is over where 8 steps still sounds ({shortNote[1]:0.000} against {loud[1]:0.000} at 0.6 s)");
             Ok(auto[2] > loud[2] * 3, $"LENGTH AUTO holds to the bar line, 8 steps ends before it ({auto[2]:0.000} against {loud[2]:0.000} at 1.8 s)");
 
-            // automation: the strings' lane (the head's bytes 66..81 say what each lane moves, a track's last 16 bytes are its points: value + 1)
-            var faded = Bar(7, 0, (b, at) => { b[66 + 15] = 26; b[at + 35] = 101; b[at + 35 + 8] = 21; });           // its fader: 100, from step 9 on 20
+            // automation: a lane is a sound (+ 1) and a knob in the head, and 16 points (value + 1) for each pattern after the tracks
+            var faded = Bar(7, 0, (b, at) => { b[Lanes] = 16; b[Lanes + 1] = 26; b[Points] = 101; b[Points + 8] = 21; });      // the strings' fader: 100, from step 9 on 20
             // (a held chord of detuned oscillators is not the same twice: compare how the second half stands to the first)
             double R(double[] x) => x[2] / x[1]; double plain = R(auto);
             Ok(Math.Abs(R(faded) / plain - 0.2) < 0.06, $"AUTOMATION of a fader: a point at step 9 takes a held note from {faded[1]:0.000} to {faded[2]:0.000} ({R(faded) / plain:0.00} of what it would be)");
-            var dulled = Bar(7, 0, (b, at) => { b[66 + 15] = 1 + 6; b[at + 35 + 8] = 11; });                       // the sound's own CUTOFF: 10 from step 9 on
+            var dulled = Bar(7, 0, (b, at) => { b[Lanes] = 16; b[Lanes + 1] = 1 + 6; b[Points + 8] = 11; });                  // the sound's own CUTOFF: 10 from step 9 on
             Ok(R(dulled) < plain * 0.5, $"AUTOMATION of a sound's own knob: CUTOFF closes on a held note ({dulled[1]:0.000} -> {dulled[2]:0.000})");
-            var other = Bar(7, 0, (b, at) => { b[66 + 3] = 28 + 4; b[Head + 3 * Track + 35 + 8] = 127; });           // the lane of sound 4 moves the master's DRIVE
+            var both = Bar(7, 0, (b, at) => { b[Lanes] = 16; b[Lanes + 1] = 26; b[Points] = 101; b[Points + 8] = 21;          // two lanes on one sound: its fader …
+                                              b[Lanes + 2] = 16; b[Lanes + 3] = 1 + 6; b[Points + 16 + 8] = 11; });              // … and its CUTOFF, together
+            Ok(R(both) < R(faded) * 0.5 && R(both) < R(dulled) * 1.1,   // (what is left at the end is the reverb's tail)
+                $"AUTOMATION of two knobs of one sound at once: quieter and duller than either alone ({R(faded):0.00}, {R(dulled):0.00}, both {R(both):0.00})");
+            var other = Bar(7, 0, (b, at) => { b[Lanes] = 4; b[Lanes + 1] = 28 + 4; b[Points + 8] = 127; });                   // a lane of sound 4 moves the master's DRIVE
             Ok(R(other) > plain * 1.4, $"AUTOMATION of the master from any lane: DRIVE comes in at step 9 ({other[1]:0.000} -> {other[2]:0.000})");
-            Bar(7, 0, (b, at) => { b[66 + 2] = 1 + 6; b[Head + 2 * Track + 35] = 6; });                              // a lane closes sound 3's CUTOFF …
+            Bar(7, 0, (b, at) => { b[Lanes] = 3; b[Lanes + 1] = 1 + 6; b[Points] = 6; });                                       // a lane closes sound 3's CUTOFF …
             for (int i = 0; i < 80; i++) Play(1f, 10);                                                              // (the strings ring out)
             SfxNative.PlayerSetTrack(pl, 2, 100, 64, 0);                                                            // (its fader as when it was measured)
             var untouched = Hit(2);
@@ -335,7 +340,7 @@ static class Tests
 
             // the arrangement: A C B, a bar each, then from the top – and a cue
             var arranged = (byte[])song.Clone();
-            arranged[66 + 16] = 3; arranged[67 + 16] = 0; arranged[68 + 16] = 2; arranged[69 + 16] = 1;
+            arranged[66] = 3; arranged[67] = 0; arranged[68] = 2; arranged[69] = 1;
             SfxNative.PlayerSetSong(pl, arranged);
             SfxNative.PlayerStart(pl, 0);
             var seen2 = new System.Collections.Generic.List<int>();
@@ -346,7 +351,21 @@ static class Tests
             Play(0f, 1125, b => { if (b % 375 == 180) { SfxNative.PlayerState(pl, st); seen2.Add(st[2]); } if (b == 400) SfxNative.PlayerCue(pl, 1); });
             Ok(seen2.SequenceEqual(new[] { 7, 7, 1 }), $"and stays until the next cue; a cue to a pattern of the arrangement goes on from that bar ({string.Join(" ", seen2.Select(x => (char)('A' + x)))})");
             SfxNative.PlayerStop(pl);
-            SfxNative.PlayerSetSong(pl, song);
+
+            // a format 4 song: one lane a sound, its target in the head after the mix, its points at the end of each track (3 + 48 bytes)
+            var v4 = new byte[SfxProtocol.SongBytesV4];
+            Array.Copy(song, 0, v4, 0, 66); Array.Copy(song, 66, v4, 82, 33); v4[0] = 4; v4[82] = 0; v4[6] = 1;
+            for (int i = 115; i < v4.Length; i++) v4[i] = 0;
+            for (int k = 0; k < 128; k++) for (int i = 0; i < 16; i++) v4[115 + k * 51 + 19 + i] = 5;
+            v4[66 + 15] = 26;                                                          // the strings' lane moves their fader …
+            { int at = 115 + 15 * 51; v4[at] = 1; v4[at + 3] = 57; v4[at + 19] = 7; v4[at + 35] = 101; v4[at + 35 + 8] = 21; }   // … 100, then 20 from step 9
+            bool took4 = SfxNative.PlayerSetSong(pl, v4);
+            for (int i = 0; i < 40; i++) Play(1f, 10);
+            SfxNative.PlayerStart(pl, 0);
+            var four = Play(1f, 375);
+            SfxNative.PlayerStop(pl);
+            double r4 = Rms(four, 1.75, 1.95) / Rms(four, 0.6, 0.9);
+            Ok(took4 && r4 / plain < 0.45, $"a format 4 song still loads, and its one lane a sound still moves its knob ({r4 / plain:0.00} of the level)");
             Marshal.FreeHGlobal(pl);
 
             // the demo project's song: exactly what the firmware sent

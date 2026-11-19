@@ -266,6 +266,7 @@ void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames)
 
 /* ---- sounds and the song: edit, keep, send ---------------------------------------------------------------------------- */
 static void say(const char *t) { toast = t; toast_frames = 70; }
+static void view_sync(void);                         /* (a song came: the AUTO pages follow – below) */
 static void changed(int slot) { send(M_UPDATE, slot, 0, 0, 0); }
 static void keep_undo(int slot) { undo[slot] = patches[slot]; undo_preset[slot] = pad_preset[slot]; has_undo[slot] = 1; }
 static sfx_pattern *pat(void) { return &SONG.pat[edit_pat]; }
@@ -332,9 +333,9 @@ static void demo_song(void)
   SONG.chain = N; SONG.swing = 20;
   for (int i = 0; i < 16; i++) SONG.arr[i] = BARS[i];
   SONG.arr_len = 16;
-  SONG.auto_to[BASS] = SFX_AT_PATCH + SFX_P_FILTER_CUTOFF;                  /* automation: the bass opens through the turnaround … */
-  SONG.auto_to[PAD] = SFX_AT_VOL;                                           /* … and the strings swell through the breakdown */
-  for (int i = 0; i < STEPS; i++) { SONG.pat[5].aut[BASS][i] = (uint8_t)(62 + i * 3); if (i % 2 == 0) SONG.pat[4].aut[PAD][i] = (uint8_t)(19 + i * 3); }
+  SONG.lane[0].track = BASS + 1; SONG.lane[0].to = SFX_AT_PATCH + SFX_P_FILTER_CUTOFF;   /* automation: the bass opens through the turnaround … */
+  SONG.lane[1].track = PAD + 1; SONG.lane[1].to = SFX_AT_VOL;                            /* … and the strings swell through the breakdown */
+  for (int i = 0; i < STEPS; i++) { SONG.pat[5].aut[0][i] = (uint8_t)(62 + i * 3); if (i % 2 == 0) SONG.pat[4].aut[1][i] = (uint8_t)(19 + i * 3); }
   SONG.pan[HAT] = 84; SONG.pan[KEYS] = 76; SONG.pan[BRASS] = 48; SONG.pan[BELLS] = 36; SONG.pan[CHOIR] = 70;
   SONG.vol[KICK] = 68; SONG.vol[SNARE] = 100; SONG.vol[HAT] = 50; SONG.vol[BASS] = 52; SONG.vol[KEYS] = 24; SONG.vol[BRASS] = 54; SONG.vol[PAD] = 46; SONG.vol[BELLS] = 56; SONG.vol[CHOIR] = 52;   /* measured: tests/mix-report.mjs */
   SONG.level[HAT] = 20; SONG.level[BASS] = 35; SONG.level[SNARE] = 50; SONG.level[PAD] = 60; SONG.level[CHOIR] = 60; SONG.level[KEYS] = 72; SONG.level[BRASS] = 90; SONG.level[BELLS] = 100;
@@ -417,7 +418,7 @@ static void sysex_in(const uint8_t *b, int n)
     if (k == 0) song_rx_next = 0;
     if (k != song_rx_next || k * SONG_CHUNK + len > SFX_SONG_BYTES) { song_rx_next = -1; return; }
     for (int i = 0; i < len; i++) song_rx[k * SONG_CHUNK + i] = b[7 + i];
-    if (++song_rx_next == SONG_CHUNKS) { say(sfx_song_unpack(&SONG, song_rx, SFX_SONG_BYTES) ? "BAD SONG" : "SONG LOADED"); song_rx_next = -1; }
+    if (++song_rx_next == SONG_CHUNKS) { say(sfx_song_unpack(&SONG, song_rx, SFX_SONG_BYTES) ? "BAD SONG" : "SONG LOADED"); view_sync(); song_rx_next = -1; }
   }
 }
 
@@ -486,29 +487,64 @@ static int auto_own(int to, int track)
 }
 static int auto_hi(int to) { return to == SFX_AT_MASTER + SFX_M_DELAY_TIME ? SFX_DELAY_TIMES - 1 : to == SFX_AT_PATCH + SFX_P_TABLE ? SFX_WT_TABLES - 1 : 126; }
 
+/* Any knob may have a lane; a song holds SFX_LANES of them. view_to: the knob each sound's AUTO page shows now. The first
+   point of a knob takes a lane, its last one gives it back. */
+static uint8_t view_to[SLOTS];
+static uint8_t last_to; static int last_sel = -1;     /* the knob turned last (a lane's target), and of which sound */
+static int lane_of(int track, int to) { for (int l = 0; l < SFX_LANES; l++) if (SONG.lane[l].track == track + 1 && SONG.lane[l].to == to) return l; return -1; }
+static int lanes_used(void) { int n = 0; for (int l = 0; l < SFX_LANES; l++) n += SONG.lane[l].track != 0; return n; }
+static int aut_at(int track, int step) { int l = lane_of(track, view_to[track]); return l < 0 ? 0 : pat()->aut[l][step]; }
+
+static void lanes_tidy(void)                         /* a lane without a point anywhere is free again */
+{
+  for (int l = 0; l < SFX_LANES; l++) {
+    int any = 0;
+    for (int k = 0; k < SFX_PATTERNS && !any; k++) for (int i = 0; i < STEPS; i++) if (SONG.pat[k].aut[l][i]) { any = 1; break; }
+    if (!any) SONG.lane[l].track = 0;
+  }
+}
+
+static void aut_put(int track, int step, int v)      /* v: 0 = no point, else value + 1 */
+{
+  int to = view_to[track], l = lane_of(track, to);
+  if (l < 0 && v) {
+    for (l = 0; l < SFX_LANES && SONG.lane[l].track; l++) { }
+    if (l == SFX_LANES) { say("ALL 24 LANES IN USE"); return; }
+    for (int k = 0; k < SFX_PATTERNS; k++) for (int i = 0; i < STEPS; i++) SONG.pat[k].aut[l][i] = 0;
+    SONG.lane[l].to = (uint8_t)to; SONG.lane[l].track = (uint8_t)(track + 1);
+  }
+  if (l < 0) return;
+  pat()->aut[l][step] = (uint8_t)v;
+  if (!v) lanes_tidy();
+}
+
+static void view_sync(void)                          /* a song came: each sound's page shows its first lane */
+{
+  for (int t = 0; t < SLOTS; t++) view_to[t] = 0;
+  for (int l = SFX_LANES - 1; l >= 0; l--) if (SONG.lane[l].track && SONG.lane[l].track <= SLOTS) view_to[SONG.lane[l].track - 1] = SONG.lane[l].to;
+}
+
 static void auto_turn(int d)                         /* the point on the cursor step: made where the knob stands, then moved */
 {
-  int to = SONG.auto_to[sel];
-  uint8_t *a = &pat()->aut[sel][cur_step];
+  int to = view_to[sel], a = aut_at(sel, cur_step);
   if (!to) { say("TURN TARGET FIRST"); return; }
-  *a = (uint8_t)(clampi((*a ? *a - 1 : clampi(auto_own(to, sel), 0, auto_hi(to))) + (*a ? d : 0), 0, auto_hi(to)) + 1);
+  aut_put(sel, cur_step, clampi((a ? a - 1 : clampi(auto_own(to, sel), 0, auto_hi(to))) + (a ? d : 0), 0, auto_hi(to)) + 1);
 }
 
 static void auto_toggle(int step)
 {
-  int to = SONG.auto_to[sel];
-  uint8_t *a = &pat()->aut[sel][step];
+  int to = view_to[sel];
   cur_step = step;
   if (!to) { say("TURN TARGET FIRST"); return; }
-  *a = *a ? 0 : (uint8_t)(clampi(auto_own(to, sel), 0, auto_hi(to)) + 1);
+  aut_put(sel, step, aut_at(sel, step) ? 0 : clampi(auto_own(to, sel), 0, auto_hi(to)) + 1);
 }
 
 static void auto_ramp(void)                          /* a straight line from each point to the next */
 {
-  int last = -1, n = 0;
-  for (int i = 0; i < STEPS; i++) {
-    if (!pat()->aut[sel][i]) continue;
-    if (last >= 0) for (int k = last + 1; k < i; k++) pat()->aut[sel][k] = (uint8_t)(pat()->aut[sel][last] + (pat()->aut[sel][i] - pat()->aut[sel][last]) * (k - last) / (i - last));
+  int last = -1, n = 0, l = lane_of(sel, view_to[sel]);
+  for (int i = 0; l >= 0 && i < STEPS; i++) {
+    if (!pat()->aut[l][i]) continue;
+    if (last >= 0) for (int k = last + 1; k < i; k++) pat()->aut[l][k] = (uint8_t)(pat()->aut[l][last] + (pat()->aut[l][i] - pat()->aut[l][last]) * (k - last) / (i - last));
     last = i; n++;
   }
   say(n < 2 ? "SET TWO POINTS FIRST" : "RAMP");
@@ -516,6 +552,7 @@ static void auto_ramp(void)                          /* a straight line from eac
 
 static void set_page(int p)
 {
+  if (p == PG_AUTO && page != PG_AUTO && last_to && last_sel == sel) view_to[sel] = last_to;   /* AUTO opens on the knob turned last */
   page = p; held_step = -1;
   if (p >= PG_SEQ && p <= PG_MASTER) kit_set(KIT_MUSIC);      /* the song's pages: its own sounds */
   for (int i = 0; i < 6; i++) vibe_label(VB_F1 + i, SOFT[soft_set()][i]);
@@ -560,17 +597,19 @@ static void param_nudge(int pg, int i, int d)
   if (pg == PG_AUTO) {
     if (i == 0) cur_step = clampi(cur_step + d, 0, STEPS - 1);
     if (i == 1) auto_turn(d);
-    if (i == 2) SONG.auto_to[sel] = (uint8_t)wrap(SONG.auto_to[sel], d > 0 ? 1 : -1, SFX_AT_COUNT);
+    if (i == 2) view_to[sel] = (uint8_t)wrap(view_to[sel], d > 0 ? 1 : -1, SFX_AT_COUNT);
     return;
   }
   if (pg == PG_MIX || pg == PG_MASTER) {
     int hi; uint8_t *v = i >= 0 && i < 4 ? mix_value(pg, i, &hi) : 0;
     if (v) *v = (uint8_t)clampi(*v + d, 0, hi);
     else if (i == 3) vibe_param_set(P_VOLUME, vd_clamp(vibe_param_get(P_VOLUME) + (float)d * 0.02f, 0.0f, 1.0f));
+    if (v) { last_sel = sel; last_to = (uint8_t)(pg == PG_MASTER ? SFX_AT_MASTER + i : i == 0 ? SFX_AT_VOL : i == 1 ? SFX_AT_PAN : SFX_AT_MASTER + SFX_M_DRIVE); }
     return;
   }
   sfx_patch *p = &patches[sel];
   int k = pg < PG_SEQ && i >= 0 && i < 4 ? PAGE_PARAMS[pg][i] : -1;
+  if (k >= 0 && kit == KIT_MUSIC) { last_sel = sel; last_to = (uint8_t)(SFX_AT_PATCH + k); }
   if (k == ENGINE_KNOB) { p->engine = (uint8_t)wrap(p->engine, d, SFX_ENGINE_COUNT); pad_preset[sel] = -1; }
   else if (k == SFX_P_TABLE) p->p[k] = (uint8_t)wrap(p->p[k] % SFX_WT_TABLES, d, SFX_WT_TABLES);
   else if (k >= 0) p->p[k] = (uint8_t)clampi(p->p[k] + d, 0, 127);
@@ -581,10 +620,10 @@ static void param_nudge(int pg, int i, int d)
 static void param_put(int pg, int i, float u)
 {
   if (pg == PG_AUTO) {
-    int to = SONG.auto_to[sel];
+    int to = view_to[sel];
     if (i == 0) cur_step = clampi((int)(u * (float)STEPS), 0, STEPS - 1);
-    if (i == 1 && to) pat()->aut[sel][cur_step] = (uint8_t)(clampi((int)(u * (float)auto_hi(to) + 0.5f), 0, auto_hi(to)) + 1);
-    if (i == 2) SONG.auto_to[sel] = (uint8_t)clampi((int)(u * (float)SFX_AT_COUNT), 0, SFX_AT_COUNT - 1);
+    if (i == 1 && to) aut_put(sel, cur_step, clampi((int)(u * (float)auto_hi(to) + 0.5f), 0, auto_hi(to)) + 1);
+    if (i == 2) view_to[sel] = (uint8_t)clampi((int)(u * (float)SFX_AT_COUNT), 0, SFX_AT_COUNT - 1);
     return;
   }
   if (pg == PG_MIX || pg == PG_MASTER) {
@@ -625,7 +664,7 @@ static void encoder(int id, float turn)
   if (page == PG_AUTO) {
     if (id == VE_1) cur_step = wrap(cur_step, d, STEPS);
     if (id == VE_2) auto_turn(d);
-    if (id == VE_3) SONG.auto_to[sel] = (uint8_t)wrap(SONG.auto_to[sel], d > 0 ? 1 : -1, SFX_AT_COUNT);
+    if (id == VE_3) view_to[sel] = (uint8_t)wrap(view_to[sel], d > 0 ? 1 : -1, SFX_AT_COUNT);
     return;
   }
   if (page == PG_SEQ) {
@@ -673,13 +712,13 @@ static void soft_sound(int f)                        /* F1-F6 on the sound pages
   audition();
 }
 
-static void pattern_clear(void) { for (int i = 0; i < STEPS; i++) { pat()->on[i] = 0; for (int t = 0; t < SLOTS; t++) { pat()->note[t][i] = 0; pat()->acc[t][i] = SFX_VEL_DEFAULT; pat()->aut[t][i] = 0; } } say("PATTERN CLEARED"); }
-static void demo(void) { demo_song(); edit_pat = 0; send(M_CUE, 0, 0, 0, 0); say("DEMO SONG"); }
+static void pattern_clear(void) { for (int i = 0; i < STEPS; i++) { pat()->on[i] = 0; for (int t = 0; t < SLOTS; t++) { pat()->note[t][i] = 0; pat()->acc[t][i] = SFX_VEL_DEFAULT; } for (int l = 0; l < SFX_LANES; l++) pat()->aut[l][i] = 0; } lanes_tidy(); say("PATTERN CLEARED"); }
+static void demo(void) { demo_song(); view_sync(); edit_pat = 0; send(M_CUE, 0, 0, 0, 0); say("DEMO SONG"); }
 
 static void pattern_copy(void)                       /* this pattern into the next one, and on to it: a variation to make */
 {
   int to = (edit_pat + 1) % SFX_PATTERNS;
-  for (int i = 0; i < STEPS; i++) { SONG.pat[to].on[i] = pat()->on[i]; for (int t = 0; t < SLOTS; t++) { SONG.pat[to].note[t][i] = pat()->note[t][i]; SONG.pat[to].acc[t][i] = pat()->acc[t][i]; SONG.pat[to].aut[t][i] = pat()->aut[t][i]; } }
+  for (int i = 0; i < STEPS; i++) { SONG.pat[to].on[i] = pat()->on[i]; for (int t = 0; t < SLOTS; t++) { SONG.pat[to].note[t][i] = pat()->note[t][i]; SONG.pat[to].acc[t][i] = pat()->acc[t][i]; } for (int l = 0; l < SFX_LANES; l++) SONG.pat[to].aut[l][i] = pat()->aut[l][i]; }
   if (SONG.chain < to + 1) SONG.chain = (uint8_t)(to + 1);
   pattern_pick(to); say("COPIED TO NEXT");
 }
@@ -719,7 +758,7 @@ static void soft_auto(int f)                         /* F1-F6 on the AUTO page *
   case 0: pattern_pick(edit_pat - 1); break;
   case 1: pattern_pick(edit_pat + 1); break;
   case 2: auto_ramp(); break;
-  case 3: for (int i = 0; i < STEPS; i++) pat()->aut[sel][i] = 0; say("LANE CLEARED"); break;
+  case 3: for (int i = 0; i < STEPS; i++) aut_put(sel, i, 0); say("LANE CLEARED"); break;
   case 4: pattern_copy(); break;
   case 5: bank_save(); say("SAVED"); break;
   }
@@ -918,10 +957,10 @@ static int stage_page_follows(void) { return sound_page() || mix_page() || page 
 /* the AUTO tab turns the rows into lanes: a click or a drag in the selected sound's row puts points where the mouse is */
 static void stage_auto(int x, int y)
 {
-  int to = SONG.auto_to[sel], step = clampi((x - SG_X) / SG_PX, 0, STEPS - 1);
+  int to = view_to[sel], step = clampi((x - SG_X) / SG_PX, 0, STEPS - 1);
   cur_step = step;
   if (!to) { say("CHOOSE A TARGET FIRST"); return; }
-  pat()->aut[sel][step] = (uint8_t)(clampi((SG_Y + sel * SG_PY + 19 - y) * auto_hi(to) / 19, 0, auto_hi(to)) + 1);
+  aut_put(sel, step, clampi((SG_Y + sel * SG_PY + 19 - y) * auto_hi(to) / 19, 0, auto_hi(to)) + 1);
 }
 
 static void stage_dragged(int x)
@@ -960,7 +999,7 @@ static void stage_event(const vibe_event *e)
   else if (gx >= 0 && gy >= 0 && gx < SG_W && gy < SLOTS * SG_PY && spage == PG_AUTO) {
     kit_set(KIT_MUSIC);    /* a lane: a point – SHIFT or the right button takes it away */
     sel = gy / SG_PY; cur_step = gx / SG_PX;
-    if (e->midi[1] & (VIBE_STAGE_MOD_SHIFT | VIBE_STAGE_MOD_RIGHT)) pat()->aut[sel][cur_step] = 0;
+    if (e->midi[1] & (VIBE_STAGE_MOD_SHIFT | VIBE_STAGE_MOD_RIGHT)) aut_put(sel, cur_step, 0);
     else { stage_drag = SD_AUTO; stage_auto(x, y); }
   } else if (gx >= 0 && gy >= 0 && gx < SG_W && gy < SLOTS * SG_PY) { kit_set(KIT_MUSIC); sel = gy / SG_PY; step_toggle(gx / SG_PX, sel); }
   else if (inside(x, y, SN_X, SG_Y, SG_X - SN_X, SLOTS * SG_PY)) {                         /* a row's name: that sound – SHIFT or the right button: mute */
@@ -1002,7 +1041,7 @@ void vibe_on_init(float sample_rate)
 {
   SR = sample_rate;
   sfx_player_init(&P, SR);
-  factory(); bank_load();
+  factory(); bank_load(); view_sync();
   for (int i = 0; i < SLOTS; i++) P.patch[i] = kits[KIT_MUSIC][i];
   vibe_notes(VIBE_NOTES);
   vibe_params(PARAMS, P_COUNT);
@@ -1088,7 +1127,7 @@ static void factory_reset(void)
   armed = 0;
   if (tour_on) tour_end();
   if (running) seq_play(0);
-  factory();
+  factory(); view_sync();
   for (int k = 0; k < 2; k++) for (int i = 0; i < SLOTS; i++) has_undo_k[k][i] = 0;
   kit = KIT_MUSIC;
   for (int i = 0; i < SLOTS; i++) changed(i);          /* the song's sounds, to the player */
@@ -1623,9 +1662,9 @@ static const char *auto_text(int to, int track, int v, char *buf)
 static void draw_auto(uint32_t rgb, uint32_t step, uint32_t now)
 {
   char buf[16];
-  int here = now == (uint32_t)edit_pat && step != NO_STEP, to = SONG.auto_to[sel], hi = auto_hi(to), last = 0;
+  int here = now == (uint32_t)edit_pat && step != NO_STEP, to = view_to[sel], hi = auto_hi(to), last = 0;
   for (int s = 0; s < STEPS; s++) {
-    int x, y, a = pat()->aut[sel][s], off = s >= SONG.len, head = here && step == (uint32_t)s;
+    int x, y, a = aut_at(sel, s), off = s >= SONG.len, head = here && step == (uint32_t)s;
     tile_at(s, &x, &y);
     vg_round(x, y, 55, 54, 7, off ? 0x1A120E : head ? 0x563A2E : (s / 4) & 1 ? 0x2A1D17 : 0x35251D);
     if (a) last = a;
@@ -1721,7 +1760,7 @@ void vibe_on_draw(uint16_t *fb)
     if (seq || song || aut) {                         /* … and the pattern; on AUTO the knob the lane moves */
       char t[40] = "PATTERN  "; t[8] = (char)('A' + edit_pat);
       tw += vg_text(t, 26 + tw, 36, VG_BOLD, TEXT, VG_LEFT);
-      if (aut) vg_text(auto_name(SONG.auto_to[sel], sel), 40 + tw, 36, VG_BOLD, SONG.auto_to[sel] ? TEXT : DIM, VG_LEFT);
+      if (aut) vg_text(auto_name(view_to[sel], sel), 40 + tw, 36, VG_BOLD, view_to[sel] ? TEXT : DIM, VG_LEFT);
       else if (seq && !layer_on(sel)) vg_text("layer off", 40 + tw, 36, VG_SMALL, DIM, VG_LEFT);
     }
     for (int i = 0; i < TAB_COUNT; i++) vg_round(LOC_X + i * 18, 37, 12, 9, 2, i == tab ? rgb : LINE);
@@ -1739,7 +1778,7 @@ void vibe_on_draw(uint16_t *fb)
       if (s < 8) { base = 0x36C5FF; state = (uint32_t)s == now && step != NO_STEP ? 3 : s == edit_pat ? 2 : s < SONG.chain ? 1 : 0; }
       else { base = 0xFF5A36; state = heat >= (s - 7) * 127 / 8 ? 2 : 1; }
     } else if (aut) {
-      base = rgb; state = step == (uint32_t)s && now == (uint32_t)edit_pat ? 3 : pat()->aut[sel][s] ? 2 : s >= SONG.len ? 0 : 1;
+      base = rgb; state = step == (uint32_t)s && now == (uint32_t)edit_pat ? 3 : aut_at(sel, s) ? 2 : s >= SONG.len ? 0 : 1;
     } else if (mix) {
       base = ENGINE_RGB[patches[s].engine]; state = silent(s) ? 1 : (on >> s) & 1 ? 3 : 2;
     } else {
@@ -1754,12 +1793,16 @@ void vibe_on_draw(uint16_t *fb)
   vibe_link_page(page <= PG_WAVE ? SUB[page] : song ? "SONG" : aut ? "AUTO" : mix ? "MIX" : page == PG_MASTER ? "MASTER" : TAB_NAME[TAB_OF[page]]);
   for (int i = 0; i < 4; i++) enc_rect[i][2] = 0;
   if (aut) {
-    int to = SONG.auto_to[sel], a = pat()->aut[sel][cur_step];
+    int to = view_to[sel], a = aut_at(sel, cur_step);
     draw_auto(rgb, step, now);
     row(0, "STEP", vg_itoa(cur_step + 1, buf), (float)(cur_step + 1) / (float)STEPS, 0, rgb);
     row(1, "VALUE", a && to ? auto_text(to, sel, a - 1, buf) : "--", a && to ? (float)(a - 1) / (float)auto_hi(to) : 0.0f, 0, rgb);
     row(2, "TARGET", auto_name(to, sel), (float)to / (float)(SFX_AT_COUNT - 1), 0, to ? TEXT : DIM);
-    footer(to ? "PADS: A POINT ON / OFF" : "TURN TARGET FIRST", to ? TEXT : 0xFF8A3C, to ? "F3 RAMP joins the points" : "knob 3: any knob of the sound, the mix");
+    if (to && lane_of(sel, to) >= 0) vg_circle(456.0f, (float)(CY + 2 * 47 + 12), 4.0f, 0xFF8A3C);             /* this knob has a lane */
+    { static char t[40]; int own = 0;
+      for (int l = 0; l < SFX_LANES; l++) own += SONG.lane[l].track == sel + 1;
+      vg_itoa(own, t); strcpy(t + strlen(t), own == 1 ? " lane here, " : " lanes here, "); vg_itoa(lanes_used(), t + strlen(t)); strcpy(t + strlen(t), " of 24 used");
+      footer(to ? "PADS: A POINT ON / OFF" : "TURN TARGET FIRST", to ? TEXT : 0xFF8A3C, t); }
   } else if (mix) {
     draw_mix();
     for (int i = 0; i < 4; i++) {
@@ -1809,6 +1852,8 @@ void vibe_on_draw(uint16_t *fb)
       else if (k == SFX_P_TABLE) hud(i, i, "TABLE", param_text(k, p, buf), (float)(p->p[k] % SFX_WT_TABLES + 1) / (float)SFX_WT_TABLES, 0, rgb);
       else if (k >= 0) hud(i, i, param_name(k, p->engine), param_text(k, p, buf), (float)p->p[k] / 127.0f, k == SFX_P_PITCH_ENV_AMT || k == SFX_P_FILTER_ENV, rgb);
       else hud(i, i, "", "", -1.0f, 0, rgb);
+      if (k >= 0 && kit == KIT_MUSIC && lane_of(sel, SFX_AT_PATCH + k) >= 0)                               /* a lane moves this knob: a mark at its corner */
+        vg_circle((i & 1) ? 318.0f : 162.0f, (float)((i >> 1) ? CY + CH - 46 : CY + 12), 4.0f, 0xFF8A3C);
     }
   }
 
@@ -1914,7 +1959,7 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
   for (int i = 0; i < 4; i++) {
     int k = spage < PG_SEQ ? PAGE_PARAMS[spage][i] : -1;
     if (spage == PG_AUTO) {
-      int to = SONG.auto_to[sel], a = pat()->aut[sel][cur_step];
+      int to = view_to[sel], a = aut_at(sel, cur_step);
       if (i == 0) stage_value(i, "STEP", vg_itoa(cur_step + 1, buf), ((float)cur_step + 0.5f) / (float)STEPS, 0, rgb);
       else if (i == 1) stage_value(i, "VALUE", a && to ? auto_text(to, sel, a - 1, buf) : "--", a && to ? (float)(a - 1) / (float)auto_hi(to) : 0.0f, 0, rgb);
       else if (i == 2) stage_value(i, "TARGET", auto_name(to, sel), ((float)to + 0.5f) / (float)SFX_AT_COUNT, 0, rgb);
@@ -1937,12 +1982,12 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
     int y = SG_Y + s * SG_PY, layer = heat >= SONG.level[s];
     if (s == sel) vg_round(SN_X, y, SG_X - SN_X - 6, 20, 4, c);
     if ((play_k[KIT_MUSIC] >> s) & 1) vg_rect(SN_X - 7, y + 2, 3, 16, 0xFFFFFF);
-    vg_text(lanes && SONG.auto_to[s] ? auto_name(SONG.auto_to[s], s) : name_of(KIT_MUSIC, s), SN_X + 5, y + 3, VG_SMALL, s == sel ? BG : silent(s) ? 0x58433A : lanes ? (SONG.auto_to[s] ? TEXT : vg_mix(BG, c, 0.55f)) : layer && ((used >> s) & 1) ? c : vg_mix(BG, c, 0.55f), VG_LEFT);
+    vg_text(lanes && view_to[s] ? auto_name(view_to[s], s) : name_of(KIT_MUSIC, s), SN_X + 5, y + 3, VG_SMALL, s == sel ? BG : silent(s) ? 0x58433A : lanes ? (view_to[s] ? TEXT : vg_mix(BG, c, 0.55f)) : layer && ((used >> s) & 1) ? c : vg_mix(BG, c, 0.55f), VG_LEFT);
     if (silent(s)) { vg_rect(SN_X + 3, y + 10, SG_X - SN_X - 12, 1, s == sel ? BG : 0x7A6055); layer = 0; }      /* muted: struck out, its steps dim */
     if (lanes) {                                      /* its lane: a point holds until the next one; the dots are its steps */
-      int to = SONG.auto_to[s], hi = auto_hi(to), last = 0;
+      int to = view_to[s], hi = auto_hi(to), last = 0;
       for (int i = 0; i < STEPS; i++) {
-        int x = SG_X + i * SG_PX, a = pat()->aut[s][i], head = here && step == (uint32_t)i, off = i >= SONG.len;
+        int x = SG_X + i * SG_PX, a = aut_at(s, i), head = here && step == (uint32_t)i, off = i >= SONG.len;
         vg_round(x, y, 22, 20, 3, head ? 0x5F4134 : off ? 0x1C130F : s == sel ? 0x503328 : (i / 4) & 1 ? 0x2B1D17 : 0x38261E);
         if (a) last = a;
         if (to && last && !off) {

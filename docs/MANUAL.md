@@ -42,11 +42,11 @@ Everything is synthesized. There are no samples and no recordings in it.
 
 | | Control | What it does |
 |---|---|---|
-| **1** | the display | the selected sound, the page you are on, four values, six soft keys |
+| **1** | the display | the selected sound, the page you are on, the four knobs' values, six soft keys |
 | **2** | **F1 – F6** | the six soft keys shown along the bottom of the display. They change with the page |
 | **3** | **encoders 1 – 4** | the four values the display shows. Hold SHIFT to turn fast |
 | **4** | **DATA** | selects a sound |
-| **5** | **the 16 pads** | play the kit's sounds. On the song pages they are steps, patterns or mutes |
+| **5** | **the 16 pads** | play the kit's sounds. On the song pages they are steps, patterns or mutes – and the display draws them as 16 tiles |
 | **6** | **SHIFT** | the second meaning of a key, and fast encoders |
 | **7** | **K1 – K6** | the pages. Press a K key again for its next page |
 | **8** | **A · B** | A: the output volume (on SEQ and AUTO, the tempo). B: the scale, or the bar's length |
@@ -75,7 +75,14 @@ The top four rows shape **one sound**. The K4 and K5 rows after their first page
 
 ## 3. The display
 
-Every sound page looks like this.
+**A page is one of two kinds, and nothing else.**
+
+| Kind | Pages | What you see |
+|---|---|---|
+| **A picture** | the seven sound pages, MASTER | one picture of what the knobs shape, with their four values in its four corners |
+| **The pads** | SEQ, SONG, AUTO, MIX | the 16 pads drawn as 16 tiles, laid out as the pads are – with the four values in a column beside them |
+
+### A picture page
 
 ![A sound page](img/page-sound.png)
 
@@ -84,15 +91,25 @@ Every sound page looks like this.
 | **1** | the selected sound: its pad number, its name, its engine |
 | **2** | the kit it belongs to: SFX or MUSIC |
 | **3** | the song: playing or stopped, its pattern, its tempo – and a dot that is green while a game is linked |
-| **4** | the pages. The bright one is where you are |
-| **5** | the sound's whole shape, from start to end, with its length |
-| **6** | what this page's knobs shape: the wave, the envelope, the filter or the LFO |
-| **7** | the 16 pads. White: sounding now |
-| **8** | SOUND's own pages. K1 again walks through them |
-| **9** | the four values = encoders 1 – 4, in their units |
-| **10** | the soft keys = F1 – F6 |
+| **4** | the page's name |
+| **5** | six marks for K1 – K6. The bright one is the key you are on; the dots under it are that key's pages |
+| **6** | the picture: the sound's whole shape – and over it, in white, what this page's knobs shape (the wave, the envelope, the filter, the LFO) |
+| **7** | a value in each corner: its name, its value in its unit, and a ring that stands where the knob stands. The number in the ring is the encoder: 1 top left, 2 top right, 3 bottom left, 4 bottom right |
+| **8** | the soft keys = F1 – F6 |
 
-**The pictures redraw as you turn a knob.** That is the quickest way to learn what a knob does.
+**Turn a knob and its value is written large across the middle for a moment** – so you never have to look for it:
+
+![A knob being turned](img/touch.png)
+
+The picture redraws as you turn. That is the quickest way to learn what a knob does.
+
+### A pad page
+
+![The SEQ page](img/page-seq.png)
+
+The tiles are the pads. Whatever a pad does on this page, its tile shows – here, the 16 steps of the selected sound.
+The four values are in the column on the right, numbered like the encoders, with two lines under them that say what
+the pads do here.
 
 ---
 
@@ -125,7 +142,7 @@ another; **F3 UNDO** takes one back.
 ![The laser, mutated](img/t-sfx-2.png)
 
 **3. Shape it by hand.** Press **K1** until FILTER is lit, and turn **encoder 1**, CUTOFF. The filter's curve moves in
-the right-hand picture and the shape on the left gets duller.
+white over the picture, and the sound's shape behind it gets duller.
 
 ![The filter page](img/t-sfx-3.png)
 
@@ -278,12 +295,13 @@ until you reach an empty pattern.
 
 | | What it is |
 |---|---|
-| **1** | the pattern, and the sound whose steps are shown |
-| **2** | the tempo (A), the swing (SHIFT + A), the scale NOTE moves in (B) |
-| **3** | the selected sound's 16 steps. A step shows its **note**; its **height** is how hard it plays; a **line under it** is how long it holds; the frame is the step the encoders edit |
-| **4** | the whole pattern: a row for each sound. The arrow marks the selected one; the bright column is the step playing now |
-| **5** | STEP · NOTE · VELOCITY · LENGTH of the framed step |
-| **6** | pattern before / after · FILL · CLEAR the row · COPY the pattern to the next · SAVE |
+| **1** | the page and the pattern you edit |
+| **2** | the 16 steps of the selected sound, as the 16 pads: **a row is a beat**. A step that is on shows its **note**; its **height** is how hard it plays; `>3` in its corner means it holds 3 steps. The frame is the step the encoders edit; the white tile is the step playing now |
+| **3** | STEP · NOTE · VELOCITY · LENGTH of the framed step |
+| **4** | what the pads do here, and the swing and the scale. It warns when the sound's layer is silent at the current intensity |
+| **5** | pattern before / after · FILL · CLEAR the row · COPY the pattern to the next · SAVE |
+
+The page shows one sound at a time. To see every sound's steps at once, open the stage ([section 14](#14-the-stage)).
 
 ### Everything a step can do
 
@@ -310,12 +328,11 @@ Press **K5 again** for the SONG page.
 
 | | What it is |
 |---|---|
-| **1** | the eight patterns, A – H, each with a sketch of what is in it. White: playing. Blue: the one you edit |
-| **2** | the arrangement: a pattern for each bar |
-| **3** | INTENSITY: the orange level |
-| **4** | the layers: a column for each sound, with its mark |
-| **5** | PATTERN · CHAIN · INTENSITY · LAYER |
-| **6** | PLAY · COPY · CLR PAT · DEMO · SEND to the game · SAVE |
+| **1** | the eight patterns on pads 1 – 8, each with a sketch of what is in it. White: playing. Blue: the one you edit |
+| **2** | INTENSITY on pads 9 – 16: the tiles light up to the current level |
+| **3** | PATTERN · CHAIN · INTENSITY · the selected sound's LAYER |
+| **4** | the arrangement: a pattern for each bar. The white one is playing |
+| **5** | PLAY · COPY · CLR PAT · DEMO · SEND to the game · SAVE |
 
 ### How a song is put together
 
@@ -357,26 +374,26 @@ bells join in that order.
 | set INTENSITY | encoder 3, or pads 9 – 16 (eight steps). A game sends it |
 | set a sound's LAYER mark | select the sound (DATA), turn encoder 4 |
 
-On the page the orange level rises from the bottom; a sound whose mark is under it plays.
+On the page the eight intensity tiles light up as the level rises; LAYER is the selected sound's own mark.
 
 ---
 
 ## 12. Automation
 
-Automation moves a knob by itself while the pattern plays. Press **K5 a third time** for the AUTO page.
+Automation moves a knob by itself while the pattern plays. **Any knob can have a lane** – and a sound can have as many
+lanes as it has knobs that should move. Press **K5 a third time** for the AUTO page.
 
 ![The AUTO page](img/page-auto.png)
 
 | | What it is |
 |---|---|
-| **1** | the pattern, the sound, and the knob its lane moves |
-| **2** | the lane: a bar for each step. Bright: a point. Dim: the value still held from the last point |
-| **3** | dots where the sound plays, to line points up with notes |
-| **4** | STEP and VALUE: the framed step's point, in the knob's own unit |
-| **5** | TARGET: which knob |
-| **6** | RAMP joins the points with straight lines · CLEAR empties the lane |
+| **1** | the pattern, and the knob this lane moves |
+| **2** | the lane, as the 16 pads: a bar for each step. Bright with a white edge: a point. Dim: the value still held from the last point. The dot in a corner: the sound plays on that step |
+| **3** | STEP · VALUE (in the knob's own unit) · TARGET (which knob). The orange dot says this knob has a lane |
+| **4** | how many lanes this sound has, and how many of the song's 24 are in use |
+| **5** | RAMP joins the points with straight lines · CLEAR empties the lane |
 
-### A lane can move any knob
+### What a lane can move
 
 | | Targets |
 |---|---|
@@ -384,25 +401,33 @@ Automation moves a knob by itself while the pattern plays. Press **K5 a third ti
 | **its place in the mix** | VOLUME, PAN |
 | **the master** | DELAY TIME, FEEDBACK, ROOM SIZE, DAMPING, DRIVE |
 
-### Drawing a sweep, step by step
+### The quick way: turn the knob, then press K5
+
+**AUTO opens on the knob you turned last.** So: on any page of the MUSIC kit turn the knob you want to move – CUTOFF
+on the FILTER page, a fader on MIX, ROOM SIZE on MASTER – then go to AUTO. Its lane is ready.
 
 | | Do this |
 |---|---|
-| **1** | DATA to the sound |
-| **2** | turn **encoder 3 TARGET** to the knob – say CUTOFF |
+| **1** | turn the knob you want to automate, on its own page |
+| **2** | press **K5** until AUTO. TARGET already names that knob (or turn **encoder 3** to choose another) |
 | **3** | hit **pad 1**. A point appears where the knob stands. Turn **encoder 2** down |
 | **4** | hit **pad 16**. Turn encoder 2 up |
 | **5** | press **F3 RAMP** – the picture above |
 
-### Three rules
+For a second lane on the same sound, turn TARGET to another knob and put points on it. Both play.
+
+On a sound page, an orange dot beside a value says a lane moves that knob:
+
+![A knob with a lane](img/lanes-sound.png)
+
+### Four rules
 
 | | |
 |---|---|
 | **A point holds** | until the next point, or the end of the bar |
 | **Nothing is written** | at every bar line each knob is back where you set it by hand |
 | **It moves in steps** | a 16th note at a time. Use RAMP for a sweep that sounds smooth |
-
-Each sound has one lane and one target. Master targets can sit on any sound's lane – an unused sound is a good place.
+| **24 lanes a song** | the first point of a knob takes a lane; clearing its last point gives it back |
 
 ---
 
@@ -426,12 +451,10 @@ Sound effects skip the faders: a muted bass never mutes an explosion.
 
 | | What it is |
 |---|---|
-| **1** | each sound's pan: a mark from left to right |
-| **2** | each sound's fader. An **M** is a mute, an **S** a solo |
-| **3** | the line at 100: the sound as it was designed |
-| **4** | VOLUME and PAN of the selected sound |
-| **5** | DRIVE: saturation on the whole mix · OUTPUT volume |
-| **6** | MUTE · SOLO · RESET the fader · ALL ON · PLAY · SAVE |
+| **1** | every sound of the MUSIC kit as a tile, where its pad is: its name, its fader (the small mark is 100, as designed), its pan under it. **M**: muted. **S**: solo. The frame is the selected sound |
+| **2** | VOLUME and PAN of the selected sound · DRIVE: saturation on the whole mix · OUTPUT volume |
+| **3** | what the pads do here |
+| **4** | MUTE · SOLO · RESET the fader · ALL ON · PLAY · SAVE |
 
 **The pads mute. SHIFT + a pad solos** – only soloed sounds play.
 
@@ -443,8 +466,8 @@ Sound effects skip the faders: a muted bass never mutes an explosion.
 |---|---|
 | **1** | the delay, drawn as its echoes: left and right in turn |
 | **2** | the reverb, drawn as its fading |
-| **3** | DELAY TIME (a 16th to a half note – it follows the tempo) · FEEDBACK |
-| **4** | ROOM SIZE · DAMPING (low: a bright hall, high: a dark room) |
+| **3** | the delay's values, in its corners: DELAY TIME (a 16th to a half note – it follows the tempo) and FEEDBACK |
+| **4** | the reverb's: ROOM SIZE and DAMPING (low: a bright hall, high: a dark room) |
 
 Each sound's own FX page decides how much of it goes into these.
 
@@ -541,9 +564,8 @@ Linked over MIDI, the game drives the device while you listen and adjust. The **
 | | What it is |
 |---|---|
 | **1** | what the game sends: pitch, cutoff, timbre, level, intensity, pattern |
-| **2** | what the device sends to the game |
+| **2** | encoders 1 – 4 send CC 20 – 23 to the game: tune a game value from here |
 | **3** | green while a game is linked, with any text it sent |
-| **4** | encoders 1 – 4 send CC 20 – 23 to the game: tune a game value from here |
 
 The protocol, byte by byte, is in the [README](../README.md#the-link-device--game-engine). The Unity package is in
 `unity/com.catsplat.sfxforge`; the demo project in `unity/Demo` shows all of it in one scene.
@@ -587,7 +609,7 @@ an earlier version is not read; the factory kits and the demo appear instead.
 | **Samples** | it cannot play recorded audio: no voice lines, no recorded foley, no real orchestra |
 | **Timing** | a bar is 16 steps. No triplets inside a bar, no notes between steps; swing is the only timing change |
 | **Size** | 8 patterns, 32 bars of arrangement, 16 voices – with long reverberant sounds the oldest note is cut to make room |
-| **Automation** | one lane for each sound, moving in steps, not glides |
+| **Automation** | 24 lanes a song, moving in steps, not glides |
 | **Chords** | one note per step for each sound. A chord needs several sounds, or the keys |
 | **Platforms** | the Unity package runs on Windows x64 so far. Receiving MIDI in Unity has not been tested against a real port |
 | **The stage** | has no control for the swing; it is SHIFT + A on the device |
@@ -620,7 +642,7 @@ PLAY STOP REC the song · MENU the tour · HOME this page's controls · A the ou
 | **MASTER** | K4 ×3 | play | DELAY TIME · FEEDBACK · ROOM SIZE · DAMPING | as MIX |
 | **SEQ** | K5 | steps · SHIFT: select a sound | STEP · NOTE · VELOCITY · LENGTH | < PAT · PAT > · FILL · CLEAR · COPY · SAVE |
 | **SONG** | K5 ×2 | 1 – 8 pattern · 9 – 16 intensity · SHIFT: arrangement | PATTERN · CHAIN · INTENSITY · LAYER | PLAY · COPY · CLR PAT · DEMO · SEND · SAVE |
-| **AUTO** | K5 ×3 | a point on / off · SHIFT: select a sound | STEP · VALUE · TARGET | < PAT · PAT > · RAMP · CLEAR · COPY · SAVE |
+| **AUTO** | K5 ×3 | a point on / off · SHIFT: select a sound | STEP · VALUE · TARGET (it opens on the knob turned last) | < PAT · PAT > · RAMP · CLEAR · COPY · SAVE |
 | **LINK** | K6 | play | send CC 20 – 23 | as the sound pages |
 
 | Other encoder | Where | What it does |

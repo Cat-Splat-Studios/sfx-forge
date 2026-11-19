@@ -96,12 +96,17 @@ The short version; [the manual](docs/MANUAL.md) is the long one.
   1–8 adds that pattern as a bar, SHIFT + pad 9–15 takes the last bar away, SHIFT + pad 16 all of them (then the chain
   plays again). A cued pattern that is in the arrangement goes on from its bar; one that is not – a boss, a menu –
   takes over and stays until the next cue.
-- **K5 a third time: AUTO** – automation. Every sound has a lane, and TARGET (encoder 3) says which knob it moves: any
-  of the sound's own 25 values, its fader, its pan, or the master's delay time, feedback, room size, damping and drive.
-  A pad puts a point on its step (where the knob stands), VALUE (encoder 2) moves it; a point holds until the next one
-  or the bar's end. F3 RAMP draws a straight line from point to point, F4 clears the lane. Nothing is written into the
-  sound or the mix: at every bar line each knob is back where you made it. In the engine it is one function
-  (`sfx_auto` in `core/sfx_song.h`), asked wherever a knob's value is used – in the game as on the device.
+- **K5 a third time: AUTO** – automation, for any knob. A song has 24 lanes; each moves one knob of one sound – any
+  of its own 25 values, its fader, its pan – or the master's delay time, feedback, room size, damping or drive. So a
+  sound has as many lanes as it has knobs that should move. AUTO opens on the knob you turned last: turn it on its own
+  page, go to AUTO, and its lane is there (TARGET, encoder 3, chooses another). A pad puts a point on its step (where
+  the knob stands), VALUE (encoder 2) moves it; a point holds until the next one or the bar's end. F3 RAMP draws a
+  straight line from point to point, F4 clears the lane. Nothing is written into the sound or the mix: at every bar
+  line each knob is back where you made it. In the engine it is one function (`sfx_auto` in `core/sfx_song.h`), asked
+  wherever a knob's value is used – in the game as on the device.
+- **The display** is one of two kinds of page: the 16 pads as 16 tiles beside the four values (SEQ, SONG, AUTO, MIX),
+  or a picture of what the knobs shape with their values in its corners (the sound pages, MASTER). The knob being
+  turned is written large across the middle for a moment.
 - **K4 again: MIX** – the mixer: a fader and a pan for every sound (encoders 1 and 2, for the selected one), DRIVE
   on the sum, the OUTPUT volume. The pads mute a sound, SHIFT + pad solos it; F1 MUTE, F2 SOLO, F3 RESET, F4 ALL ON.
 - **K4 a third time: MASTER** – the effects every sound sends to: the delay's TIME (1/16 to 1/2) and FEEDBACK, the reverb's ROOM
@@ -145,7 +150,7 @@ Plain MIDI, so it works over USB, the plugin's MIDI ports and Web MIDI. SysEx us
 | game → device | `F0 7D 56 42 02 <slot> <28 patch bytes> F7` | load a patch into a pad |
 | game → device | `F0 7D 56 42 03 <ASCII, ≤ 24> F7` | text for the top line |
 | game → device | `F0 7D 56 42 04 <slot> F7` | request a dump of a pad |
-| both ways | `F0 7D 56 42 05 <piece> <pieces> <≤ 200 bytes> F7` | the song with its mix, in 34 pieces (6643 bytes, `sfx_song_pack`; the older 4546-, 2498- and 2455-byte songs are still taken) |
+| both ways | `F0 7D 56 42 05 <piece> <pieces> <≤ 200 bytes> F7` | the song with its mix, in 39 pieces (7699 bytes, `sfx_song_pack`; the older 6643-, 4546-, 2498- and 2455-byte songs are still taken) |
 | game → device | `F0 7D 56 42 06 F7` | request the 16 sounds and the song (as SEND does) |
 
 `<slot>` is 0–15, a pad of the kit the device shows. SEND and the request `06` always give the MUSIC kit: the song's

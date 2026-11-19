@@ -7,6 +7,7 @@ namespace CatSplat.SfxForge
     public enum SfxMaster { DelayTime, DelayFeedback, ReverbSize, ReverbDamping, Drive }
     /// <summary>What a sound's automation lane moves (core/sfx_song.h, SFX_AT_*): 1..25 are the sound's own values (SfxParam + 1).</summary>
     public static class SfxAutoTarget { public const int None = 0, FirstParam = 1, Volume = 26, Pan = 27, FirstMaster = 28, Count = 33; }
+    // (a song holds 24 lanes: each moves one knob of one sound, so a sound may have several)
 
     /// <summary>What a game sends the device while it plays (CC 10..17 on channel 2).</summary>
     public enum SfxTelemetry { Pitch, Cutoff, FmDepth, Level, Intensity, Pattern, Aux3, Aux4 }
@@ -33,7 +34,8 @@ namespace CatSplat.SfxForge
         public const int SongBytesV1 = 2455;        // a song from before the mixer: still played
         public const int SongBytesV2 = 2498;        // … and one from before velocity and length
         public const int SongBytesV3 = 4546;        // … and one from before automation and the arrangement
-        public const int SongBytes = 6643;          // a packed song (core/sfx_song.h)
+        public const int SongBytesV4 = 6643;        // … and one with a single automation lane for each sound
+        public const int SongBytes = 7699;          // a packed song (core/sfx_song.h)
         public const int SongChunkBytes = 200;
         public const int SongChunks = (SongBytes + SongChunkBytes - 1) / SongChunkBytes;
         public const int Patterns = 8;

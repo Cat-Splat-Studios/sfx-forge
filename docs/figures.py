@@ -54,19 +54,19 @@ def annotated(src, dst, marks, scale=2, r=15):
 
 # ---- the device's pages, with marks -----------------------------------------------------------------------------------
 # (the marks sit in the gaps and margins beside what they name, so nothing is hidden)
-annotated("sfx-sound", "page-sound", [(42, 8), (310, 17), (384, 17), (240, 44), (150, 75), (330, 67), (350, 124), (94, 208), (240, 251), (240, 301)])
-annotated("seq-playing", "page-seq", [(160, 65), (194, 65), (7, 92), (473, 165), (240, 251), (240, 301)])
-annotated("song", "page-song", [(238, 77), (250, 111), (473, 127), (473, 176), (240, 251), (240, 301)])
-annotated("t-auto", "page-auto", [(228, 65), (473, 135), (473, 202), (124, 251), (356, 251), (160, 301)])
-annotated("mix", "page-mix", [(473, 79), (473, 150), (7, 112), (124, 251), (356, 251), (80, 301)])
-annotated("master", "page-master", [(226, 98), (458, 98), (124, 251), (356, 251)])
-annotated("link", "page-link", [(228, 205), (458, 140), (458, 174), (240, 251)])
+annotated("sfx-sound", "page-sound", [(200, 17), (308, 17), (384, 17), (130, 44), (354, 44), (240, 104), (178, 87), (238, 304)])
+annotated("seq-playing", "page-seq", [(190, 44), (128, 114), (250, 150), (250, 258), (238, 304)])
+annotated("song", "page-song", [(128, 114), (128, 230), (250, 150), (250, 252), (238, 304)])
+annotated("lanes-auto", "page-auto", [(262, 44), (128, 172), (250, 125), (250, 258), (159, 304)])
+annotated("mix", "page-mix", [(128, 172), (250, 125), (250, 258), (80, 304)])
+annotated("master", "page-master", [(90, 125), (318, 125), (178, 87), (302, 87)])
+annotated("link", "page-link", [(180, 75), (250, 150), (250, 258)])
 annotated("seq-playing-stage", "stage", [(150, 34), (190, 14), (342, 14), (462, 14), (454, 45), (14, 180), (328, 316), (200, 345), (14, 414), (14, 458), (14, 510),
                                          (458, 240), (946, 240), (946, 434), (946, 458), (458, 502), (946, 491)], scale=1, r=11)
 annotated("auto-stage", "stage-auto", [(459, 414), (14, 458), (946, 240), (946, 491)], scale=1, r=11)
 
 # ---- the tutorials: a picture a step ---------------------------------------------------------------------------------
-for n in ("t-sfx-1", "t-sfx-2", "t-sfx-3", "t-sfx-4", "t-beat-1", "t-beat-2", "t-beat-3", "t-beat-4", "env", "lfo", "fx", "music-wave"):
+for n in ("t-sfx-1", "t-sfx-2", "t-sfx-3", "t-sfx-4", "t-beat-1", "t-beat-2", "t-beat-3", "t-beat-4", "env", "lfo", "fx", "music-wave", "touch", "lanes-sound"):
     plain(n)
 
 
@@ -91,20 +91,20 @@ def device_map():
             tw = d.textlength(label, font=small)
             d.text((x - tw / 2, y + r + 6), label, font=small, fill=DIM)
 
-    # the display, with the pages it shows
-    d.rounded_rectangle([110, 56, 470, 296], 8, fill=BG, outline="#3A4252", width=2)
+    # the display: a picture with a value in each corner
+    d.rounded_rectangle([110, 56, 470, 296], 8, fill="#0E0B09", outline="#3A4252", width=2)
     d.rounded_rectangle([122, 66, 152, 86], 4, fill="#36C5FF")
     d.text((160, 66), "LASER", font=f, fill=TEXT)
-    for i, n in enumerate(["SOUND", "ENV", "LFO", "FX", "SEQ", "LINK"]):
-        d.rounded_rectangle([122 + i * 57, 96, 174 + i * 57, 112], 4, fill="#36C5FF" if i == 0 else PANEL)
-    d.rounded_rectangle([122, 120, 372, 216], 5, fill=PANEL)
-    d.polygon([(130, 168), (132, 128), (250, 160), (364, 167), (364, 169), (250, 176), (132, 208)], fill="#36C5FF")
-    for i in range(16):
-        d.rounded_rectangle([382 + (i % 4) * 20, 120 + (i // 4) * 24, 398 + (i % 4) * 20, 140 + (i // 4) * 24], 3, fill="#24405A")
-    for i in range(4):
-        d.rounded_rectangle([122 + i * 86, 224, 200 + i * 86, 262], 5, fill=PANEL)
+    d.text((122, 92), "SOUND  OSC", font=small, fill="#36C5FF")
     for i in range(6):
-        d.rounded_rectangle([122 + i * 57, 268, 174 + i * 57, 286], 4, fill="#1C2436")
+        d.rounded_rectangle([372 + i * 15, 95, 382 + i * 15, 102], 2, fill="#36C5FF" if i == 0 else "#3A2E26")
+    d.rounded_rectangle([122, 112, 458, 262], 6, fill="#1B1613")
+    d.polygon([(130, 187), (132, 150), (250, 178), (450, 186), (450, 188), (250, 196), (132, 224)], fill="#36C5FF")
+    for cx, cy in ((128, 118), (366, 118), (128, 226), (366, 226)):
+        d.rectangle([cx, cy, cx + 86, cy + 30], fill="#0E0B09")
+        d.ellipse([cx + 4, cy + 5, cx + 24, cy + 25], outline="#36C5FF", width=2)
+    for i in range(6):
+        d.rounded_rectangle([122 + i * 57, 270, 174 + i * 57, 288], 9, fill="#36241C")
     key(60, 150, 34, 28, "RET")
     key(60, 190, 34, 28, "HOME")
     for i in range(6):
@@ -185,7 +185,7 @@ def cheat():
                       ("MASTER EFFECTS", "TIME · FEEDBACK · ROOM SIZE · DAMPING", "of the delay and the reverb")]),
         ("K5", "SEQ", [("SEQUENCER", "STEP · NOTE · VELOCITY · LENGTH", "pads: the 16 steps    pad + key: its note"),
                        ("SONG", "PATTERN · CHAIN · INTENSITY · LAYER", "pads 1-8: pattern    9-16: intensity"),
-                       ("AUTOMATION", "STEP · VALUE · TARGET", "pads: a point on / off")]),
+                       ("AUTOMATION", "STEP · VALUE · TARGET", "pads: points    opens on the knob turned last")]),
         ("K6", "LINK", [("GAME LINK", "send CC 20 · 21 · 22 · 23", "A B: CC 24 25")]),
     ]
     y = 92
