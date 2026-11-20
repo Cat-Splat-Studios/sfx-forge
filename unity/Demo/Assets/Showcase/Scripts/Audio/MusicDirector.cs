@@ -13,7 +13,7 @@ namespace SfxShowcase.Audio
     ///    or above it. Here it follows the player's speed: fast in, slow out.
     ///  • <c>CuePattern(n)</c> – another pattern of the song from the next bar line: one per section of the level.
     ///    A song with an arrangement (the demo song has one, 16 bars) treats a cue as "jump to the next bar of the
-    ///    arrangement with that pattern" and then walks on through the arrangement, so one cue lasts one bar. To HOLD
+    ///    arrangement with that pattern" and then walks on through the arrangement, so one cue lasts until the arrangement moves on (a bar, or two where a pattern repeats). To HOLD
     ///    a pattern, this component cues it again on every bar line while the player is in the section.
     ///  • <c>PlaySound(instrument, velocity, note)</c> – a note by hand on one of the song's instruments, on top of the
     ///    music: the bell answer at a checkpoint, the fanfare at the goal.

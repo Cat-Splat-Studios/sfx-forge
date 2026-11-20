@@ -10,6 +10,9 @@ game with the same engine.
 **[The manual](docs/MANUAL.md)** explains all of it: making sound effects, writing and mixing music, and getting both
 into a game. In a hurry: **[the cheat sheet](docs/img/cheatsheet.png)** is every page and shortcut on one picture.
 
+**[The Unity manual](docs/UNITY.md)** is its sibling for the game's side: the package, the three ways to play a sound,
+adaptive music, the link to the device, recipes, and the showcase game as a worked example.
+
 Everything is synthesized: there are no samples in it. Its strings, brass, choir and bells are synthesizer
 instruments in that style, not recordings of an orchestra. The wavetables are computed from sums of harmonics in
 `core/sfx_wavetable.h`; nothing is taken from another instrument.
@@ -34,7 +37,9 @@ Not tried yet: receiving MIDI against a real port (it needs a loopback port or a
 | `tests/` | a scripted performance (`tour.json`) and its checks (`check.mjs`); `dotnet/` tests the Unity package's core without Unity |
 | `tests/mix-report.mjs` | measures the demo song's mix: every instrument soloed in turn – its level, its peak, how much of it is high |
 | `docs/` | the manual, and `figures.py`, which builds its pictures from the firmware's own screenshots |
+| `docs/UNITY.md` | the Unity manual: the package and the showcase, with its own figures (`docs/img/unity-*.png`, built by `docs/unity_figures.py` from the song file and the recorded takes in `out/unity-video/`) |
 | `docs/video/make_videos.py` | makes the two videos (a feature tour, and building the demo song piece by piece) from scripts of key presses: the firmware renders its own display and sound, ffmpeg joins them. Results in `out/video/` |
+| `docs/video/make_unity_videos.py` | makes the two Unity videos: `out/video/sfx-forge-unity-showcase.mp4` (the showcase game, start to goal) and `out/video/sfx-forge-unity-how-it-works.mp4` (the three routes, the music, the event seam, with the code). It lays out the takes the showcase records of itself into `out/unity-video/` (the showcase's README, "Recording it"); `docs/video/check_unity_capture.py` checks those takes. Captions only; all sound is SFX FORGE in Unity |
 | `build.sh` | build, `vibe-check`, render the performance to `out/` |
 
 ## Build
@@ -168,6 +173,8 @@ rate / amount, wavetable position / warp). Engines: 0 IMPACT, 1 UI BLIP, 2 SCI-F
 
 ## Unity
 
+The short version; [the Unity manual](docs/UNITY.md) is the long one.
+
 Add the package from disk: **Window > Package Manager > + > Add package from disk…** and pick
 `unity/com.catsplat.sfxforge/package.json` (Unity 2021.3 or newer; developed against Unity 6).
 
@@ -181,6 +188,10 @@ Add the package from disk: **Window > Package Manager > + > Add package from dis
 | `SfxTelemetrySender` | a Rigidbody's speed, an Animator float or your own value → CC 10–17 to the device, and to local `SfxPlayer`s and `SfxMusicPlayer`s |
 | `SfxForgeLink` | the link in Play mode: pad and encoder events from the device |
 | `SfxEncoderBinding` | a device encoder (LINK page) → an exposed AudioMixer parameter or an event |
+
+Everything that arrives *from* the device (EXPORT, SEND, "Fetch the song", pads, encoders) is unit-tested at the
+protocol level only: receiving MIDI in Unity has not been tried against a real port. See
+[section 6 of the Unity manual](docs/UNITY.md#6-from-the-device-to-the-game). The demo's song came in as a file.
 
 **The demo** – open `unity/Demo` with Unity 6.3 and the scene `Assets/SfxDemo/SfxDemo.unity`: W/S thrust, A/D turn,
 SPACE fires. The engine hum follows the speed, and so does the music: at rest only the kick, flat out every layer. The

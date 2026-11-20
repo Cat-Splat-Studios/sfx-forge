@@ -9,6 +9,9 @@ It exists to be read and copied. The game is small on purpose; the part to take 
 [`Scripts/Audio`](Scripts/Audio), sixteen short files that show the three ways to use SFX FORGE in a
 Unity game: **one-shots**, **sounds that follow the game while they play**, and **adaptive music**.
 
+**The Unity manual**, [`docs/UNITY.md`](../../../../docs/UNITY.md), explains the package itself – every value of a
+patch, the three routes, the music player, the link to the device – and uses this game as its worked example.
+
 Brio is an original character and First Harmonic an original level: running builds speed, slopes and
 loops carry it, a Tuck rolls, a Wind-Up charges a Burst, Woofers throw you, Chimes are collected and
 scatter when you are hit, Tuning Forks are checkpoints and the Resonator is the goal.
@@ -96,15 +99,16 @@ music's intensity follows speed and drops on a hit.
 | **`Scripts/Audio`** | **The SFX FORGE example.** The only assembly that references `CatSplat.SfxForge`. |
 | `Editor` | `ShowcaseBuilder.cs` (builds the scene; `Verify` and `SelfTest`) and `ShowcaseAudio.cs` (the builder's two calls into the sound: install it, check it). |
 | `Generated` | Written by the builder: `ArtKit.asset` with the two materials, `ShowcaseMeshes.asset`, and `Presets/<sound>.asset` – every sound effect as a clickable `SfxPreset`. |
-| `Tests` | The PlayMode tests: `ShowcaseTests.cs` (the game), `ShowcaseAudioTests.cs` (the sound), and what they share. |
+| `Tests` | The PlayMode tests: `ShowcaseTests.cs` (the game), `ShowcaseAudioTests.cs` (the sound), and what they share. Also the capture rig: `CaptureTakes.cs`, `CaptureRecorder.cs`, `CaptureTelemetry.cs`, `CapturePilot.cs`. Its takes are marked `[Explicit]`; see [Recording it](#recording-it). |
 | `Docs` | `DESIGN.md` (what the game is), `ARCHITECTURE.md` (how the code is organised, and the rules), and one notes file per discipline: `GAMEPLAY-NOTES.md`, `LEVEL-NOTES.md`, `ART-NOTES.md`, `AUDIO-NOTES.md`. |
 
 The four runtime folders reference only `Scripts/Core`, never each other, and gameplay never calls
-SFX FORGE. Outside `Scripts/Audio` the sound is known in exactly two files, `Editor/ShowcaseAudio.cs`
-and `Tests/ShowcaseAudioTests.cs`, and called from two lines of `ShowcaseBuilder`
-(`ShowcaseAudio.Install` and `ShowcaseAudio.Check`). Delete the folder, those two files and those two
-lines and the game is the same game, silent. (This is by construction – no other file has a `using`
-for the audio code – and has not been tried by actually deleting them.)
+SFX FORGE. Outside `Scripts/Audio` the sound is known only in editor and test code: in four files,
+`Editor/ShowcaseAudio.cs`, `Tests/ShowcaseAudioTests.cs` and the capture rig's `Tests/CaptureTakes.cs`
+and `Tests/CaptureTelemetry.cs`, and in two lines of `ShowcaseBuilder` (`ShowcaseAudio.Install` and
+`ShowcaseAudio.Check`). Delete the folder, those four files and those two lines and the game is the
+same game, silent. (This is by construction – no other file has a `using` for the audio code – and
+has not been tried by actually deleting them.)
 
 ## Use SFX FORGE in your own Unity game
 
@@ -187,11 +191,12 @@ speed) and the Wind-Up rev (retriggered on each tap; pitch, `fm` and filter from
 
 ### 4. Adaptive music – [`MusicDirector.cs`](Scripts/Audio/MusicDirector.cs)
 
-An `SfxMusicPlayer` plays an `SfxSong` asset (16 sounds and a sequenced song, made on the device or in
-the SFX FORGE window). The director turns the game into five calls:
+An `SfxMusicPlayer` plays an `SfxSong` asset (16 sounds and a sequenced song, made on the device; the
+package cannot edit one). The showcase plays the demo project's `Assets/SfxDemo/DemoSong.asset`. The
+director turns the game into five calls:
 
 ```csharp
-music.intensity = …;                        // 0..1, every frame: each instrument plays only at or above its layer threshold
+music.intensity = …;                        // 0..1, every frame: each instrument plays only at or above its layer mark
 music.CuePattern(2);                        // another pattern of the song, from the next bar line (see below)
 music.PlaySound(instrument, velocity, 76);  // a note by hand on one of the song's instruments, on top of the music
 music.volume = …;                           // a dip when the player is hurt (not smoothed by the player: ramp it yourself)
@@ -205,11 +210,13 @@ the song and plays a fanfare by hand
 ([`MusicNote.cs`](Scripts/Audio/MusicNote.cs), [`MusicKit.cs`](Scripts/Audio/MusicKit.cs),
 [`Pitch.cs`](Scripts/Audio/Pitch.cs)).
 
-What `CuePattern` does depends on the song. A song WITHOUT an arrangement (`SfxSong.ArrangementBars`
-is 0), or a pattern that is not in the arrangement, stays on the cued pattern until the next cue. A
+What `CuePattern` does depends on the song. A pattern that is not in the song's arrangement stays
+until the next cue. So does any pattern in a song without an arrangement (`SfxSong.ArrangementBars`
+is 0) whose chain is 1; with a longer chain the cued pattern plays one bar and the chain walks on. A
 song WITH an arrangement – the demo song has one, 16 bars that use all six patterns – jumps to the
 arrangement's next bar with that pattern and then walks on through the arrangement, so one cue lasts
-one bar. To hold a section's pattern over such a song, cue it again whenever `music.Bar` changes:
+a bar or two. The table is in [section 5 of the Unity manual](../../../../docs/UNITY.md#cueing-patterns).
+To hold a section's pattern whatever the song does, cue it again whenever `music.Bar` changes:
 `MusicDirector.HoldPattern` is those five lines.
 
 ### 5. Put it in the scene – [`AudioInstaller.cs`](Scripts/Audio/AudioInstaller.cs)
@@ -241,3 +248,80 @@ subscriptions in each `OnEnable` with your own events and the reads of speed, ro
 charge (`ContinuousSounds`, `MusicDirector`) with your own values, and drop the Core files altogether.
 `ARCHITECTURE.md` section 7 lists exactly what to replace, and the limits (Windows x64, no
 spatialisation for live players, what happens without the native library).
+
+## Recording it
+
+The videos and the manual's figures are made from the game itself, without anyone holding a controller.
+`Tests/CaptureTakes.cs` holds the takes: each is a Play mode test that plays a scripted piece of the
+game and records it. They are marked `[Explicit]`, so the ordinary test run above skips them (its summary line reads
+`passed="25" … skipped="8"`); you run one by name. A take takes well under a minute.
+
+```sh
+UNITY="C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Unity.exe"   # where your Unity 6000.3 is
+PROJECT="$PWD/unity/Demo"                           # run from the repository's root
+OUT="$PWD/out"
+TAKES=SfxShowcase.Tests.CaptureTakes
+record() { "$UNITY" -batchmode -projectPath "$PROJECT" -runTests -testPlatform PlayMode -testFilter "$TAKES.$1" -testResults "$OUT/unity-capture-$1.xml" -logFile "$OUT/unity-capture-$1.log"; grep "CAPTURE take" "$OUT/unity-capture-$1.log"; }
+
+record FullRun          # out/unity-video/full-run: the title card, the whole level, the results (101 s)
+record OneShots         # out/unity-video/one-shots: jumps, rows of Chimes with the rising combo, a skid, a Woofer
+record HeldSounds       # out/unity-video/held-sounds: the Wind-Up rev, the Burst, the roll hum down a slope and round a loop
+record AdaptiveMusic    # out/unity-video/adaptive-music: stand, walk, run, stop, a Burst flat out, stand again
+record SectionsAndCues  # out/unity-video/sections-and-cues: Woofer Steps into Static Field, past its Tuning Fork
+record HurtAndGoal      # out/unity-video/hurt-and-goal: a hit at a run with twelve Chimes (Split Signal's low terrace), then the goal and the results
+record Stills           # out/unity-video/stills: twelve pictures of one run, for the manual
+record SyncCheck        # out/unity-video/sync-check: three jumps and three Chimes in silence, to measure with
+
+python docs/video/check_unity_capture.py            # counts, lengths, levels, clipping, and whether sound and picture agree
+```
+
+Do not run it with `-nographics`: the pictures need the graphics card. Several takes in one run:
+`-testFilter "$TAKES.OneShots;$TAKES.HeldSounds"`. Exit code 0 means every take in the run recorded
+what it was meant to show; a take asserts that (the Woofer fired, the pattern changed) and fails otherwise.
+
+A take's folder holds
+
+| File | What it is |
+|---|---|
+| `f00000.png`, `f00001.png` … | Every frame, 1920×1080, 30 a second. |
+| `audio.wav` | The game's sound for exactly those frames: 48 kHz, 16-bit stereo, recorded at half the listener's volume (see below). |
+| `telemetry.json` | For every frame: the player (position, speed, grounded, rolling, charge), the run (phase, section, Chimes), the music (intensity, volume, pattern, bar, step, which of the song's sounds the intensity lets play), the three held sounds (held or let go, and their live values), the live voices. Then two timed lists: every `GameEvents` event, and every SFX FORGE sound it started, with its route (`baked`, `live`, `held`, `music`). The header lists the song's instruments with their layer marks and the notes the director plays by hand. Its `notes` say how the numbers are to be read. |
+
+`stills/` also receives `wind-up.png` and `burst-roll.png` from the take `HeldSounds` and
+`hurt-scatter.png` from `HurtAndGoal`. Everything goes to `out/unity-video/` at the repository's root,
+which git ignores; set the environment variable `SFXFORGE_CAPTURE_DIR` to record somewhere else.
+The checker, `docs/unity_figures.py` and `docs/video/make_unity_videos.py` read the same variable.
+Recording a take first removes its old pictures and its old `telemetry.json`, so a take that failed
+part-way is seen as missing, not as an old one.
+
+How the rig works (`Tests/CaptureRecorder.cs`, about 350 lines; nothing in the game knows about it):
+
+- **The clock.** `Time.captureFramerate = 30`: a frame is 1/30 s of game time however long it takes
+  to write. The physics still steps every 0.02 s, as in the tests. The pilot that plays the level
+  decides once per physics step (`Tests/CapturePilot.cs`), so the full run is the run the tests check:
+  92 seconds, no hit, no respawn.
+- **The picture.** The game camera is given a 1920×1080 render texture as its target for the whole
+  take and is rendered by hand at the very end of each frame. Because the target is 16:9 all the time,
+  the camera's aspect is too, and the view's bounds, the backdrop and the HUD – which lay themselves
+  out from the aspect – fill the picture edge to edge. PNGs are compressed on worker threads.
+- **The sound.** Real-time audio does not line up with a fixed clock, so nothing is recorded from the
+  sound card. `AudioRenderer` takes Unity's audio off the real-time clock; each frame the rig asks it
+  for the samples that frame is due and Unity calls SFX FORGE's `OnAudioFilterRead` for them, there and
+  then. Unity mixes in blocks of 1024 samples, so a frame gets one or two blocks and the wav is never
+  more than one block (21 ms) away from the pictures. Measured with the take `SyncCheck`: a jump's
+  baked clip and a Chime's live voice start within 0.7 frames of the frame their event is in.
+- **The level.** While the rig is on, `AudioListener.volume` is 0.5 (`CaptureRecorder.ListenerVolume`).
+  At full volume the game's mix goes over full scale where the roll hum, the wind and the full band
+  sound together (the full run peaks at 0.69 at half volume, so about 1.4 at full), and Unity clips it.
+  The first recordings had those clipped samples in them. The video script brings the level back up
+  with one gain per take. The game itself is unchanged: played at full volume it still clips there.
+- **The telemetry** only listens to `GameEvents` and reads public state, like the audio folder. Which
+  sound an event starts is worked out with the rules of `SoundEffects` (a soft landing is silent, a
+  dense row of Chimes skips pings), read from the component so it follows its Inspector values.
+  Those values, the director's cues and phrases, and whether a held sound is held are private; the
+  telemetry reads them by reflection and stops with an error if one has been renamed.
+- **A cut.** Technique takes move the player with `PlaceAt`, as the tests do, and tell the follow
+  camera to be there at once instead of gliding over.
+
+To add a take, copy a short one (`OneShots`): `Rig("name")`, script the input, `Roll()` where the
+recording should begin, `Wrap()` at the end.
