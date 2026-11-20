@@ -42,11 +42,12 @@ VIBE_PARALLEL_AUDIO
 #define STEPS  SFX_STEPS
 
 /* ---- the protocol (README: "The link") --------------------------------------------------------------------------- */
-#define SX_DUMP     0x01           /* out (and in): F0 7D 56 42 01 <slot> <28 patch bytes> F7 */
-#define SX_LOAD     0x02           /* in:           F0 7D 56 42 02 <slot> <28 patch bytes> F7 */
+#define SX_DUMP     0x01           /* out (and in): F0 7D 56 42 01 <slot> <28 patch bytes> F7 (in: not our own, come straight back) */
+#define SX_LOAD     0x02           /* in:           F0 7D 56 42 02 <slot> <28 patch bytes> F7. Slot 0-15: the pad of the kit that is
+                                      selected. Slot 16-31 (1.3.1): pad 1-16 of the MUSIC kit, whatever is selected - a song's sounds */
 #define SX_TEXT     0x03           /* in:           F0 7D 56 42 03 <ASCII, up to 24> F7 */
 #define SX_REQUEST  0x04           /* in:           F0 7D 56 42 04 <slot> F7  -> answers with a dump */
-#define SX_SONG     0x05           /* both ways:    F0 7D 56 42 05 <chunk> <chunks> <up to 200 song bytes> F7 */
+#define SX_SONG     0x05           /* both ways:    F0 7D 56 42 05 <chunk> <chunks> <up to 200 song bytes> F7 (in: in any order) */
 #define SX_REQ_SONG 0x06           /* in:           F0 7D 56 42 06 F7 -> answers with 16 dumps and the song */
 #define SONG_CHUNK  200
 #define SONG_CHUNKS ((SFX_SONG_BYTES + SONG_CHUNK - 1) / SONG_CHUNK)
@@ -191,7 +192,11 @@ static int tour_kit0;
 static int tour_page0, tour_sel0, tour_kept = -1;   /* what it puts back; the sound it changed */
 static sfx_patch tour_keep;
 static int export_at = -1;                          /* sending the sounds and the song: the next message, -1 = not */
-static uint8_t song_rx[SFX_SONG_BYTES]; static int song_rx_next;
+static uint8_t song_rx[SFX_SONG_BYTES]; static uint64_t song_rx_seen, song_rx_t;   /* a song coming in: which of its pieces are here (a bit a piece), and when the last came */
+/* What went out last, to know our own echo by (sysex_in): the dump of each slot, and the song as it was sent. */
+static uint8_t sent_dump[SLOTS][SFX_PATCH_BYTES], song_tx[SFX_SONG_BYTES];
+static uint64_t sent_dump_t, sent_song_t; static uint32_t sent_dump_any; static int sent_song_any;
+#define ECHO_FRAMES ((uint64_t)SR / 10)              /* an echo comes back within a tenth of a second */
 static const char *const SOFT[5][6] = { { "PRESET", "MUTATE", "UNDO", "RANDOM", "EXPORT", "SAVE" },
                                         { "< PAT", "PAT >", "FILL", "CLEAR", "COPY", "SAVE" },
                                         { "PLAY", "COPY", "CLR PAT", "DEMO", "SEND", "SAVE" },
@@ -386,12 +391,17 @@ static void bank_load(void)
   if (vibe_store_read("song.bin", s, sizeof s) == (int)sizeof s) sfx_song_unpack(&SONG, s, sizeof s);
 }
 
+static int same(const uint8_t *a, const uint8_t *b, int n) { for (int i = 0; i < n; i++) if (a[i] != b[i]) return 0; return 1; }
+
 static int sysex_dump_k(int k, int slot)
 {
   uint8_t b[7 + SFX_PATCH_BYTES] = { 0xF0, 0x7D, 0x56, 0x42, SX_DUMP, (uint8_t)slot };
   sfx_patch_pack(&kits[k][slot], b + 6);
   b[6 + SFX_PATCH_BYTES] = 0xF7;
-  return vibe_midi_send_sysex(b, sizeof b);
+  if (vibe_midi_send_sysex(b, sizeof b)) return -1;
+  for (int i = 0; i < SFX_PATCH_BYTES; i++) sent_dump[slot][i] = b[6 + i];
+  sent_dump_any |= 1u << slot; sent_dump_t = vibe_frames();
+  return 0;
 }
 static int sysex_dump(int slot) { return sysex_dump_k(kit, slot); }
 
@@ -399,7 +409,8 @@ static int sysex_dump(int slot) { return sysex_dump_k(kit, slot); }
    every draw and every event) until all are out. */
 static void export_pump(void)
 {
-  static uint8_t song[SFX_SONG_BYTES], b[8 + SONG_CHUNK];
+  static uint8_t b[8 + SONG_CHUNK];
+  uint8_t *song = song_tx;
   for (int guard = 0; guard < 2 && export_at >= 0; guard++) {
     if (export_at < SLOTS) { if (sysex_dump_k(KIT_MUSIC, export_at)) return; }     /* (the song's sounds: the MUSIC kit) */
     else {
@@ -409,6 +420,7 @@ static void export_pump(void)
       for (int i = 0; i < n; i++) b[7 + i] = song[k * SONG_CHUNK + i];
       b[7 + n] = 0xF7;
       if (vibe_midi_send_sysex(b, 8 + n)) return;
+      sent_song_any = 1; sent_song_t = vibe_frames();
     }
     if (++export_at >= SLOTS + SONG_CHUNKS) { export_at = -1; say("SONG SENT"); }
   }
@@ -418,7 +430,19 @@ static void sysex_in(const uint8_t *b, int n)
 {
   if (n < 6 || b[0] != 0xF0 || b[1] != 0x7D || b[2] != 0x56 || b[3] != 0x42 || b[n - 1] != 0xF7) return;
   linked = 1;
-  if ((b[4] == SX_LOAD || b[4] == SX_DUMP) && n == 7 + SFX_PATCH_BYTES && b[5] < SLOTS) {
+  uint64_t now = vibe_frames();
+  /* Our own echo. A virtual MIDI cable's port is an input as well as an output, and a host that listens on every input
+     (the emulator does) hands back what was just sent. A dump that comes in while the sounds and the song are going
+     out, or within a tenth of a second after a dump, and that is byte for byte what went out for that slot, is that:
+     taking it would put the song's sounds into the kit that is selected. Another patch at that moment is taken. */
+  if (b[4] == SX_DUMP && n == 7 + SFX_PATCH_BYTES && b[5] < SLOTS && (sent_dump_any >> b[5] & 1)
+      && (export_at >= 0 || now - sent_dump_t < ECHO_FRAMES) && same(b + 6, sent_dump[b[5]], SFX_PATCH_BYTES)) return;
+  if (b[4] == SX_LOAD && n == 7 + SFX_PATCH_BYTES && b[5] >= SLOTS && b[5] < 2 * SLOTS) {   /* a song's sound: the MUSIC kit's pad */
+    sfx_patch p; int slot = b[5] - SLOTS, was = kit;
+    if (sfx_patch_unpack(&p, b + 6)) { say("BAD PATCH"); return; }
+    kit = KIT_MUSIC; patches[slot] = p; pad_preset[slot] = -1; changed(slot); kit = was;
+    say("SOUND LOADED");
+  } else if ((b[4] == SX_LOAD || b[4] == SX_DUMP) && n == 7 + SFX_PATCH_BYTES && b[5] < SLOTS) {
     sfx_patch p;
     if (sfx_patch_unpack(&p, b + 6)) { say("BAD PATCH"); return; }
     keep_undo(b[5]); patches[b[5]] = p; pad_preset[b[5]] = -1; sel = b[5]; changed(sel); say("PATCH LOADED");
@@ -429,11 +453,24 @@ static void sysex_in(const uint8_t *b, int n)
   } else if (b[4] == SX_REQUEST && n == 7 && b[5] < SLOTS) sysex_dump(b[5]);
   else if (b[4] == SX_REQ_SONG) { export_at = 0; export_pump(); }
   else if (b[4] == SX_SONG && n > 8 && b[6] == SONG_CHUNKS) {                 /* a song from the game, piece by piece */
+    /* Every piece is put where it belongs, and the song is taken when all 39 are here. So the pieces may come in any
+       order: a MIDI path can swap two neighbours (a browser's Web MIDI output does, now and then). And more than once:
+       a host can deliver everything twice (the emulator does), and a piece that is here already, byte for byte, is
+       left alone. A piece that is here already with OTHER bytes belongs to another song: that begins a new transfer.
+       After a song is taken its pieces stay marked, so that its own late twins do not begin one. A transfer that
+       broke off is forgotten after two seconds without a piece. */
     int k = b[5], len = n - 8;
-    if (k == 0) song_rx_next = 0;
-    if (k != song_rx_next || k * SONG_CHUNK + len > SFX_SONG_BYTES) { song_rx_next = -1; return; }
-    for (int i = 0; i < len; i++) song_rx[k * SONG_CHUNK + i] = b[7 + i];
-    if (++song_rx_next == SONG_CHUNKS) { say(sfx_song_unpack(&SONG, song_rx, SFX_SONG_BYTES) ? "BAD SONG" : "SONG LOADED"); view_sync(); song_rx_next = -1; }
+    if (k >= SONG_CHUNKS || len != (k == SONG_CHUNKS - 1 ? SFX_SONG_BYTES - k * SONG_CHUNK : SONG_CHUNK)) return;
+    const uint8_t *in = b + 7; uint8_t *at = song_rx + k * SONG_CHUNK;
+    uint64_t piece = (uint64_t)1 << k;
+    /* our own echo: the piece that just went out, come back while the song is going out or just after */
+    if (sent_song_any && (export_at >= SLOTS || now - sent_song_t < ECHO_FRAMES) && same(in, song_tx + k * SONG_CHUNK, len)) return;
+    if (now - song_rx_t > (uint64_t)SR * 2) song_rx_seen = 0;
+    song_rx_t = now;
+    if (song_rx_seen & piece) { if (same(in, at, len)) return; song_rx_seen = 0; }
+    for (int i = 0; i < len; i++) at[i] = in[i];
+    song_rx_seen |= piece;
+    if (song_rx_seen == ((uint64_t)1 << SONG_CHUNKS) - 1) { say(sfx_song_unpack(&SONG, song_rx, SFX_SONG_BYTES) ? "BAD SONG" : "SONG LOADED"); view_sync(); }
   }
 }
 

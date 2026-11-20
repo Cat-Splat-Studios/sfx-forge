@@ -624,7 +624,7 @@ an earlier version is not read; the factory kits and the demo appear instead.
 | **Size** | 8 patterns, 32 bars of arrangement, 16 voices – with long reverberant sounds the oldest note is cut to make room |
 | **Automation** | 24 lanes a song, moving in steps, not glides |
 | **Chords** | one note per step for each sound. A chord needs several sounds, or the keys |
-| **Platforms** | the Unity package runs on Windows x64 so far. Receiving MIDI in Unity has not been tested against a real port |
+| **Platforms** | the Unity package runs on Windows x64 so far. Its MIDI link is tested against the emulator over a virtual cable, not against the hardware |
 | **The stage** | has no control for the swing; it is SHIFT + A on the device |
 
 ---

@@ -51,6 +51,17 @@ namespace CatSplat.SfxForge
         /// <summary>F0 7D 56 42 02 slot [28] F7 – a patch into a pad of the device.</summary>
         public static byte[] BuildLoad(int slot, SfxPatch patch) => BuildPatch(Load, slot, patch);
 
+        /// <summary>
+        /// F0 7D 56 42 02 (16 + sound) [28] F7 – one of a song's 16 sounds: the pad of the device's MUSIC kit, whichever
+        /// kit is selected there. Needs firmware 1.3.1; an older one ignores it.
+        /// </summary>
+        public static byte[] BuildLoadSongSound(int sound, SfxPatch patch)
+        {
+            byte[] m = BuildPatch(Load, sound, patch);
+            m[5] = (byte)(Slots + sound);
+            return m;
+        }
+
         /// <summary>F0 7D 56 42 01 slot [28] F7 – what the device sends on EXPORT.</summary>
         public static byte[] BuildDump(int slot, SfxPatch patch) => BuildPatch(Dump, slot, patch);
 
@@ -114,10 +125,13 @@ namespace CatSplat.SfxForge
         }
 
         /// <summary>
-        /// One piece of a song: copies it into song (SongBytes long). True when every piece is there. The pieces may
-        /// come in any order: a browser's Web MIDI output can swap two neighbours (seen with the emulator, about one
-        /// transfer in twenty), and a song must not be lost to that. <paramref name="seen"/> remembers which pieces
-        /// are in (start with 0); a piece that comes a second time begins a new transfer.
+        /// One piece of a song: copies it into song (SongBytes long) where it belongs. True when this piece made the
+        /// song whole. The pieces may come in any order: a browser's Web MIDI output can swap two neighbours (seen
+        /// with the emulator, about one transfer in twenty). And more than once: a piece that is in already, byte for
+        /// byte, is left alone. A piece that is in already with OTHER bytes belongs to another song: that begins a new
+        /// transfer. <paramref name="seen"/> remembers which pieces are in, also after the song was whole, so that its
+        /// late twins do not begin one: start with 0, and set it back to 0 before asking for a song again or to forget
+        /// a transfer that broke off (<see cref="SfxLink"/> does both, the second after two seconds without a piece).
         /// </summary>
         public static bool TryTakeSongChunk(byte[] m, byte[] song, ref ulong seen)
         {
@@ -125,12 +139,16 @@ namespace CatSplat.SfxForge
             int k = m[5], n = m.Length - 8;
             if (k >= SongChunks || n != Math.Min(SongChunkBytes, SongBytes - k * SongChunkBytes)) return false;
             ulong piece = 1UL << k;
-            if ((seen & piece) != 0) seen = 0;
+            if ((seen & piece) != 0)
+            {
+                bool same = true;
+                for (int i = 0; i < n && same; i++) same = song[k * SongChunkBytes + i] == m[7 + i];
+                if (same) return false;
+                seen = 0;
+            }
             Array.Copy(m, 7, song, k * SongChunkBytes, n);
             seen |= piece;
-            if (seen != (1UL << SongChunks) - 1) return false;
-            seen = 0;
-            return true;
+            return seen == (1UL << SongChunks) - 1;
         }
 
         /// <summary>The telemetry value that cues pattern 0..7 (A..H) on the device.</summary>

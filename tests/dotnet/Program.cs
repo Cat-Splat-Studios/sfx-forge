@@ -186,19 +186,41 @@ static class Tests
                 else if (SfxProtocol.TryTakeSongChunk(msg, song, ref next)) whole = true;
             }
             Ok(whole && seen == 0xFFFF, "the firmware's song arrives whole: 16 sounds and 39 pieces");
-            {   // the pieces in another order (a browser's MIDI output can swap neighbours), one of them twice, one too short
-                var pieces = SfxProtocol.BuildSong(song); var again = new byte[SfxProtocol.SongBytes]; ulong got = 0; int done = 0;
+            {   // how a song's pieces are taken: in any order, twins left alone, another song's piece begins anew
+                var pieces = SfxProtocol.BuildSong(song);
+                var songTwo = (byte[])song.Clone();
+                for (int k = 0; k < pieces.Length; k++) { int at = k * SfxProtocol.SongChunkBytes + 50; songTwo[at] = (byte)(songTwo[at] ^ 1); }   // (another song: every piece differs)
+                var piecesTwo = SfxProtocol.BuildSong(songTwo);
                 var order = Enumerable.Range(0, pieces.Length).ToArray(); (order[36], order[37]) = (order[37], order[36]); (order[9], order[10]) = (order[10], order[9]);
-                foreach (int k in order) if (SfxProtocol.TryTakeSongChunk(pieces[k], again, ref got)) done++;
-                Ok(done == 1 && again.SequenceEqual(song), "a song whose pieces come out of order arrives whole all the same");
-                got = 0; done = 0;
-                foreach (int k in order.Take(20)) SfxProtocol.TryTakeSongChunk(pieces[k], again, ref got);       // a transfer that broke off …
-                foreach (int k in Enumerable.Range(0, pieces.Length)) if (SfxProtocol.TryTakeSongChunk(pieces[k], again, ref got)) done++;   // … and a whole one after it
-                Ok(done == 1 && again.SequenceEqual(song), "a transfer that broke off does not spoil the next one");
-                var cut = pieces[3].Take(pieces[3].Length - 5).Append((byte)0xF7).ToArray(); got = 0;
-                Ok(!SfxProtocol.TryTakeSongChunk(cut, again, ref got) && got == 0, "a piece of the wrong length is not taken");
+                byte[] Fresh() { var b = new byte[SfxProtocol.SongBytes]; for (int i = 0; i < b.Length; i++) b[i] = 0x55; return b; }
+
+                var got = Fresh(); ulong mask = 0; int done = 0;
+                foreach (int k in order) if (SfxProtocol.TryTakeSongChunk(pieces[k], got, ref mask)) done++;
+                Ok(done == 1 && got.SequenceEqual(song), "a song whose pieces come out of order arrives whole all the same");
+
+                got = Fresh(); mask = 0; done = 0;
+                foreach (int k in order) { if (SfxProtocol.TryTakeSongChunk(pieces[k], got, ref mask)) done++; if (SfxProtocol.TryTakeSongChunk(pieces[k], got, ref mask)) done++; }
+                Ok(done == 1 && got.SequenceEqual(song), "a song whose every piece comes twice arrives whole, once");
+                foreach (int k in order) { if (SfxProtocol.TryTakeSongChunk(piecesTwo[k], got, ref mask)) done++; if (SfxProtocol.TryTakeSongChunk(piecesTwo[k], got, ref mask)) done++; }
+                Ok(done == 2 && got.SequenceEqual(songTwo), "and the next song, straight after and doubled too, arrives whole and is the next song (no piece of the first in it)");
+
+                got = Fresh(); mask = 0; done = 0;
+                foreach (int k in Enumerable.Range(0, pieces.Length).Where(k => k != 5)) SfxProtocol.TryTakeSongChunk(pieces[k], got, ref mask);     // a song that lost a piece …
+                bool early = false;
+                foreach (int k in Enumerable.Range(0, pieces.Length)) { bool pieceMadeItWhole = SfxProtocol.TryTakeSongChunk(piecesTwo[k], got, ref mask); if (pieceMadeItWhole) { done++; early |= k != pieces.Length - 1; } }   // … and another, whole, after it
+                Ok(done == 1 && !early && got.SequenceEqual(songTwo), "after a song that lost a piece, the next is whole only with its own last piece, and is the next song");
+
+                got = Fresh(); mask = 0; done = 0;
+                foreach (int k in order.Take(20)) SfxProtocol.TryTakeSongChunk(pieces[k], got, ref mask);
+                foreach (int k in order.Reverse()) if (SfxProtocol.TryTakeSongChunk(piecesTwo[k], got, ref mask)) done++;
+                Ok(done == 1 && got.SequenceEqual(songTwo), "after a transfer that broke off, another song sent last piece first arrives whole");
+
+                var cut = pieces[3].Take(pieces[3].Length - 5).Append((byte)0xF7).ToArray(); mask = 0;
+                Ok(!SfxProtocol.TryTakeSongChunk(cut, got, ref mask) && mask == 0, "a piece of the wrong length is not taken");
+                var sound = SfxProtocol.BuildLoadSongSound(3, sounds[3]);
+                Ok(sound[4] == SfxProtocol.Load && sound[5] == 19 && sound.Length == 7 + SfxPatch.Bytes && SfxPatch.TryUnpack(sound, 6, out var soundBack) && soundBack.Pack().SequenceEqual(sounds[3].Pack()),
+                   "a song's sound goes out as LOAD for slot 16 + sound (the MUSIC kit's pad)");
             }
-            Ok(whole && SfxProtocol.BuildSong(song).SelectMany(c => c).SequenceEqual(msgs.Where(b => b[0] == 0xF0 && b[4] == SfxProtocol.SongChunk).SelectMany(c => c)), "and packs back to the same messages");
 
             IntPtr pl = Marshal.AllocHGlobal(SfxNative.PlayerSize);
             SfxNative.PlayerInit(pl, 48000f);

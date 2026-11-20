@@ -87,6 +87,36 @@ ramps. `ShowcaseAudioTests.cs`: a jump and a Chime are really heard through SFX 
 rev and the roll hum sound and bend while they play, Static Field's pattern is cued and held, and the
 music's intensity follows speed and drops on a hit.
 
+## A standalone build
+
+The game as an executable, with no editor near it: Windows x64, this one scene.
+
+```sh
+"$UNITY" -batchmode -quit -projectPath "$PWD/unity/Demo" -executeMethod SfxShowcase.Editor.ShowcaseBuild.BuildWindows -logFile out/build.log
+grep "SHOWCASE BUILD" out/build.log                 # SHOWCASE BUILD: ok .../out/build/Brio/Brio.exe (85 MB, ...)
+```
+
+In the editor: **SFX Forge > Showcase > Build for Windows**. The build goes to `out/build/Brio/` at the repository's
+root (another place: `-sfxforge-build <path to the .exe>`). The build settings and the project's settings are left
+as they are.
+
+The built game checks itself when it is asked to. Started like this it plays by itself for 14 seconds, measures what
+comes out of its AudioListener, writes a report and a picture, and quits with exit code 0 or 1:
+
+```sh
+out/build/Brio/Brio.exe -screen-fullscreen 0 -screen-width 1280 -screen-height 720 -sfxforge-probe "C:\\somewhere\\probe.json"
+```
+
+`ok` in the report means: the native library was found, the title card was left, the song ran through at least two
+bar lines, every baked sound has its clip, a jump happened, and the output was not silent for at least a quarter of
+the frames. The report also has the patterns heard, the highest intensity, the output's peak and level and the
+counts of jumps, landings, footsteps and Chimes ([`Scripts/Audio/BuildProbe.cs`](Scripts/Audio/BuildProbe.cs)).
+Without the argument the probe does nothing.
+
+What a pass does not tell you: how it sounds. The probe measures that sound comes out and that the song moves; it
+does not compare the sound with the editor's, and nobody has listened to the build. It was run on one machine
+(Windows 11, Unity 6000.3.8f1, Mono).
+
 ## Map of the folder
 
 | Path | What is there |
@@ -292,8 +322,11 @@ The link to the device has its own takes. They need the device to be there, so t
 3. The device's end: `node tests/emulator-link.mjs`. It opens the emulator in a Chrome of its own with a
    throwaway profile, allows that page MIDI, switches SFX FORGE on and puts its MIDI out on `SFX to Unity`.
 4. Unity's end, the tests of `Tests/LinkTakes.cs`: `-testFilter SfxShowcase.Tests.LinkTakes`. They ask the device
-   for a patch and for the song, play the song that arrives, fetch it twenty times in a row, and drive the device.
-   Each step that worked logs a line starting with `LINK: ok`.
+   for a patch and for the song, play the song that arrives, fetch it twenty times in a row, send a song to the
+   device and ask it back (in order, last piece first, after a transfer that broke off), and drive the device.
+   Each step that worked logs a line starting with `LINK: ok`. `--spy` on the script logs what MIDI reaches the
+   emulator's page and what the page hands to the firmware; `--twice` connects the page's MIDI once more, so the
+   firmware gets everything once more.
 
 The recorded session is `Tests/LinkSession.cs`: the game runs at the wall clock's speed, tells the script which
 keys to press on the device (through `out/link/cues.txt`), and writes `out/unity-video/link-session/` with a

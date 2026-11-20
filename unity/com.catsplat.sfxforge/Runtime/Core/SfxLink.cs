@@ -19,6 +19,8 @@ namespace CatSplat.SfxForge
         readonly SfxPatch[] sounds = new SfxPatch[SfxProtocol.Slots];
         int soundsSeen;
         ulong songSeen;
+        readonly System.Diagnostics.Stopwatch sinceSongPiece = System.Diagnostics.Stopwatch.StartNew();
+        const double ForgetSongSeconds = 2.0;       // a song whose pieces stopped coming is forgotten after this
 
         public SfxLink() { Forget(); }
 
@@ -65,10 +67,26 @@ namespace CatSplat.SfxForge
         {
             if (input != null) { input.Dispose(); input = null; }
             if (output != null) { output.Dispose(); output = null; }
+            songSeen = 0; soundsSeen = 0;
             Forget();
         }
 
         public void Dispose() => Close();
+
+        /// <summary>
+        /// Takes a piece of a song; true when it made the song whole. A piece that follows a long silence begins a new
+        /// transfer (only a message that really is a piece counts as breaking the silence).
+        /// </summary>
+        bool TakeSongPiece(byte[] m)
+        {
+            if (m.Length < 9 || m[4] != SfxProtocol.SongChunk) return false;
+            ulong before = sinceSongPiece.Elapsed.TotalSeconds > ForgetSongSeconds ? 0 : songSeen, seen = before;
+            bool whole = SfxProtocol.TryTakeSongChunk(m, songIn, ref seen);
+            if (seen == before && !whole) return false;             // not a piece, or one that was in already
+            songSeen = seen;
+            sinceSongPiece.Restart();
+            return whole;
+        }
 
         void Forget() { for (int i = 0; i < lastCc.Length; i++) lastCc[i] = -1; }
 
@@ -87,7 +105,7 @@ namespace CatSplat.SfxForge
                         sounds[slot] = patch; soundsSeen |= 1 << slot;
                         PatchReceived?.Invoke(slot, patch);
                     }
-                    else if (SfxProtocol.TryTakeSongChunk(m, songIn, ref songSeen))
+                    else if (TakeSongPiece(m))
                     {
                         SongReceived?.Invoke((byte[])songIn.Clone(), soundsSeen == 0xFFFF ? (SfxPatch[])sounds.Clone() : null);
                         soundsSeen = 0;
@@ -122,12 +140,16 @@ namespace CatSplat.SfxForge
         /// <summary>Asks for the 16 sounds and the song of the device; the answer comes as SongReceived.</summary>
         public bool RequestSong() { soundsSeen = 0; songSeen = 0; return output != null && output.SendSysEx(SfxProtocol.BuildRequestSong()); }
 
-        /// <summary>16 sounds and a packed song to the device (it replaces what is there).</summary>
+        /// <summary>
+        /// 16 sounds and a packed song to the device: they replace its song and the 16 sounds of its MUSIC kit, which
+        /// the song plays (the kit that is selected there is left alone). Needs firmware 1.3.1: an older one takes the
+        /// song and ignores the sounds.
+        /// </summary>
         public bool SendSong(SfxPatch[] patches, byte[] song)
         {
             if (output == null || patches == null || patches.Length != SfxProtocol.Slots) return false;
             bool ok = true;
-            for (int i = 0; i < patches.Length; i++) ok &= output.SendSysEx(SfxProtocol.BuildLoad(i, patches[i]));
+            for (int i = 0; i < patches.Length; i++) ok &= output.SendSysEx(SfxProtocol.BuildLoadSongSound(i, patches[i]));
             foreach (var m in SfxProtocol.BuildSong(song)) ok &= output.SendSysEx(m);
             return ok;
         }
@@ -136,6 +158,9 @@ namespace CatSplat.SfxForge
         public bool SendIntensity(float value01) => SendTelemetry(SfxTelemetry.Intensity, value01);
         /// <summary>The music on the device: this pattern (0..7) from the next bar line.</summary>
         public bool CuePattern(int pattern) => SendTelemetry(SfxTelemetry.Pattern, SfxProtocol.PatternValue(pattern));
+
+        /// <summary>One SysEx message as it is (F0 … F7): for what this class has no call for. False when no output is open.</summary>
+        public bool SendSysEx(byte[] message) => output != null && message != null && message.Length > 1 && output.SendSysEx(message);
 
         /// <summary>Text for the device's top line (a level's name, a state): 24 ASCII characters.</summary>
         public bool SendText(string text) => output != null && output.SendSysEx(SfxProtocol.BuildText(text));

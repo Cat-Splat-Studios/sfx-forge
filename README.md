@@ -157,10 +157,10 @@ Plain MIDI, so it works over USB, the plugin's MIDI ports and Web MIDI. SysEx us
 | game → device | CC 14, ch 2 | music: intensity 0…127 (layers come in) |
 | game → device | CC 15, ch 2 | music: pattern A…H (value / 16), from the next bar line |
 | game → device | CC 16–17, ch 2 | shown on the LINK page, not mapped |
-| game → device | `F0 7D 56 42 02 <slot> <28 patch bytes> F7` | load a patch into a pad |
+| game → device | `F0 7D 56 42 02 <slot> <28 patch bytes> F7` | load a patch into a pad. Slot 16–31 (firmware 1.3.1): pad 1–16 of the MUSIC kit whichever kit is shown – how a song's sounds are sent |
 | game → device | `F0 7D 56 42 03 <ASCII, ≤ 24> F7` | text for the top line |
 | game → device | `F0 7D 56 42 04 <slot> F7` | request a dump of a pad |
-| both ways | `F0 7D 56 42 05 <piece> <pieces> <≤ 200 bytes> F7` | the song with its mix, in 39 pieces (7699 bytes, `sfx_song_pack`; the older 6643-, 4546-, 2498- and 2455-byte songs are still taken) |
+| both ways | `F0 7D 56 42 05 <piece> <pieces> <≤ 200 bytes> F7` | the song with its mix, in 39 pieces (7699 bytes, `sfx_song_pack`). Only this format travels; the older, shorter songs are read from files. A receiver puts each piece where it belongs and takes the song when all 39 are there: in any order, twins ignored. It forgets a transfer that stops for two seconds; a *different* song sent sooner than that after one that broke off can be mixed with it |
 | game → device | `F0 7D 56 42 06 F7` | request the 16 sounds and the song (as SEND does) |
 
 `<slot>` is 0–15, a pad of the kit the device shows. SEND and the request `06` always give the MUSIC kit: the song's
@@ -191,8 +191,9 @@ Add the package from disk: **Window > Package Manager > + > Add package from dis
 | `SfxForgeLink` | the link in Play mode: pad and encoder events from the device |
 | `SfxEncoderBinding` | a device encoder (LINK page) → an exposed AudioMixer parameter or an event |
 
-Everything that arrives *from* the device (EXPORT, SEND, "Fetch the song", pads, encoders) is unit-tested at the
-protocol level only: receiving MIDI in Unity has not been tried against a real port. See
+The link is tested end to end against the SDK's emulator over a virtual MIDI cable: patches and the song from the
+device, a song and its sounds to the device, the game driving the device. Not tested: the hardware, the plugin, and
+pads and encoders coming from the device. See
 [section 6 of the Unity manual](docs/UNITY.md#6-from-the-device-to-the-game). The demo's song came in as a file.
 
 **The demo** – open `unity/Demo` with Unity 6.3 and the scene `Assets/SfxDemo/SfxDemo.unity`: W/S thrust, A/D turn,

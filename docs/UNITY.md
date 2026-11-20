@@ -576,21 +576,36 @@ MIDI ports. Without the hardware you need a virtual MIDI cable with two ports, o
 > **What is tested, and what is not.** MIDI is implemented for Windows only (winmm).
 >
 > **Tested end to end against the emulator**, over two loopMIDI ports, with Unity 6000.3 on Windows 11
-> (`Tests/LinkTakes.cs` in the showcase, run against `tests/emulator-link.mjs`):
+> (`Tests/LinkTakes.cs` in the showcase, run against `tests/emulator-link.mjs`; firmware 1.3.1):
 > - Unity asks for a pad's patch and for the song, and both arrive. The song that arrived was the demo project's
->   song, byte for byte, and an `SfxMusicPlayer` played it.
+>   song, byte for byte, and an `SfxMusicPlayer` played it. Twenty transfers in a row all arrived.
+> - A song sent *to* the device comes back the same when asked for: sent piece by piece, last piece first, after a
+>   transfer that broke off, and with `SendSong`, whose 16 sounds arrive in the MUSIC kit while the selected kit
+>   stays as it was. The songs sent differ from the device's in every one of the 39 pieces.
 > - SEND and EXPORT pressed on the device arrive in a running game (`Tests/LinkSession.cs`, the link video).
 > - The game's intensity reaches the device: the INTENSITY on its SONG page followed the game's value. Text was
 >   sent in the same session, but the page that was open does not show it, so nobody saw it arrive.
 >
 > **Not tested:** the hardware and the plugin; pads and encoders coming *from* the device (`onPad`, `onEncoder`,
-> `SfxEncoderBinding`); `SendPatch` and `SendSong` *to* the device; the SFX Forge window's buttons, which nobody
-> has clicked against a device.
+> `SfxEncoderBinding`); `SendPatch`; the SFX Forge window's buttons, which nobody has clicked against a device.
 >
-> **Found by that test.** The emulator's MIDI output sometimes delivers two neighbouring SysEx messages in the
-> wrong order: 3 of the first 60 song transfers had two pieces swapped. The package used to drop such a song; it now
-> takes a song's pieces in any order (100 of 100 transfers since). The firmware still wants the pieces of a song
-> sent *to* it in order, which was not tested.
+> **Found by these tests**, all three in how the emulator moves MIDI, none of them in the hardware's path:
+> - Its MIDI output sometimes delivers two neighbouring SysEx messages in the wrong order: 3 of the first 60 song
+>   transfers had two pieces swapped, and the package dropped such a song.
+> - Its page handed every incoming message to the firmware twice. The firmware took a repeated piece for a new
+>   transfer, so before 1.3.1 it never took a song from the game there.
+> - It listens on its own output port (a virtual cable's port is both), so the firmware hears what it sends. Its
+>   own sound dumps came back and were loaded into the selected kit.
+>
+> Since then both ends put every piece of a song where it belongs and take the song when all 39 are there: in any
+> order, and a piece that is there already, byte for byte, is ignored. A piece that is there already with other
+> bytes begins a new transfer, and a transfer that broke off is forgotten after two seconds. The firmware ignores a
+> dump or a piece that is exactly what it just sent. With that, 100 of 100 transfers to Unity arrived, and the round
+> trip to the device passes with every message doubled.
+>
+> **A limit that remains.** No piece says which song it belongs to. If a transfer breaks off and a *different* song
+> follows within two seconds, pieces of the two can add up to a whole song, and that mixture is taken. Wait two
+> seconds after a transfer that failed, or send the same song again.
 >
 > The song in the demo project came in as a file, not over MIDI ([below](#a-song-without-midi)).
 
@@ -630,7 +645,7 @@ update. In a scene, `SfxForgeLink` polls every frame.
 | You call on `SfxLink.Shared` | The device |
 |---|---|
 | `SendPatch(slot, patch)` | loads the patch into that pad and selects it |
-| `SendSong(sounds, song.data)` | replaces its 16 sounds and its song |
+| `SendSong(sounds, song.data)` | replaces its song and the 16 sounds of its MUSIC kit, which the song plays. The kit that is shown is left alone. Needs firmware 1.3.1: an older one takes the song and ignores the sounds |
 | `PlayPad(slot, velocity)` · `ReleasePad(slot)` | plays a pad |
 | `SendText("LEVEL 2")` | shows up to 24 ASCII characters on its top line |
 | `SendTelemetry(channel, value01)` | moves the held sound, or the music (below) |
@@ -1478,7 +1493,8 @@ What this does not tell you:
 | the window lists no ports | no MIDI device and no virtual cable. The window says what to install |
 | the emulator in the browser sends nothing | its tab is hidden or minimized: the browser throttles it and the firmware stops sending. Keep the tab visible. Also check that **MIDI** is on in its top bar and **MIDI out** names the port Unity listens on |
 | the browser never offers MIDI | Web MIDI needs Chrome or Edge, and the page must be allowed to use MIDI devices (with SysEx) |
-| a song from the device never arrives, though messages come in | before this fix: two pieces arrived swapped. Update the package; `SfxProtocol.TryTakeSongChunk` now takes them in any order |
+| a song never arrives, though messages come in | an old package or a firmware before 1.3.1: they wanted a song's pieces once each and in order, and the emulator's MIDI swaps and repeats messages. Update both |
+| after SEND the device shows PATCH LOADED and another pad is selected | a firmware before 1.3.1 on a virtual cable: it heard its own dumps come back |
 | editing a preset in Play mode changes nothing | the sound was baked. Live players follow an edit; baked clips are rendered at start |
 
 ---
