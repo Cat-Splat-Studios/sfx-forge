@@ -54,15 +54,7 @@ namespace SfxShowcase.Tests
         readonly List<string> linkEvents = new List<string>();
         int framesRolled;
 
-        static string CaptureFolder
-        {
-            get
-            {
-                string chosen = Environment.GetEnvironmentVariable(FolderVariable);
-                if (!string.IsNullOrEmpty(chosen)) return Path.GetFullPath(chosen);
-                return Path.GetFullPath(Path.Combine(Application.dataPath, "..", "..", "..", "out", "unity-video"));
-            }
-        }
+        static string CaptureFolder => ShowcaseFolders.CaptureFolder(FolderVariable);
 
         [TearDown]
         public void PutTheRigAway()

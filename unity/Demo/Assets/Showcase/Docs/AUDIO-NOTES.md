@@ -34,7 +34,7 @@ AudioInstaller.Install(player, session, song, presetFactory);
 The builder does this in `Editor/ShowcaseAudio.cs`, the only editor file that names the audio code.
 
 - `player` and `session` are the `PlayerBase` and the `GameSessionBase` of the scene; nothing else of the game is needed.
-- `song` is `Assets/SfxDemo/DemoSong.asset` (only read).
+- `song` is the showcase's own `Song/DemoSong.asset`, which the builder writes from `Song/DemoSong.bytes`.
 - `presetFactory(name, patch, holdSeconds)` is called once for each of the 19 sounds, with the names
   `Jump, Land, FootstepLeft, FootstepRight, TuckStart, RollHum, WindUpRev, Burst, Chime, ChimeScatter, Woofer, Hurt,
   ClipperPop, TuningFork, Goal, Wind, Skid, Respawn, UiConfirm`. It must return an `SfxPreset` whose `patch` and

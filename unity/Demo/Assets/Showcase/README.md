@@ -23,6 +23,19 @@ scatter when you are hit, Tuning Forks are checkpoints and the Resonator is the 
 1. Open the Unity project `unity/Demo` (Unity 6000.3.8f1).
 2. Open the scene `Assets/Showcase/Showcase.unity` and press Play.
 
+**In another place.** This page names paths as they are in the SFX FORGE repository, where the folder is
+`unity/Demo/Assets/Showcase`. Imported as the package's sample it is
+`Assets/Samples/SFX Forge/<version>/Showcase` of your own project, and it may be moved anywhere under `Assets`:
+the editor script and the tests find the folder from their own assembly definition files, the song is inside it
+(`Song/`), and the game itself never looks at a path. Read `Assets/Showcase` below as "this folder" and
+`unity/Demo` as "your project". Two defaults differ outside the repository: a build goes to `Builds/Brio/` and
+the capture rig records to `Captures/`, both in the project's folder beside `Assets`. The folder was checked in a
+second place by copying it to `Assets/Elsewhere/Deeper/Showcase` of an otherwise empty project (the checks, the
+tests, a build and its probe); importing it through the Package Manager's Samples list is the same copy, made by
+Unity. What a new project does not have: the scene in its build settings. `Verify` says so in one failed check
+until **SFX Forge > Rebuild Showcase Scene** has added it, or you have; playing, the tests and the build do not
+need it.
+
 | | Keyboard | Gamepad |
 |---|---|---|
 | Run | Left / Right or A / D | left stick |
@@ -97,7 +110,7 @@ grep "SHOWCASE BUILD" out/build.log                 # SHOWCASE BUILD: ok .../out
 ```
 
 In the editor: **SFX Forge > Showcase > Build for Windows**. The build goes to `out/build/Brio/` at the repository's
-root (another place: `-sfxforge-build <path to the .exe>`). The build settings and the project's settings are left
+root, and in any other project to `Builds/Brio/` in the project's folder (another place: `-sfxforge-build <path to the .exe>`). The build settings and the project's settings are left
 as they are.
 
 The built game checks itself when it is asked to. Started like this it plays by itself for 14 seconds, measures what
@@ -129,16 +142,19 @@ does not compare the sound with the editor's, and nobody has listened to the bui
 | **`Scripts/Audio`** | **The SFX FORGE example.** The only assembly that references `CatSplat.SfxForge`. |
 | `Editor` | `ShowcaseBuilder.cs` (builds the scene; `Verify` and `SelfTest`) and `ShowcaseAudio.cs` (the builder's two calls into the sound: install it, check it). |
 | `Generated` | Written by the builder: `ArtKit.asset` with the two materials, `ShowcaseMeshes.asset`, and `Presets/<sound>.asset` – every sound effect as a clickable `SfxPreset`. |
+| `Song` | The music: `DemoSong.bytes` (16 sounds and the packed song, as the device sent them) and `DemoSong.asset`, the `SfxSong` the builder writes from it. The same song as the older demo's `Assets/SfxDemo/DemoSong.*`, as a separate pair of files with their own GUIDs, so the folder is complete by itself. |
 | `Tests` | The PlayMode tests: `ShowcaseTests.cs` (the game), `ShowcaseAudioTests.cs` (the sound), and what they share. Also the capture rig: `CaptureTakes.cs`, `CaptureRecorder.cs`, `CaptureTelemetry.cs`, `CapturePilot.cs`. Its takes are marked `[Explicit]`; see [Recording it](#recording-it). |
 | `Docs` | `DESIGN.md` (what the game is), `ARCHITECTURE.md` (how the code is organised, and the rules), and one notes file per discipline: `GAMEPLAY-NOTES.md`, `LEVEL-NOTES.md`, `ART-NOTES.md`, `AUDIO-NOTES.md`. |
 
 The four runtime folders reference only `Scripts/Core`, never each other, and gameplay never calls
-SFX FORGE. Outside `Scripts/Audio` the sound is known only in editor and test code: in four files,
-`Editor/ShowcaseAudio.cs`, `Tests/ShowcaseAudioTests.cs` and the capture rig's `Tests/CaptureTakes.cs`
-and `Tests/CaptureTelemetry.cs`, and in two lines of `ShowcaseBuilder` (`ShowcaseAudio.Install` and
-`ShowcaseAudio.Check`). Delete the folder, those four files and those two lines and the game is the
-same game, silent. (This is by construction – no other file has a `using` for the audio code – and
-has not been tried by actually deleting them.)
+SFX FORGE. Outside `Scripts/Audio` the sound is known only in editor and test code: in six files,
+`Editor/ShowcaseAudio.cs`, `Tests/ShowcaseAudioTests.cs`, the capture rig's `Tests/CaptureTakes.cs`
+and `Tests/CaptureTelemetry.cs` and the link takes' `Tests/LinkTakes.cs` and `Tests/LinkSession.cs`,
+in two lines of `ShowcaseBuilder` (`ShowcaseAudio.Install` and `ShowcaseAudio.Check`), and in the
+references of the `Editor` and `Tests` assembly definitions. Delete the folder, those six files,
+those two lines and the two references and the game is the same game, silent. (This is by
+construction – no other file has a `using` for the audio code – and has not been tried by actually
+deleting them.)
 
 ## Use SFX FORGE in your own Unity game
 
@@ -222,7 +238,8 @@ speed) and the Wind-Up rev (retriggered on each tap; pitch, `fm` and filter from
 ### 4. Adaptive music – [`MusicDirector.cs`](Scripts/Audio/MusicDirector.cs)
 
 An `SfxMusicPlayer` plays an `SfxSong` asset (16 sounds and a sequenced song, made on the device; the
-package cannot edit one). The showcase plays the demo project's `Assets/SfxDemo/DemoSong.asset`. The
+package cannot edit one). The showcase plays its own `Song/DemoSong.asset`, the firmware's demo song; the
+builder writes the asset from `Song/DemoSong.bytes`, the song as the device sent it. The
 director turns the game into five calls:
 
 ```csharp
@@ -356,7 +373,8 @@ A take's folder holds
 
 `stills/` also receives `wind-up.png` and `burst-roll.png` from the take `HeldSounds` and
 `hurt-scatter.png` from `HurtAndGoal`. Everything goes to `out/unity-video/` at the repository's root,
-which git ignores; set the environment variable `SFXFORGE_CAPTURE_DIR` to record somewhere else.
+which git ignores (in any other project: to `Captures/` in the project's folder); set the environment variable
+`SFXFORGE_CAPTURE_DIR` to record somewhere else.
 The checker, `docs/unity_figures.py` and `docs/video/make_unity_videos.py` read the same variable.
 Recording a take first removes its old pictures and its old `telemetry.json`, so a take that failed
 part-way is seen as missing, not as an old one.

@@ -1,7 +1,7 @@
 namespace SfxShowcase.Audio
 {
     /// <summary>
-    /// The sixteen instruments of the song (Assets/SfxDemo/DemoSong.asset) by index – what
+    /// The sixteen instruments of the song (the showcase's Song/DemoSong.asset) by index – what
     /// <c>SfxMusicPlayer.PlaySound</c>, <c>SetTrackVolume</c> and <c>SetTrackMute</c> take as "sound".
     /// </summary>
     public static class MusicKit

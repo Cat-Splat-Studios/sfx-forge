@@ -15,11 +15,16 @@ namespace SfxShowcase.Editor
     /// </summary>
     public static class ShowcaseAudio
     {
-        /// <summary>The music: the demo's song asset, which is only read.</summary>
-        public const string SongPath = "Assets/SfxDemo/DemoSong.asset";
+        const string SongFolderName = "Song";
+        /// <summary>The showcase's own copy of the song, inside its folder so that the folder can be taken anywhere.</summary>
+        public static string SongFolder => ShowcaseBuilder.Root + "/" + SongFolderName;
+        /// <summary>The music: the song asset the scene's music player holds. Written from <see cref="SongBytesPath"/> by every rebuild.</summary>
+        public static string SongPath => SongFolder + "/DemoSong.asset";
+        /// <summary>The song as the device sent it: 16 sounds of <see cref="SfxPatch.Bytes"/> bytes, then the packed song.</summary>
+        public static string SongBytesPath => SongFolder + "/DemoSong.bytes";
 
         const string PresetFolderName = "Presets";
-        const string PresetFolder = ShowcaseBuilder.GeneratedFolder + "/" + PresetFolderName;
+        static string PresetFolder => ShowcaseBuilder.GeneratedFolder + "/" + PresetFolderName;
 
         /// <summary>The largest sample of a baked clip must be above this for the sound to count as audible.</summary>
         const float AudibleLevel = 0.01f;
@@ -33,7 +38,48 @@ namespace SfxShowcase.Editor
         public static void Install(PlayerBase player, GameSessionBase session)
         {
             if (!AssetDatabase.IsValidFolder(PresetFolder)) AssetDatabase.CreateFolder(ShowcaseBuilder.GeneratedFolder, PresetFolderName);
-            AudioInstaller.Install(player, session, AssetDatabase.LoadAssetAtPath<SfxSong>(SongPath), CreatePresetAsset);
+            AudioInstaller.Install(player, session, BuildSong(), CreatePresetAsset);
+        }
+
+        /// <summary>
+        /// The song asset, written from the song file beside it (and created if it is not there, so its GUID and the
+        /// scene's reference to it survive a rebuild). The file is a copy of the demo project's
+        /// <c>Assets/SfxDemo/DemoSong.bytes</c>; the showcase keeps its own so that it needs nothing outside its folder.
+        /// </summary>
+        static SfxSong BuildSong()
+        {
+            if (!ReadSongFile(out SfxPatch[] sounds, out byte[] packed))
+                throw new InvalidOperationException(SongBytesPath + " is missing or is not 16 sounds and a packed song");
+            SfxSong song = ShowcaseBuilder.LoadOrCreate<SfxSong>(SongPath);
+            song.Set(sounds, packed);
+            EditorUtility.SetDirty(song);
+            return song;
+        }
+
+        /// <summary>Reads <see cref="SongBytesPath"/>. False when the file is not there or has another size.</summary>
+        static bool ReadSongFile(out SfxPatch[] sounds, out byte[] packed)
+        {
+            sounds = new SfxPatch[SfxProtocol.Slots];
+            packed = new byte[SfxProtocol.SongBytes];
+            var file = AssetDatabase.LoadAssetAtPath<TextAsset>(SongBytesPath);
+            byte[] raw = file != null ? file.bytes : null;
+            int soundBytes = SfxProtocol.Slots * SfxPatch.Bytes;
+            if (raw == null || raw.Length != soundBytes + packed.Length) return false;
+            for (int i = 0; i < sounds.Length; i++)
+                if (!SfxPatch.TryUnpack(raw, i * SfxPatch.Bytes, out sounds[i])) return false;
+            Array.Copy(raw, soundBytes, packed, 0, packed.Length);
+            return true;
+        }
+
+        /// <summary>Whether a song asset holds exactly these sounds and this packed song.</summary>
+        static bool Holds(SfxSong song, SfxPatch[] sounds, byte[] packed)
+        {
+            if (song == null || !song.IsValid || song.data.Length != packed.Length) return false;
+            for (int i = 0; i < packed.Length; i++)
+                if (song.data[i] != packed[i]) return false;
+            for (int i = 0; i < sounds.Length; i++)
+                if (!song.sounds[i].Equals(sounds[i])) return false;
+            return true;
         }
 
         /// <summary>
@@ -68,8 +114,10 @@ namespace SfxShowcase.Editor
 
             var song = AssetDatabase.LoadAssetAtPath<SfxSong>(SongPath);
             var music = UnityEngine.Object.FindFirstObjectByType<SfxMusicPlayer>();
-            check(song != null && song.IsValid && music != null && music.song == song && music.GetComponent<MusicDirector>() != null,
-                  "the music player holds the demo song and is driven by the MusicDirector");
+            bool songIsItsFile = ReadSongFile(out SfxPatch[] fileSounds, out byte[] filePacked) && Holds(song, fileSounds, filePacked);
+            check(song != null && song.IsValid && songIsItsFile && music != null && music.song == song && music.GetComponent<MusicDirector>() != null,
+                  $"the music player holds the showcase's own song ({SongFolderName}/DemoSong.asset, which is what {SongFolderName}/DemoSong.bytes holds) and is driven by the MusicDirector");
+            NoteOtherCopies();
 
             var pool = UnityEngine.Object.FindFirstObjectByType<LiveVoicePool>();
             int voices = pool != null ? pool.GetComponentsInChildren<SfxPlayer>().Length : 0;
@@ -92,6 +140,28 @@ namespace SfxShowcase.Editor
             foreach (AudioSource source in UnityEngine.Object.FindObjectsByType<AudioSource>(FindObjectsSortMode.None))
                 sourcesAreBare &= source.clip == null && !source.playOnAwake && source.spatialBlend == 0f;
             check(sourcesAreBare, "no AudioSource has a clip: every sound is made at runtime");
+        }
+
+        /// <summary>
+        /// Not a check, a line in the log: any other file named DemoSong.bytes in the project (the demo project has the
+        /// original in Assets/SfxDemo), and whether it still holds the same bytes as the showcase's copy. If not, one
+        /// of the two was regenerated and the other was not.
+        /// </summary>
+        static void NoteOtherCopies()
+        {
+            var mine = AssetDatabase.LoadAssetAtPath<TextAsset>(SongBytesPath);
+            if (mine == null) return;
+            byte[] own = mine.bytes;
+            foreach (string guid in AssetDatabase.FindAssets("DemoSong t:TextAsset"))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (path == SongBytesPath || !path.EndsWith("/DemoSong.bytes", StringComparison.Ordinal)) continue;
+                byte[] other = AssetDatabase.LoadAssetAtPath<TextAsset>(path).bytes;
+                bool same = other.Length == own.Length;
+                for (int i = 0; same && i < own.Length; i++) same = other[i] == own[i];
+                if (same) Debug.Log($"SHOWCASE: note  {path} holds the same song as the showcase's copy");
+                else Debug.LogWarning($"SHOWCASE: note  {path} DIFFERS from {SongBytesPath}: copy the newer file over the other and rebuild");
+            }
         }
 
         static SfxPreset PresetOf(SoundDefinition definition)

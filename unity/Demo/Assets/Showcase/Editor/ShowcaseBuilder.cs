@@ -6,6 +6,7 @@ using SfxShowcase.Core;
 using SfxShowcase.Gameplay;
 using SfxShowcase.Level;
 using UnityEditor;
+using UnityEditor.Compilation;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -28,14 +29,29 @@ namespace SfxShowcase.Editor
     /// </summary>
     public static class ShowcaseBuilder
     {
-        /// <summary>The showcase's own folder.</summary>
-        public const string Root = "Assets/Showcase";
+        /// <summary>
+        /// The showcase's own folder, wherever it is: <c>Assets/Showcase</c> in the demo project,
+        /// <c>Assets/Samples/SFX Forge/&lt;version&gt;/Showcase</c> when it was imported as the package's sample, anywhere
+        /// else after a move. It is found from this script's own assembly definition (<c>Editor/SfxShowcase.Editor.asmdef</c>,
+        /// one folder below the root); no path of the showcase is written down anywhere.
+        /// </summary>
+        public static string Root
+        {
+            get
+            {
+                string assembly = typeof(ShowcaseBuilder).Assembly.GetName().Name;
+                string definition = CompilationPipeline.GetAssemblyDefinitionFilePathFromAssemblyName(assembly);
+                if (string.IsNullOrEmpty(definition))
+                    throw new InvalidOperationException($"the showcase cannot find its folder: the assembly {assembly} has no assembly definition file");
+                return Path.GetDirectoryName(Path.GetDirectoryName(definition)).Replace('\\', '/');
+            }
+        }
         /// <summary>The generated scene.</summary>
-        public const string ScenePath = Root + "/Showcase.unity";
+        public static string ScenePath => Root + "/Showcase.unity";
         /// <summary>Everything else this script writes.</summary>
-        public const string GeneratedFolder = Root + "/Generated";
-        const string ArtKitPath = GeneratedFolder + "/ArtKit.asset";
-        const string MeshesPath = GeneratedFolder + "/ShowcaseMeshes.asset";
+        public static string GeneratedFolder => Root + "/Generated";
+        static string ArtKitPath => GeneratedFolder + "/ArtKit.asset";
+        static string MeshesPath => GeneratedFolder + "/ShowcaseMeshes.asset";
         const string LogPrefix = "SHOWCASE: ";
 
         /// <summary>Serialized references that are empty on purpose, as "Type.field": the Resonator's fork is always lit and has no unlit look.</summary>
@@ -117,9 +133,18 @@ namespace SfxShowcase.Editor
         static void AddToBuildSettings(string scenePath)
         {
             var scenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
-            if (scenes.Exists(listed => listed.path == scenePath)) return;
+            if (scenes.Exists(listed => IsScene(listed, scenePath))) return;
             scenes.Add(new EditorBuildSettingsScene(scenePath, true));
             EditorBuildSettings.scenes = scenes.ToArray();
+        }
+
+        /// <summary>
+        /// Whether an entry of the build settings is this scene: by GUID first, because the entry keeps the path it was
+        /// added with when the showcase's folder is moved or copied into another project with its .meta files.
+        /// </summary>
+        static bool IsScene(EditorBuildSettingsScene listed, string scenePath)
+        {
+            return listed.path == scenePath || listed.guid.ToString() == AssetDatabase.AssetPathToGUID(scenePath);
         }
 
         // ---- SelfTest ---------------------------------------------------------------------------------------------
@@ -291,21 +316,24 @@ namespace SfxShowcase.Editor
         /// <summary>The proofs of DESIGN.md section 6 that are about files: no audio assets, one assembly knows SFX FORGE.</summary>
         static void CheckProject(Action<bool, string> check)
         {
+            string root = Root;
             var audioFiles = new List<string>();
-            foreach (string guid in AssetDatabase.FindAssets("t:AudioClip", new[] { Root }))
+            foreach (string guid in AssetDatabase.FindAssets("t:AudioClip", new[] { root }))
                 audioFiles.Add(AssetDatabase.GUIDToAssetPath(guid));
-            check(audioFiles.Count == 0, "there is no audio file under " + Root + (audioFiles.Count == 0 ? "" : ": " + string.Join(", ", audioFiles)));
+            check(audioFiles.Count == 0, "there is no audio file under " + root + (audioFiles.Count == 0 ? "" : ": " + string.Join(", ", audioFiles)));
 
-            var textures = AssetDatabase.FindAssets("t:Texture t:Model t:Font", new[] { Root });
-            check(textures.Length == 0, "there is no texture, model or font under " + Root);
+            var textures = AssetDatabase.FindAssets("t:Texture t:Model t:Font", new[] { root });
+            check(textures.Length == 0, "there is no texture, model or font under " + root);
 
             bool onlyAudioKnowsSfxForge = true;
             foreach (string folder in new[] { "Core", "Gameplay", "Level", "Art" })
-                foreach (string file in Directory.GetFiles($"{Root}/Scripts/{folder}", "*.*", SearchOption.AllDirectories))
+                foreach (string file in Directory.GetFiles($"{root}/Scripts/{folder}", "*.*", SearchOption.AllDirectories))
                     if ((file.EndsWith(".cs") || file.EndsWith(".asmdef")) && File.ReadAllText(file).Contains("CatSplat")) onlyAudioKnowsSfxForge = false;
             check(onlyAudioKnowsSfxForge, "only Scripts/Audio references CatSplat.SfxForge");
 
-            check(Array.Exists(EditorBuildSettings.scenes, listed => listed.path == ScenePath && listed.enabled), "the scene is in the build settings");
+            string scenePath = ScenePath;
+            check(Array.Exists(EditorBuildSettings.scenes, listed => IsScene(listed, scenePath) && listed.enabled),
+                  "the scene is in the build settings (if it is not: SFX Forge > Rebuild Showcase Scene adds it)");
         }
 
         static int Count<T>() where T : UnityEngine.Object

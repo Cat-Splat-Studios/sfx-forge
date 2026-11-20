@@ -21,7 +21,10 @@ another developer can read and copy. Every rule below serves that.
 
 ## 2. Layout and ownership
 
-Everything is under `unity/Demo/Assets/Showcase`. One owner per folder; nobody edits another owner's
+Everything is under `unity/Demo/Assets/Showcase` – in this repository. The folder does not have to be there:
+as the package's sample it is `Assets/Samples/SFX Forge/<version>/Showcase`, and `Editor/ShowcaseBuilder.Root`
+and `Tests/ShowcaseFolders.Root` find it from their assembly definition files, so the paths in this document are
+this repository's and nothing in the code repeats them. One owner per folder; nobody edits another owner's
 files – if a contract in `Scripts/Core` does not fit, tell the technical director, do not work round it.
 
 | Folder | Assembly = namespace | References | Owner | Holds |
@@ -38,8 +41,8 @@ files – if a contract in `Scripts/Core` does not fit, tell the technical direc
 
 The four runtime assemblies (Gameplay, Audio, Level, Art) reference **only Core**, never each other.
 That is what lets four people work at once, and what makes each folder liftable on its own. Nothing in
-`Assets/Showcase` references code in `Assets/SfxDemo`; the song asset `Assets/SfxDemo/DemoSong.asset`
-is the only thing shared, and it is only read.
+`Assets/Showcase` references code or assets in `Assets/SfxDemo`: the showcase has its own copy of the demo
+song in `Song/` (the same bytes, files with their own GUIDs), so the folder is complete by itself.
 
 Facts about the project that constrain everyone:
 
@@ -194,7 +197,7 @@ Scene*), in this order:
 5. `context.Art.CreateCharacter(player)` parented to the player; `CreateBackground(camera, level.Bounds)`;
    `CreateHud(camera, player, session)`.
 6. `ShowcaseAudio.Install(player, session)`, which calls `AudioInstaller.Install(player, session, song,
-   presetFactory)` with `Assets/SfxDemo/DemoSong.asset` and a factory that saves each patch as a preset asset.
+   presetFactory)` with the showcase's own `Song/DemoSong.asset` (written from `Song/DemoSong.bytes` first) and a factory that saves each patch as a preset asset.
 7. Store the two materials in the art kit asset and the generated meshes in `Generated/ShowcaseMeshes.asset`,
    save the scene, add it to the build settings (without removing the SfxDemo scene), save assets.
 
@@ -315,7 +318,7 @@ version, with every step, is `../README.md` ("Use SFX FORGE in your own Unity ga
    no preset for the pool. Every source is 2D with no clip and `playOnAwake` off; the players keep their
    sources running themselves.
 
-7. **Lifting the audio folder out.** Copy `Scripts/Audio` (16 files). From `Scripts/Core` it needs
+7. **Lifting the audio folder out.** Copy `Scripts/Audio` (17 scripts and its `.asmdef`). From `Scripts/Core` it needs
    exactly these ten files: `GameEvents`; `PlayerBase` with the interfaces it implements, `IPlayerState`
    (speed, grounded, rolling, charging), `IPlayerActor` and `IPlayerInput`, and `TerrainPlane`, which
    those name; `GameSessionBase` with `IGameSession`, `GamePhase` and `SectionId`. The folder's

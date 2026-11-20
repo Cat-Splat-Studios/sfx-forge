@@ -600,7 +600,7 @@ def link():
         c.text(154, 134 + n * 20, s, 14, DIM, False, "ma")
     c.box(1116, 70, 1376, 610, fill=PANEL, outline=LIVE, r=14, width=2)
     c.text(1246, 100, "UNITY", 22, LIVE, True, "ma")
-    for n, s in enumerate(["com.catsplat.sfxforge", "SfxLink.Shared", "Window > SFX Forge"]):
+    for n, s in enumerate(["the SFX Forge package", "SfxLink.Shared", "Window > SFX Forge"]):   # no package id: the figure is also in the standalone package
         c.text(1246, 134 + n * 20, s, 14, DIM, False, "ma")
 
     def lane(y, title, colour, rows, to_unity):
@@ -841,7 +841,7 @@ def level_strip():
 # ---- 10. what to copy --------------------------------------------------------------------------------------------------
 def copy_map():
     audio = ["SoundLibrary", "GameSound", "SoundRoute", "SoundDefinition", "SoundBinding", "Pitch", "SoundEffects", "LiveVoicePool", "ContinuousSounds", "HeldSound",
-             "MusicDirector", "SectionCue", "MusicNote", "MusicKit", "AudioInstaller", "PresetFactory"]
+             "MusicDirector", "SectionCue", "MusicNote", "MusicKit", "AudioInstaller", "PresetFactory", "BuildProbe"]
     core = ["GameEvents", "PlayerBase", "IPlayerState", "IPlayerActor", "IPlayerInput", "TerrainPlane", "GameSessionBase", "IGameSession", "GamePhase", "SectionId"]
     for folder, names in (("Audio", audio), ("Core", core)):                 # the picture must not lie about the folder
         d = os.path.join(ROOT, "unity", "Demo", "Assets", "Showcase", "Scripts", folder)
@@ -851,7 +851,7 @@ def copy_map():
             assert set(names) == on_disk, "Scripts/Audio changed: %s" % sorted(on_disk ^ set(names))
         else:
             core_total = len(on_disk)
-    song_asset = os.path.join(ROOT, "unity", "Demo", "Assets", "SfxDemo", "DemoSong.asset")
+    song_asset = os.path.join(ROOT, "unity", "Demo", "Assets", "Showcase", "Song", "DemoSong.asset")
     assert os.path.isfile(song_asset) and os.path.isfile(song_asset + ".meta"), "the demo song moved"
     c = Canvas(1400, 720, "COPY THIS INTO YOUR GAME", "the audio folder, the ten files of Core it needs, and a song")
     c.box(24, 66, 800, 696, fill=PANEL, outline=LINE, r=14)
@@ -871,12 +871,12 @@ def copy_map():
         return y + rows * 21
 
     y = 112
-    tree(44, y, 0, "unity/Demo/Assets/Showcase/", TEXT, True)
+    tree(44, y, 0, "Showcase/", TEXT, True, "the showcase's folder")
     tree(44, y + 26, 1, "Scripts/", TEXT, True)
     c.box(84, y + 52, 780, y + 264, fill="#241A12", outline=EMBER, r=10)
-    tree(54, y + 62, 2, "Audio/", EMBER, True, "all 16 files, and SfxShowcase.Audio.asmdef")
+    tree(54, y + 62, 2, "Audio/", EMBER, True, "all %d scripts, and SfxShowcase.Audio.asmdef" % len(audio))
     files(120, y + 90, audio, TEXT, 3, 215)
-    c.text(120, y + 232, "The whole sound of the game. The only code that names CatSplat.SfxForge.", 13, DIM)
+    c.text(120, y + 232, "The whole sound of the game. The only runtime code that names CatSplat.SfxForge.", 13, DIM)
     c.box(84, y + 278, 780, y + 432, fill="#12202A", outline=LIVE, r=10)
     tree(54, y + 288, 2, "Core/", LIVE, True, "ten of its %d files: the seam the audio listens to" % core_total)
     files(120, y + 316, core, TEXT, 3, 215)
@@ -884,16 +884,16 @@ def copy_map():
     tree(44, y + 448, 2, "Art/   Gameplay/   Level/", DIM, False, "the game itself: not needed")
     tree(44, y + 476, 1, "Editor/   Generated/   Tests/   Docs/", DIM, False, "the builder, generated assets, tests, notes")
     tree(44, y + 504, 1, "Showcase.unity", DIM)
-    tree(44, y + 532, 0, "unity/Demo/Assets/SfxDemo/DemoSong.asset", EMBER, True, "the song, with its .meta")
+    tree(44, y + 532, 1, "Song/DemoSong.asset", EMBER, True, "the song, with its .meta")
     c.legend(44, y + 564, [(EMBER, "copy"), (LIVE, "copy, or replace with your own"), (LINE, "leave")], 13)
 
     y = 112
     tree(920, y, 0, "Packages/", TEXT, True)
     tree(920, y + 26, 1, "manifest.json", TEXT)
-    c.text(964, y + 52, '"com.catsplat.sfxforge": "file:…"', 13, DIM, mono=True)
+    c.text(964, y + 52, "the SFX Forge package is in its list", 13, DIM)
     tree(920, y + 92, 0, "Assets/", TEXT, True)
     c.box(940, y + 118, 1356, y + 262, fill="#241A12", outline=EMBER, r=10)
-    tree(932, y + 128, 1, "Audio/", EMBER, True, "the 16 files")
+    tree(932, y + 128, 1, "Audio/", EMBER, True, "the %d scripts" % len(audio))
     c.text(954, y + 160, "its .asmdef references", 13, DIM)
     c.text(954, y + 182, "CatSplat.SfxForge", 14, TEXT, True, mono=True)
     c.text(954, y + 204, "and the assembly the Core files are in", 13, DIM)
@@ -955,17 +955,14 @@ def audio_tree():
     c.save("unity-audio-tree")
 
 
-routes()
-held()
-layers()
-intensity()
-cues()
-link()
-showcase_routes()
-seam()
-level_strip()
-copy_map()
-audio_tree()
+FIGURES = [routes, held, layers, intensity, cues, link, showcase_routes, seam, level_strip, copy_map, audio_tree]
+# SFXFORGE_FIGURES=link,copy_map draws only those (the others need the captured takes); without it, all of them
+ONLY = [n.strip() for n in os.environ.get("SFXFORGE_FIGURES", "").split(",") if n.strip()]
+unknown = sorted(set(ONLY) - {f.__name__ for f in FIGURES})
+assert not unknown, "SFXFORGE_FIGURES names no figure: %s" % unknown
+for figure in FIGURES:
+    if not ONLY or figure.__name__ in ONLY:
+        figure()
 
 for name, w, h, size in written:
     print("%-28s %4d x %-4d %6.1f KB%s" % (name, w, h, size / 1024.0, "   TOO LARGE" if size > MAX_BYTES else ""))

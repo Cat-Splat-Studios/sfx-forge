@@ -17,7 +17,6 @@ namespace SfxShowcase.Tests
     /// </summary>
     public abstract class ShowcaseTestBase
     {
-        const string ScenePath = "Assets/Showcase/Showcase.unity";
         const string SceneName = "Showcase";
 
         /// <summary>Game seconds per frame on the fixed clock: one physics step.</summary>
@@ -58,8 +57,9 @@ namespace SfxShowcase.Tests
         public IEnumerator Load()
         {
 #if UNITY_EDITOR
-            // By path, so the test does not depend on which scenes the build settings list at the moment.
-            yield return UnityEditor.SceneManagement.EditorSceneManager.LoadSceneAsyncInPlayMode(ScenePath, new LoadSceneParameters(LoadSceneMode.Single));
+            // By path, so the test does not depend on which scenes the build settings list at the moment; and the
+            // path is found, not written down, so it does not depend on where the showcase's folder is either.
+            yield return UnityEditor.SceneManagement.EditorSceneManager.LoadSceneAsyncInPlayMode(ShowcaseFolders.ScenePath, new LoadSceneParameters(LoadSceneMode.Single));
 #else
             yield return SceneManager.LoadSceneAsync(SceneName, LoadSceneMode.Single);
 #endif

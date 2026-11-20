@@ -46,7 +46,7 @@ Not tried yet: receiving MIDI against a real port (it needs a loopback port or a
 
 ## Build
 
-Needs the SDK in `.tools/vibe-fm-sdk`, Zig 0.13.0 (in `.tools/`, on PATH, or `ZIG=`), Node 18+. On Windows use Git Bash.
+Needs the SDK in `.tools/vibe-fm-sdk`, Zig 0.13.0 (in `.tools/`, on PATH, or `ZIG=`), Node 18+, Python 3 (it takes the debug sections, which hold this machine's paths, out of the built `.wasm`). On Windows use Git Bash.
 
 ```sh
 git clone https://github.com/Vibe-FM-SDK/vibe-fm-sdk.git .tools/vibe-fm-sdk

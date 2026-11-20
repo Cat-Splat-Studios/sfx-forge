@@ -31,7 +31,7 @@ namespace SfxShowcase.Tests
         /// <summary>A take may write three thousand pictures: far longer than a test's usual three minutes.</summary>
         const int TakeTimeoutMilliseconds = 30 * 60 * 1000;
 
-        /// <summary>Set this environment variable to record somewhere else than out/unity-video in the repository.</summary>
+        /// <summary>Set this environment variable to record somewhere else than the usual folder (<see cref="CaptureFolder"/>).</summary>
         const string FolderVariable = "SFXFORGE_CAPTURE_DIR";
 
         /// <summary>How far above the ground a cut puts the player's centre: a hair more than standing.</summary>
@@ -43,16 +43,11 @@ namespace SfxShowcase.Tests
         CaptureTelemetry telemetry;
         FollowCamera follow;
 
-        /// <summary>The folder all takes share: out/unity-video at the repository's root (the project is unity/Demo).</summary>
-        static string CaptureFolder
-        {
-            get
-            {
-                string chosen = Environment.GetEnvironmentVariable(FolderVariable);
-                if (!string.IsNullOrEmpty(chosen)) return Path.GetFullPath(chosen);
-                return Path.GetFullPath(Path.Combine(Application.dataPath, "..", "..", "..", "out", "unity-video"));
-            }
-        }
+        /// <summary>
+        /// The folder all takes share: out/unity-video at the repository's root when the project is the repository's
+        /// unity/Demo, and Captures in the project's folder anywhere else (<see cref="ShowcaseFolders.CaptureFolder"/>).
+        /// </summary>
+        static string CaptureFolder => ShowcaseFolders.CaptureFolder(FolderVariable);
 
         /// <summary>A failed take leaves no recorder behind: the camera and the clock are given back.</summary>
         [TearDown]

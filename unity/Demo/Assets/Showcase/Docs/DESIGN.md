@@ -230,7 +230,7 @@ events raised by gameplay, never by audio), one audio class that subscribes to t
 holds every sound-effect patch as a named patch (`Make(...)`, a wrapper that gives every value of `SfxPatch.Create(...)` a name) so a reader can see the whole sound
 set on one screen. Gameplay code never references SFX FORGE types.
 
-The tune is `Assets/SfxDemo/DemoSong.asset` (E minor, patterns A-F). Every pitched effect is tuned to
+The tune is the demo song (E minor, patterns A-F): `Assets/SfxDemo/DemoSong.asset`, of which the showcase carries its own copy, `Song/DemoSong.asset`. Every pitched effect is tuned to
 E minor pentatonic (E G A B D) so effects sound like part of the band.
 
 ### Sound-effect events
@@ -333,8 +333,8 @@ One `SfxMusicPlayer` playing `DemoSong`, driven by one small `MusicDirector` cla
   with BELLS (13) doubling the last note, STRINGS (15) holding an E chord root under it, and one
   TIMPANI (0) hit on the last note. After the fanfare there is silence except UI sounds. Restarting
   starts the song again at pattern A.
-- The showcase does not edit `DemoSong.asset`. If the builder needs its own copy, it copies the asset
-  into `Assets/Showcase` and leaves the original untouched.
+- The showcase does not edit the demo's `DemoSong.asset`. It has its own copy in `Song/` (as built:
+  `Song/DemoSong.bytes` and the asset the builder writes from it) and leaves the original untouched.
 
 ---
 
@@ -381,5 +381,5 @@ Conventions:
   Values named `…01` are normalised 0..1 (speed ÷ speed cap, or charge ÷ full charge).
 - Tunable numbers live in serialised fields or one settings object per system with a tooltip each;
   no magic numbers in logic.
-- Nothing in `Assets/Showcase` depends on `Assets/SfxDemo` code. The song asset is the only thing
-  shared, and it is only read.
+- Nothing in `Assets/Showcase` depends on `Assets/SfxDemo`, code or assets (as built: the song is a copy
+  inside the showcase's folder, so the folder works in any project and at any path).

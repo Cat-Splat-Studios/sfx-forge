@@ -787,9 +787,11 @@ Things that sound continuously have no event. The audio reads the player's state
 
 `Scripts/Audio` is the only runtime assembly that references `CatSplat.SfxForge`. Outside it, the sound is named
 only in editor and test code: `Editor/ShowcaseAudio.cs`, the two lines of `Editor/ShowcaseBuilder.cs` that call it
-(`ShowcaseAudio.Install` and `ShowcaseAudio.Check`), and three files in `Tests` (`ShowcaseAudioTests.cs`, and
-`CaptureTakes.cs` and `CaptureTelemetry.cs` of the capture rig). Delete the folder, those four files and those two
-lines, and the game is the same game, silent. (That is true by construction. It has not been tried by deleting them.)
+(`ShowcaseAudio.Install` and `ShowcaseAudio.Check`), and five files in `Tests` (`ShowcaseAudioTests.cs`;
+`CaptureTakes.cs` and `CaptureTelemetry.cs` of the capture rig; `LinkTakes.cs` and `LinkSession.cs` of the link
+takes). The assembly definitions of `Editor` and `Tests` reference `CatSplat.SfxForge` as well. Delete the folder,
+those six files, those two lines and the two references, and the game is the same game, silent. (That is true by
+construction. It has not been tried by deleting them.)
 
 ### The sound table: SoundLibrary
 
@@ -897,7 +899,7 @@ The music's volume is 0.36 (`musicVolume`), halved for a moment after a hit.
 | **4** | Held sounds: one `SfxPlayer` each, started with its note, bent every frame, released | `ContinuousSounds.cs`, `HeldSound.cs` |
 | **5** | Music: one `SfxMusicPlayer` with a song, and a script that sets `intensity` from a floor and the game's speed, holds a pattern where the level wants one, and plays notes by hand | `MusicDirector.cs`, and [a first song](#a-first-song) |
 | **6** | Put it in the scene: follow the installer top to bottom, in code or by hand in the Inspector | `AudioInstaller.cs` |
-| **7** | Or take the folder: copy `Scripts/Audio` (16 files), ten files of `Scripts/Core`, and the song `Assets/SfxDemo/DemoSong.asset` | below |
+| **7** | Or take the folder: copy `Scripts/Audio` (17 scripts and its `.asmdef`), ten files of `Scripts/Core`, and the song `Assets/SfxDemo/DemoSong.asset` | below |
 
 **The scene objects**, as `AudioInstaller.Install(player, session, song, presetFactory)` builds them. `player` is a
 `PlayerBase` and `session` a `GameSessionBase`: `Install` throws without either. `song` is the `SfxSong`; without one

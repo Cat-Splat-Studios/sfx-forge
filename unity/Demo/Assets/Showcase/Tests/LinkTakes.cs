@@ -36,7 +36,6 @@ namespace SfxShowcase.Tests
         const float AnswerSeconds = 15f;
         const float PieceSeconds = 0.1f;                    // between two pieces of a song sent one by one
         const float ForgetSeconds = 2.5f;                   // a little more than the device's two seconds for a transfer that broke off
-        const string SongAssetPath = "Assets/SfxDemo/DemoSong.asset";
 
         SfxLink link;
         readonly List<byte[]> messages = new List<byte[]>();
@@ -384,7 +383,7 @@ namespace SfxShowcase.Tests
         static string CompareWithTheDemoSong(SfxSong received)
         {
 #if UNITY_EDITOR
-            var demo = UnityEditor.AssetDatabase.LoadAssetAtPath<SfxSong>(SongAssetPath);
+            var demo = UnityEditor.AssetDatabase.LoadAssetAtPath<SfxSong>(ShowcaseFolders.SongPath);
             if (demo == null || !demo.IsValid) return "the demo song asset is not here to compare with";
             if (demo.data.Length != received.data.Length) return "it is not the demo song (another length)";
             int different = 0;

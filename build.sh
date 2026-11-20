@@ -3,7 +3,7 @@
 #   sh build.sh            build + vibe-check + test render (out/audio.wav, out/*.png, out/midi.json)
 #   sh build.sh quick      build only
 # Needs: .tools/vibe-fm-sdk (git clone https://github.com/Vibe-FM-SDK/vibe-fm-sdk.git) and Zig 0.13.0
-# (in .tools/, on your PATH, or ZIG=/path/to/zig), Node 18+ for the checks.
+# (in .tools/, on your PATH, or ZIG=/path/to/zig), Node 18+ for the checks, Python 3 to strip the debug sections.
 set -e
 ROOT="$(cd "$(dirname "$0")" && (pwd -W 2>/dev/null || pwd))"
 SDK="${VIBE_SDK:-$ROOT/.tools/vibe-fm-sdk}"
@@ -21,6 +21,11 @@ rm -rf "$SDK/sfx-forge" "$SDK/core"
 mkdir -p "$ROOT/build" "$ROOT/out/daw" "$ROOT/out/guide"
 cp "$SDK/build/sfx-forge.wasm" "$SDK/build/sfx-forge.json" "$ROOT/build/"
 [ -f "$SDK/build/sfx-forge.zip" ] && cp "$SDK/build/sfx-forge.zip" "$ROOT/build/"
+# the SDK's build leaves debug sections in the .wasm, with the full paths of this machine: take them out of our copy
+# (and of the zip), so that build/ can be given away. The code is untouched; the checks below run on the result.
+PY="${PYTHON:-python}"; command -v "$PY" >/dev/null 2>&1 || PY=python3
+if [ -f "$ROOT/build/sfx-forge.zip" ]; then "$PY" "$ROOT/tools/strip_wasm_debug.py" "$ROOT/build/sfx-forge.wasm" "$ROOT/build/sfx-forge.zip"
+else "$PY" "$ROOT/tools/strip_wasm_debug.py" "$ROOT/build/sfx-forge.wasm"; fi
 [ "$1" = "quick" ] && exit 0
 
 node "$SDK/tools/vibe-check.mjs" "$ROOT/build/sfx-forge.wasm" --manifest "$ROOT/sfx-forge/firmware.json"
