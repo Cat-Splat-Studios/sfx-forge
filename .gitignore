@@ -1,3 +1,10 @@
 .tools/
 build/
 out/
+
+# the inspectors' test project: what Unity makes
+tests/unity-inspectors/Library/
+tests/unity-inspectors/Logs/
+tests/unity-inspectors/Temp/
+tests/unity-inspectors/UserSettings/
+tests/unity-inspectors/obj/

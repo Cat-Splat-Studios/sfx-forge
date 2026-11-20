@@ -32,12 +32,13 @@ Not tried yet: receiving MIDI against a real port (it needs a loopback port or a
 | `core/sfx_song.h` | the player: 16 voices, chorus / delay / reverb, and the music – a song (8 patterns, notes, chain, a layer threshold per sound) and its sequencer |
 | `sfx-forge/` | the Vibe: pads, pages, display, storage, MIDI |
 | `native/` | the same engine as a native library (Windows x64 so far), for game engines |
-| `unity/com.catsplat.sfxforge/` | the Unity package: the link, presets, a player, telemetry, editor tools |
+| `unity/com.catsplat.sfxforge/` | the Unity package: the link, presets, a player, telemetry, and an editor UI drawn like the device's display (`Editor/UI` is its kit) |
 | `unity/Demo/` | a Unity 6.3 project using the package: a hovercraft whose every sound is synthesized live |
 | `tests/` | a scripted performance (`tour.json`) and its checks (`check.mjs`); `dotnet/` tests the Unity package's core without Unity |
 | `tests/mix-report.mjs` | measures the demo song's mix: every instrument soloed in turn – its level, its peak, how much of it is high |
+| `tests/unity-inspectors/` | a small Unity project that tests the package's editor UI (the sound inspector, the song inspector, the SFX Forge window; 88 EditMode tests) and writes pictures of it to `out/inspector-shots/`. The pictures are the Inspector's element tree and stylesheet rendered in a panel to a texture, not photographs of the Inspector. Its README has the command |
 | `docs/` | the manual, and `figures.py`, which builds its pictures from the firmware's own screenshots |
-| `docs/UNITY.md` | the Unity manual: the package and the showcase, with its own figures (`docs/img/unity-*.png`, built by `docs/unity_figures.py` from the song file and the recorded takes in `out/unity-video/`) |
+| `docs/UNITY.md` | the Unity manual: the package and the showcase, with its own figures (`docs/img/unity-*.png`, built by `docs/unity_figures.py` from the song file and the recorded takes in `out/unity-video/`; its pictures of the editor UI, `unity-inspector-*.png`, are copied by the same script from `out/inspector-shots/`: `SFXFORGE_FIGURES=inspectors python docs/unity_figures.py` after the inspectors' tests ran) |
 | `docs/video/make_videos.py` | makes the two videos (a feature tour, and building the demo song piece by piece) from scripts of key presses: the firmware renders its own display and sound, ffmpeg joins them. Results in `out/video/` |
 | `tests/emulator-link.mjs` | the device's end of the link without hands: opens the SDK's emulator in a Chrome of its own, allows it MIDI and presses its keys. With `Tests/LinkTakes.cs` and `Tests/LinkSession.cs` in the showcase it tests the link end to end |
 | `docs/video/make_link_video.py` | makes `out/video/sfx-forge-unity-link.mp4` from one recorded session: the emulator and the game side by side, with what crossed the MIDI ports |
@@ -178,22 +179,32 @@ rate / amount, wavetable position / warp). Engines: 0 IMPACT, 1 UI BLIP, 2 SCI-F
 The short version; [the Unity manual](docs/UNITY.md) is the long one.
 
 Add the package from disk: **Window > Package Manager > + > Add package from disk…** and pick
-`unity/com.catsplat.sfxforge/package.json` (Unity 2021.3 or newer; developed against Unity 6).
+`unity/com.catsplat.sfxforge/package.json` (it says Unity 2022.3 or newer; only Unity 6.3, 6000.3.8f1, was ever run).
+
+The Inspectors of a sound and of a song, and the window, are drawn as the device draws its display: the same pages
+of four values, knobs, units and soft keys.
+
+![The Inspector of a sound in Unity, page OSC](docs/img/unity-inspector-sound-osc.png)
+
+*The Inspector of a preset, page OSC. The picture is the Inspector's element tree and stylesheet rendered in a panel
+to a texture by the tests in `tests/unity-inspectors`; it is not a photograph of the Inspector, which nobody has
+opened yet. [The manual](docs/UNITY.md#the-inspectors-look-like-the-device) has the song and the window.*
 
 | | |
 |---|---|
-| **Window > SFX Forge** | choose the MIDI ports, play the device's pads, fetch their patches. EXPORT on the device arrives here and is saved as a preset asset |
-| `SfxPreset` | a patch as an asset (Create > SFX Forge > Preset): sliders, Play, Mutate, Bake WAV (stereo, with its effects), send to a pad |
+| **Window > SFX Forge** | the device's LINK page in Unity: choose the MIDI ports, CONNECT, see what the device's knobs send, play its 16 pads or fetch their patches, write a text on its top line. EXPORT on the device arrives here as a tile with the sound's waveform and is saved as a preset asset |
+| `SfxPreset` | a patch as an asset (Create > SFX Forge > Preset). Its Inspector has the device's pages OSC TONE FILTER WAVE ENV LFO FX, each with up to four knobs and the values in the device's units, the sound's waveform, and the soft keys PLAY, MUTATE, UNDO, RANDOM, BAKE WAV (stereo, with its effects), SEND to a pad |
 | `SfxPlayer` | plays a preset in the game with the device's own engine and effects, live – its Pitch / Cutoff / Timbre / Level move the sound as telemetry does on the device. No device needed |
-| `SfxSong` | a song and its 16 sounds as an asset: SEND on the device's SONG page (or "Fetch the song" in the window) creates one |
+| `SfxSong` | a song and its 16 sounds as an asset: SEND on the device's SONG page (or FETCH SONG in the window) creates one. Its Inspector shows the song: patterns, arrangement, step grid, mix, master, automation. TEMPO, SWING and a sound's LAYER, VOLUME and PAN can be changed there; everything else only shows and is made on the device |
 | `SfxMusicPlayer` | plays a song in the game with the device's own player: `intensity` brings its layers in and out, `CuePattern` changes pattern on the next bar line, `SetTrackVolume` / `SetTrackPan` / `SetTrackMute` and `SetMaster` move the mix. No device needed |
 | `SfxTelemetrySender` | a Rigidbody's speed, an Animator float or your own value → CC 10–17 to the device, and to local `SfxPlayer`s and `SfxMusicPlayer`s |
 | `SfxForgeLink` | the link in Play mode: pad and encoder events from the device |
 | `SfxEncoderBinding` | a device encoder (LINK page) → an exposed AudioMixer parameter or an event |
 
 The link is tested end to end against the SDK's emulator over a virtual MIDI cable: patches and the song from the
-device, a song and its sounds to the device, the game driving the device. Not tested: the hardware, the plugin, and
-pads and encoders coming from the device. See
+device, a song and its sounds to the device, the game driving the device. Not tested: the hardware, the plugin,
+pads and encoders coming from the device, and the window's and the Inspectors' keys against a device (their tests
+show them a model, not a link; nobody has opened the real window or Inspector). See
 [section 6 of the Unity manual](docs/UNITY.md#6-from-the-device-to-the-game). The demo's song came in as a file.
 
 **The demo** – open `unity/Demo` with Unity 6.3 and the scene `Assets/SfxDemo/SfxDemo.unity`: W/S thrust, A/D turn,

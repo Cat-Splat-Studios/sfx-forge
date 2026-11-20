@@ -6,8 +6,12 @@ The diagrams are drawn from nothing. The charts are drawn from real data:
   - the layer marks, the tempo and the arrangement are read from unity/Demo/Assets/SfxDemo/DemoSong.bytes;
   - the curves are read from the telemetry.json of the capture takes (default folder: out/unity-video), which
     the showcase's "Capture" tests record (unity/Demo/Assets/Showcase/README.md, "Recording it");
-  - the annotated still is two frames of the full-run take.
-Without the takes only the pictures that need none are written, and the script says which it left out.
+  - the annotated still is two frames of the full-run take;
+  - the pictures of the editor UI (unity-inspector-*.png) are copies of a few of the pictures the inspectors' tests
+    write to out/inspector-shots (tests/unity-inspectors/README.md has the command). They are the Inspector's element
+    tree and stylesheet rendered in a panel to a texture, not photographs of the Inspector window.
+Without the takes, or without those pictures, only what needs neither is written, and the script says which it left out.
+SFXFORGE_FIGURES=inspectors copies the editor pictures alone and leaves the charts as they are.
 
 Needs Pillow. Same look as the cheat sheet of docs/figures.py (that script draws when it is imported, so its
 font helper is repeated here instead of imported). Everything is drawn at twice the size and scaled down.
@@ -955,7 +959,40 @@ def audio_tree():
     c.save("unity-audio-tree")
 
 
-FIGURES = [routes, held, layers, intensity, cues, link, showcase_routes, seam, level_strip, copy_map, audio_tree]
+# ---- the editor UI: a few of the pictures the inspectors' tests took of it ----------------------------------------------
+# docs/img name -> the picture in out/inspector-shots (<what>-<width in pixels>.png). Written by the EditMode tests of
+# tests/unity-inspectors; each is the element tree and stylesheet the Inspector hosts, rendered in a panel to a
+# texture. Nobody photographed the Inspector window itself. The window's pictures show a model the test filled in
+# (ports named VIBE FM, patches, messages): no device was connected.
+SHOTS = os.path.join(ROOT, "out", "inspector-shots")
+INSPECTOR_SHOTS = [
+    ("unity-inspector-sound-osc", "sound-osc-640"),         # the sound inspector, page OSC (the showcase's Jump)
+    ("unity-inspector-sound-env", "sound-env-640"),         # page ENV of a held sound, with HOLD (the showcase's RollHum)
+    ("unity-inspector-sound-narrow", "sound-tone-340"),     # page TONE at 340 pixels: the soft keys wrap
+    ("unity-inspector-song", "song-640"),                   # the song inspector, page STEPS (the demo song)
+    ("unity-inspector-song-mix", "song-mix-640"),           # page MIX
+    ("unity-inspector-song-auto", "song-auto-640"),         # page AUTO, pattern F
+    ("unity-inspector-window", "window-700"),               # Window > SFX Forge, shown a filled-in model
+    ("unity-inspector-window-off", "window-off-700"),       # the same window, not connected
+]
+SHOT_MAX_BYTES = 300 * 1024
+
+
+def inspectors():
+    missing = [shot for _, shot in INSPECTOR_SHOTS if not os.path.isfile(os.path.join(SHOTS, shot + ".png"))]
+    if missing:                                         # all or none: the manual shows them side by side
+        left_out.append("the editor pictures (unity-inspector-*.png): run the tests of tests/unity-inspectors first; missing in out/inspector-shots: "
+                        + ", ".join(missing))
+        return
+    for name, shot in INSPECTOR_SHOTS:
+        im = Image.open(os.path.join(SHOTS, shot + ".png")).convert("RGB")     # as it is: not scaled, not cropped
+        path = os.path.join(OUT, name + ".png")
+        im.save(path, optimize=True)
+        assert os.path.getsize(path) <= SHOT_MAX_BYTES, "%s.png is larger than %d KB" % (name, SHOT_MAX_BYTES // 1024)
+        written.append((name + ".png", im.width, im.height, os.path.getsize(path)))
+
+
+FIGURES = [routes, held, layers, intensity, cues, link, showcase_routes, seam, level_strip, copy_map, audio_tree, inspectors]
 # SFXFORGE_FIGURES=link,copy_map draws only those (the others need the captured takes); without it, all of them
 ONLY = [n.strip() for n in os.environ.get("SFXFORGE_FIGURES", "").split(",") if n.strip()]
 unknown = sorted(set(ONLY) - {f.__name__ for f in FIGURES})
@@ -967,5 +1004,8 @@ for figure in FIGURES:
 for name, w, h, size in written:
     print("%-28s %4d x %-4d %6.1f KB%s" % (name, w, h, size / 1024.0, "   TOO LARGE" if size > MAX_BYTES else ""))
 for what in left_out:
-    print("left out, no capture found in %s: %s" % (TAKES, what))
+    if what.startswith("the editor pictures"):
+        print("left out, " + what)
+    else:
+        print("left out, no capture found in %s: %s" % (TAKES, what))
 print("%d figures written to %s" % (len(written), OUT))

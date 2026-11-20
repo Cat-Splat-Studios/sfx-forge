@@ -5,8 +5,8 @@
 
 Everything in the target except .git is written by this script, and written again from nothing on
 every run: the package (Runtime, Editor), the showcase as a sample (Samples~/Showcase), the manuals
-(Documentation~), the videos and the previews cut from them, the built Vibe (Firmware~), the front
-page, and a .meta file for everything Unity will see. Nothing is edited by hand over there: change
+(Documentation~) with their figures, the videos and the previews cut from them, the built Vibe (Firmware~),
+the front page, and a .meta file for everything Unity will see. Nothing is edited by hand over there: change
 the source here, or this script, and run it again.
 
 It builds the package in a new folder beside the target and checks it there: no e-mail address, no
@@ -15,6 +15,8 @@ when all of that passed does it replace what it owns in the target. When somethi
 missing, or a check fails, it stops with an error and the target is as it was. It never starts Unity.
 
 Needs Python 3 and ffmpeg on the PATH. The videos must exist (out/video, made by docs/video/*.py),
+the figures must be in docs/img (docs/unity_figures.py; its pictures of the editor UI are copies of what the
+tests of tests/unity-inspectors wrote to out/inspector-shots),
 the Vibe must be built (build/sfx-forge.zip, made by build.sh, which also strips its debug sections),
 and the SDK and Zig must be in .tools: the licence texts of what is compiled into the firmware and
 the native library are read from there (Documentation~/licenses).
@@ -90,6 +92,9 @@ VIDEOS = [
                "sent to the game. It is the song the showcase plays.",
          clip=(22.0, 10.0), poster=26.0),
 ]
+# The pictures of the editor UI the front page shows (docs/img, copied there by docs/unity_figures.py from what the
+# inspectors' tests rendered). The manual uses them too; they are named here so a missing one stops the run by name.
+README_FIGURES = ["unity-inspector-sound-osc.png", "unity-inspector-song.png", "unity-inspector-window.png"]
 PREVIEW_WIDTH = 640
 PREVIEW_FPS = 10
 POSTER_WIDTH = 960
@@ -234,8 +239,9 @@ def make_package_json(target):
         "author": AUTHOR,
         "license": "MIT",
         # The built-in modules the code uses: AudioSource and AudioMixer, the telemetry sender's Rigidbody,
-        # Rigidbody2D and Animator sources, and IMGUI for the editor window. Two are for the sample only:
-        # Screen Capture (the build probe's screenshot) and Image Conversion (the capture rig's PNGs).
+        # Rigidbody2D and Animator sources, UI Toolkit (UIElements) for the Inspectors and the editor window, and
+        # IMGUI, which UI Toolkit itself needs. Two are for the sample only: Screen Capture (the build probe's
+        # screenshot) and Image Conversion (the capture rig's PNGs).
         "dependencies": {
             "com.unity.modules.animation": "1.0.0",
             "com.unity.modules.audio": "1.0.0",
@@ -244,6 +250,7 @@ def make_package_json(target):
             "com.unity.modules.physics": "1.0.0",
             "com.unity.modules.physics2d": "1.0.0",
             "com.unity.modules.screencapture": "1.0.0",
+            "com.unity.modules.uielements": "1.0.0",
         },
         "samples": [{
             "displayName": SAMPLE_NAME,
@@ -367,7 +374,8 @@ def make_manuals(target):
                         ">   [LINK-PROTOCOL.md](LINK-PROTOCOL.md);\n"
                         "> - **not in the package:** the older demo scene the manual mentions (a hovercraft, `SfxDemo`, with its tests\n"
                         ">   `SfxDemoTests`), and the scripts under `docs/`, `tests/`, `core/` and `out/`: the engine's C source, the\n"
-                        ">   emulator script of the link tests, and the scripts that draw the figures and cut the videos.\n", where)
+                        ">   emulator script of the link tests, the test project of the editor UI (`tests/unity-inspectors`, with\n"
+                        ">   the pictures it writes to `out/inspector-shots`), and the scripts that draw the figures and cut the videos.\n", where)
     text = replace_once(text, "**Two videos** show the Unity side running. They are built by `docs/video/make_unity_videos.py` and written to\n"
                               "`out/video/` (not committed):\n\n"
                               "| File | What it shows |\n|---|---|\n"
@@ -380,7 +388,7 @@ def make_manuals(target):
                         "| [`sfx-forge-unity-link.mp4`](video/sfx-forge-unity-link.mp4) | the device (in the emulator) and the game, linked: the song and a patch arrive in the running game ([section 6](#6-from-the-device-to-the-game)) |\n", where)
     text = replace_once(text, "**The pictures** in this manual are built by `docs/unity_figures.py`.",
                         "**The pictures** in this manual are built by a script in the source repository (`docs/unity_figures.py`).", where)
-    text = replace_once(text, "You need Windows x64 and Unity. The package says Unity 2021.3 or newer; it is developed and tested with Unity 6.3\n(6000.3.8f1) only.",
+    text = replace_once(text, "You need Windows x64 and Unity. The package says Unity 2022.3 or newer; it is developed and tested with Unity 6.3\n(6000.3.8f1) only.",
                         "You need Windows x64 and Unity " + UNITY + ". The package is developed and tested with Unity 6.3 (" + UNITY_TESTED + ") only; its\n"
                         "manifest asks for " + UNITY + " for that reason, not because an older version is known to fail.", where)
     text = replace_once(text, "and pick `unity/com.catsplat.sfxforge/package.json` | \"SFX Forge Bridge\" appears in the list |",
@@ -425,7 +433,7 @@ def make_manuals(target):
                         "`Song/DemoSong.asset`. This is the path that is proven to work:", where)
     for test in ("`SfxDemoTests.FiringPlaysTheLaserAndSpawnsABolt` |", "`SfxDemoTests.TheMusicPlaysAndFollowsTheSpeed` |"):
         text = replace_once(text, test, test[:-2] + " (the older demo, in the source repository) |", where)
-    if OLD_PACKAGE_ID in text or "](../unity/" in text or "2021.3" in text:
+    if OLD_PACKAGE_ID in text or "](../unity/" in text or "2021.3" in text or "2022.3" in text:
         fail(where + ": a line still names the old package, an old Unity version or a path into the source repository")
     write_text(os.path.join(docs, "UNITY.md"), text)
 
@@ -464,6 +472,7 @@ def make_manuals(target):
     for name in ("UNITY.md", "MANUAL.md"):
         used.update(re.findall(r"\]\(img/([A-Za-z0-9._-]+)\)", read_text(os.path.join(docs, name))))
     used.add("showcase.png")
+    used.update(README_FIGURES)                  # the front page's pictures of the editor UI
     for name in sorted(used):
         copy_file(need(src("docs", "img", name), "a figure of the manuals"), os.path.join(docs, "img", name))
     return len(used)
@@ -658,6 +667,39 @@ device and in Unity; nobody has listened to it (see [What is tested](#what-is-te
 
 {recorded_elsewhere}
 
+## In the editor: the device's own look
+
+The Inspector of a sound, the Inspector of a song and the window **Window > SFX Forge** are drawn as the device
+draws its display: the firmware's colours, its pages of up to four values, a knob for each value, every value in the
+device's units, the sound's waveform, and rows of soft keys.
+
+![The Inspector of a sound, page OSC](Documentation~/img/unity-inspector-sound-osc.png)
+
+**A sound** (`SfxPreset`). Seven pages, OSC TONE FILTER WAVE ENV LFO FX, hold the engine and all 25 values. Drag a
+value up or down to turn it, or turn the wheel over its ring; double-click the value to type one, double-click the
+ring for the plain patch's value. PLAY, MUTATE, UNDO, RANDOM and BAKE WAV work on the asset; SEND and PLAY ON DEVICE need the
+link. The picture is the sound as the device draws it: one voice, without its effects.
+
+![The Inspector of a song, page STEPS](Documentation~/img/unity-inspector-song.png)
+
+**A song** (`SfxSong`). Tempo, steps, swing and chain; the patterns A – H; the arrangement; and four pages: STEPS
+(the step grid, with INTENSITY and a mark for the LAYER of every sound that plays in the song under it), MIX, MASTER and AUTO. It is a viewer: here
+you can change TEMPO, SWING and a sound's LAYER, VOLUME and PAN. Everything else only shows, and is made on the
+device.
+
+![The SFX Forge window, shown with a filled-in model](Documentation~/img/unity-inspector-window.png)
+
+**The window.** The link's state and the two MIDI ports, what the device's knobs send, its 16 pads as tiles that
+play or fetch, a text for the device's top line, the patches that arrived as tiles with their waveform, the last
+messages, and CONNECT, REFRESH PORTS, FETCH SONG.
+
+**These three pictures are not photographs of the Unity editor.** They are the same element tree and stylesheet
+the Inspector hosts, rendered in a panel to a texture by the editor UI's tests (88 EditMode tests, in the source
+repository). Nobody has opened the real Inspector or the real window yet. The window's picture shows a model the
+test filled in: its ports, patches and messages are the test's, and no device was connected. Also not tried: the
+menus (ENGINE, TABLE, the pad, the MIDI ports), typing into a value, any key (the arrow keys on a tile, ENTER in
+the window's text field), and anything sent to a device from these panels. [The manual has more pictures, and what each control does](Documentation~/UNITY.md#the-inspectors-look-like-the-device).
+
 ## From the device to the game in five steps
 
 ![What flows between the device and Unity](Documentation~/img/unity-link.png)
@@ -670,11 +712,11 @@ the browser. Hit a pad, turn the knobs, press **F2 MUTATE** for variations; writ
 
 **2. Connect it over MIDI.** Unity talks to the device over two MIDI ports, one each way. Without the hardware, the
 device is the emulator or the plugin, and the two ports are a virtual MIDI cable (for example loopMIDI). In Unity:
-**Window > SFX Forge**, choose **From device** and **To device**, press **Connect**.
+**Window > SFX Forge**, click the **FROM DEVICE** and **TO DEVICE** tiles to choose the ports, press **CONNECT**.
 
 **3. EXPORT a sound, SEND the song.** On a sound page, **F5 EXPORT** sends the selected sound: one patch. On the SONG
 page, **F5 SEND** sends everything: the 16 patches, then the song with its arrangement, layers, mix and automation
-in 39 pieces (55 messages in all). Unity can also ask: **Fetch the song** in the window, or from code:
+in 39 pieces (55 messages in all). Unity can also ask: **FETCH SONG** in the window, or from code:
 
 ```csharp
 SfxLink.Shared.PatchReceived += (slot, patch) => Debug.Log($"pad {{slot + 1}}: {{patch.engine}}");
@@ -689,8 +731,9 @@ built game, put an `SfxForgeLink` component in the scene: it opens the ports (in
 `inputPort` and `outputPort`) and polls every frame.
 
 **4. It arrives in Unity as an asset.** The window saves a patch as an `SfxPreset` (into `Assets/SfxForge`, named like
-`Pad03_SciFiFm`) and a song as an `SfxSong` named `Song`. A preset's Inspector has a slider for every value, **Play**,
-**Mutate** and **Bake WAV**. A sound can also be written in code, as an engine and up to 25 numbers:
+`Pad03_SciFiFm`; with SAVE AS THEY ARRIVE on, as it is at first, otherwise SAVE on its tile) and a song as an `SfxSong` named `Song`. A preset's Inspector has the device's pages with a knob for
+every value, and **PLAY**, **MUTATE** and **BAKE WAV**. A sound can also be written in code, as an engine and up to 25
+numbers:
 
 ```csharp
 SfxPatch coin = SfxPatch.Create(SfxEngine.UiBlip, 86, 64, 0, 26, 60, 0, 127, 0, 62, 0);
@@ -809,6 +852,11 @@ Tested, on one machine (Windows 11, Unity {unity_tested}), in the repository thi
   from the device to Unity, a song and its sounds from Unity to the device, the game's intensity driving the device,
   SEND and EXPORT pressed on the device arriving in a running game.
 - The code in the manual was compiled against the package.
+- The editor UI: 88 EditMode tests in a project of their own build the two Inspectors and the window as elements,
+  call what their knobs and keys call, send them mouse and wheel events, check the asset and Undo afterwards, and
+  compare the value texts with 46 values read off the device's own pictures and with a table of the firmware's
+  arithmetic in 32-bit floats. They also render the pictures of the editor UI on this page and
+  in the manual; those are not photographs of the editor.
 
 Tested on this package as generated, on the same machine, with the editor run headless:
 
@@ -824,7 +872,15 @@ Tested on this package as generated, on the same machine, with the editor run he
   With the Test Framework (1.6.0) added: 20 Play mode tests passed, none failed, and 14 were skipped, which are the
   capture and link takes that only run when asked for by name. The Windows build made from there passed its probe:
   native library found, 7 bars of the song, 14 of 14 baked clips, not silent; the output peak was 0.55 of full scale
-  in one build and 0.62 in a second one, made after the plugin's import settings were written down.
+  in one build and 0.62 in a second one, made after the plugin's import settings were written down. With the new
+  editor UI in the package the sample's files were copied over the imported ones and these were run again: it
+  compiles, all 32 checks pass, 20 Play mode tests pass and 14 are skipped, the Windows build passes its probe
+  (peak 0.58) and holds no `CatSplat.SfxForge.Editor.dll`. The import call, the project without the Test
+  Framework, the state as imported and the rebuilt scene were not repeated.
+- **The editor UI.** The source repository's test project of the editor UI was copied and pointed at this package
+  by a `file:` line under the id `{package_id}`: 88 of 88 EditMode tests passed, the stylesheet was found (it is
+  looked up by its GUID, not by a path), and the 51 pictures the tests rendered are byte for byte the ones rendered
+  from the source. That is still a test panel: the Inspector and the window themselves were not opened.
 
 Not tested:
 
@@ -832,13 +888,18 @@ Not tested:
   and RMS of recorded takes, the build's probe, tests that read the output buffer. They say that sound comes out and
   does not clip. They do not say that it sounds good or is balanced.
 - Hardware, and the VIBE FM plugin. The link was only run against the emulator. Pads and encoders coming from the
-  device (`onPad`, `onEncoder`, `SfxEncoderBinding`), `SendPatch`, and the buttons of the SFX Forge window were not
-  tried against a device.
+  device (`onPad`, `onEncoder`, `SfxEncoderBinding`), `SendPatch`, and the keys of the SFX Forge window and of the
+  two Inspectors (SEND, PLAY ON DEVICE, the pads, FETCH SONG) were not tried against a device.
+- **The Inspectors and the window in the editor itself.** Nobody has opened them: their tests host the same
+  elements in a test panel. Their menus were never opened, and nobody typed into a value. No keys: the arrow keys on a tile, ENTER in the window's text field and the double-click that opens a value's field were never sent; what they call was called directly.
 - Any Unity version other than {unity_tested}, any platform other than Windows x64, any render pipeline other than
   the built-in one. A gamepad.
 - The Package Manager's window itself: nobody clicked **Add package from disk**, **Import** or the menu items; the
   calls behind them were run from the command line. Installing from a git URL (there is no published repository
   yet). A project made from a template that has another render pipeline or the Input System alone.
+- A project without Unity's built-in modules. Every project the package ran in lists all of them in its own
+  manifest, so the list of modules in this package's `package.json` was never what brought one in: nothing shows
+  that it is enough.
 - The 14 capture and link takes of the sample outside the source repository. They need that repository's scripts
   and the emulator.
 
@@ -885,8 +946,20 @@ and the Unity code live there) by `tools/make_unity_package.py`; nothing in it i
 - **Runtime** (`CatSplat.SfxForge`): `SfxPatch`, `SfxPreset`, `SfxSong`, `SfxPlayer`, `SfxMusicPlayer`, `SfxNative`
   with the native library for Windows x64, `SfxWav`, and the link: `SfxLink`, `SfxProtocol`, `SfxForgeLink`,
   `SfxTelemetrySender`, `SfxEncoderBinding`.
-- **Editor** (`CatSplat.SfxForge.Editor`): the window **Window > SFX Forge**, the Inspectors of presets and songs,
-  `SfxForgeEditorLink`.
+- **Editor** (`CatSplat.SfxForge.Editor`): the Inspectors of presets and songs and the window **Window > SFX
+  Forge**, built with UI Toolkit to look like the device's display, and `SfxForgeEditorLink`.
+  - The sound inspector (`SfxPresetPanel`): the pages OSC, TONE, FILTER, WAVE, ENV, LFO and FX with the engine and
+    all 25 values as knobs, each value in the device's units; the sound's waveform as the device draws it; HOLD for
+    held sounds; the keys PLAY, MUTATE, UNDO, RANDOM, BAKE WAV, SEND, HEAR CHANGES, PLAY ON DEVICE, SEND CHANGES.
+  - The song inspector (`SfxSongPanel`): tempo, steps, swing, chain, the patterns A – H, the arrangement, and the
+    pages STEPS, MIX, MASTER and AUTO. It is a viewer: TEMPO, SWING and a sound's LAYER, VOLUME and PAN can be
+    changed in it, nothing else.
+  - The window (`SfxForgeView` over an `SfxForgeModel`): the link's state, the device's knobs, 16 pads that play
+    or fetch, a text for the device, the patches that arrived with their waveform, the last messages.
+  - The kit they are built from, in `Editor/UI` (`Knob`, `ValueTile`, `WaveformView`, `PadGrid`, `SoftKeyRow`,
+    `SfxUnits`, `SfxForge.uss`), with a README of its own.
+  - `SfxSong` has read-only accessors for what the song inspector shows: steps, notes, velocities, lengths, the
+    mix, the master effects, the automation lanes.
 - **Sample** "{sample}": a one-level game whose every sound is SFX FORGE, with its own song, editor checks, Play
   mode tests, a Windows build command and a self-check in the built game.
 - **Documentation~**: the Unity manual, the device's manual with the cheat sheet, the link's protocol, five videos.
@@ -903,6 +976,11 @@ version are new; namespaces, assembly names and asset GUIDs are unchanged.
   plugin.
 - Nobody has listened to the audio. Levels and "sound comes out" are measured (peaks, RMS, the build's probe).
 - If a song transfer breaks off and a different song follows within two seconds, pieces of the two can be mixed.
+- The Inspectors and the window were tested as elements in a test panel (88 EditMode tests in the source
+  repository), and the pictures of them in these pages were rendered there. Nobody has opened them in the editor
+  itself; their menus, typing into a value, and their keys against a device were not tried. No keys: the arrow
+  keys on a tile, ENTER in the window's text field and the double-click that opens a value's field were never
+  sent; what they call was called directly.
 - Tried on the generated package, headless: added to an empty project from disk, the sample imported with the
   Package Manager's import call, with and without the Test Framework, its checks, tests, Windows build and the
   build's probe (the README, "What is tested", has the numbers). Not tried: the Package Manager's buttons clicked
