@@ -14,6 +14,7 @@ font helper is repeated here instead of imported). Everything is drawn at twice 
 """
 import json
 import os
+import re
 import sys
 from PIL import Image, ImageDraw, ImageFont
 
@@ -33,12 +34,17 @@ RED = "#FF5A36"
 S = 2                     # drawn at twice the size
 MAX_BYTES = 400 * 1024
 
-# the level (Scripts/Core/Sections.cs and Scripts/Audio/SectionCue.cs); checked against the takes when they are there
-SECTIONS = [("SoftStart", "SOFT START", 0, 90, "A", 0.15), ("RollingSines", "ROLLING SINES", 90, 220, "B", 0.25),
-            ("FullCycle", "FULL CYCLE", 220, 340, "C", 0.40), ("WooferSteps", "WOOFER STEPS", 340, 460, "D", 0.40),
-            ("StaticField", "STATIC FIELD", 460, 600, "E", 0.20), ("SplitSignal", "SPLIT SIGNAL", 600, 800, "C", 0.45),
-            ("Overdrive", "OVERDRIVE", 800, 960, "D", 0.70), ("TheResonator", "THE RESONATOR", 960, 1000, None, 0.0)]
+# the level (Scripts/Core/Sections.cs and the table of SectionCues in Scripts/Audio/MusicDirector.cs); checked against the
+# takes when they are there. The fifth value is the pattern the section holds: a letter, SONG_ORDER (none: the song plays in
+# its own order, SectionCue.SongOrder) or KEEP (whatever is held stays held, SectionCue.KeepPattern). The sixth is the floor:
+# the intensity when the player stands still.
+SONG_ORDER, KEEP = "song order", "keeps"
+SECTIONS = [("SoftStart", "SOFT START", 0, 90, SONG_ORDER, 0.42), ("RollingSines", "ROLLING SINES", 90, 220, SONG_ORDER, 0.45),
+            ("FullCycle", "FULL CYCLE", 220, 340, SONG_ORDER, 0.50), ("WooferSteps", "WOOFER STEPS", 340, 460, SONG_ORDER, 0.50),
+            ("StaticField", "STATIC FIELD", 460, 600, "E", 0.50), ("SplitSignal", "SPLIT SIGNAL", 600, 800, SONG_ORDER, 0.55),
+            ("Overdrive", "OVERDRIVE", 800, 960, SONG_ORDER, 0.60), ("TheResonator", "THE RESONATOR", 960, 1000, KEEP, 0.42)]
 TOP_SPEED, CRUISE_SPEED = 22.0, 10.0          # Scripts/Core/DesignTargets.cs
+RUN01 = CRUISE_SPEED / TOP_SPEED              # the player's Speed01 at a run
 # the song's sounds by index (Scripts/Audio/MusicKit.cs)
 KIT = ["Timpani", "Snare", "Kick", "Cowbell", "Pizzicato", "Brass", "FM bass", "FM keys", "Harp", "Celesta", "Organ", "Sweep", "Hi-hat", "Bells",
        "Choir", "Strings"]
@@ -171,6 +177,14 @@ def read_song():
     return {"bpm": song[2] << 7 | song[3], "steps": song[1], "chain": song[6], "layers": layers, "bytes": len(song)}
 
 
+def read_director():
+    """The MusicDirector's numbers the pictures print, read from its source (the serialized defaults; the scene is built from them)."""
+    path = os.path.join(ROOT, "unity", "Demo", "Assets", "Showcase", "Scripts", "Audio", "MusicDirector.cs")
+    src = open(path, encoding="utf-8").read()
+    return {name: float(re.search(r"\bfloat %s = ([0-9.]+)f;" % name, src).group(1))
+            for name in ("riseSeconds", "fallSeconds", "titleIntensity", "musicVolume", "hurtVolume", "hurtDipSeconds", "checkpointIntensity")}
+
+
 def read_take(name):
     path = os.path.join(TAKES, name, "telemetry.json")
     if not os.path.isfile(path):
@@ -180,12 +194,14 @@ def read_take(name):
 
 
 song = read_song()
+director = read_director()
 full_run, held_take, adaptive_take, hurt_take = read_take("full-run"), read_take("held-sounds"), read_take("adaptive-music"), read_take("hurt-and-goal")
 ARRANGEMENT = "ABABCDCDEEABCDCF"                       # the demo song's 16 bars
 if full_run:                                           # the tables above must be what the game recorded
     assert "".join("ABCDEFGH"[p] for p in full_run["song"]["arrangement"]) == ARRANGEMENT, "the arrangement changed"
-    for (ident, _, x0, x1, letter, floor), s in zip(SECTIONS, full_run["sections"]):
-        assert (ident, x0, x1, letter) == (s["id"], s["startX"], s["endX"], s["letter"]) and abs(floor - s["intensityFloor"]) < 1e-6, "a section changed: " + ident
+    for (ident, _, x0, x1, hold, floor), s in zip(SECTIONS, full_run["sections"]):
+        recorded_hold = {-2: SONG_ORDER, -1: KEEP}.get(s["pattern"], s["letter"])
+        assert (ident, x0, x1, hold) == (s["id"], s["startX"], s["endX"], recorded_hold) and abs(floor - s["intensityFloor"]) < 1e-6, "a section changed: " + ident
     for i, mark in enumerate(song["layers"]):
         assert abs(mark - full_run["song"]["instruments"][i]["layer"]) < 0.001, "a layer mark changed"
 
@@ -310,55 +326,65 @@ def layers():
     marks = song["layers"]
     used = [2] + sorted((i for i in range(16) if marks[i] > 0), key=lambda i: (marks[i], KIT[i] != "Strings"))      # the kick, then every sound with a mark
     family = {"Kick": RED, "Snare": RED, "Hi-hat": "#7BE07B", "FM bass": LIVE, "FM keys": LIVE}
-    x0, x1, y0, row = 190, 1300, 150, 40
-    H = y0 + len(used) * row + 150
-    c = Canvas(1400, H, "LAYERS AGAINST SPEED", "the demo song's LAYER marks, and where the showcase's speed puts the intensity")
+    floors = {}
+    for _, name, _, _, _, floor in SECTIONS:
+        floors.setdefault(floor, []).append(name.title())
+    x0, x1, y0, row, rrow = 190, 1300, 84, 40, 36
+    bottom = y0 + len(used) * row
+    ry0 = bottom + 78
+    H = ry0 + len(floors) * rrow + 66
+    c = Canvas(1400, H, "LAYERS AGAINST SPEED", "the demo song's LAYER marks, and where the showcase's sections and speed put the intensity")
 
     def X(v):
         return x0 + (x1 - x0) * v
 
-    bottom = y0 + len(used) * row
-    floors = {}
-    for _, name, _, _, _, floor in SECTIONS:
-        if floor > 0:
-            floors.setdefault(floor, []).append(name.title())
+    def up_to(v):
+        """The band at intensity v, named by the last sounds to have joined."""
+        top = max(m for m in marks if m <= v + 1e-9)
+        return " and ".join(KIT[i] if KIT[i].startswith("FM") else KIT[i].lower() for i in used if marks[i] == top)
+
     for i, idx in enumerate(used):
         y = y0 + i * row
-        name, mark = KIT[idx], marks[idx]
-        c.text(x0 - 16, y + 17, name.upper(), 16, TEXT, True, "rm")
+        c.text(x0 - 16, y + 17, KIT[idx].upper(), 16, TEXT, True, "rm")
         c.box(x0, y + 4, x1, y + 30, fill="#17120F", outline=None, r=6)
-    for n, (floor, names) in enumerate(sorted(floors.items())):          # the sections' floors
-        ytop = 64 + (n % 3) * 22
-        c.dash(X(floor), ytop + 20, X(floor), bottom + 6, EMBER, 1.5)
-        label = "%.2f  %s" % (floor, ", ".join(names))
-        anchor = "la" if n % 3 != 2 or floor < 0.6 else "la"
-        c.text(X(floor) + 6, ytop + 10, label, 13, EMBER, False, anchor[0] + "m")
-        c.line([(X(floor), ytop + 10), (X(floor), ytop + 20)], EMBER, 1.5)
-    cruise = CRUISE_SPEED / TOP_SPEED
-    c.line([(X(cruise), y0 - 2), (X(cruise), bottom + 2)], TEXT, 2)      # behind the bars, like the floors
+    for i, idx in enumerate(used):                                       # each mark, down to the sections' rows
+        if marks[idx] > 0:
+            c.dash(X(marks[idx]), y0 + i * row + 17, X(marks[idx]), ry0 + len(floors) * rrow - 6, "#54443A", 1, 3, 4)
     for i, idx in enumerate(used):
         y = y0 + i * row
         name, mark = KIT[idx], marks[idx]
         c.box(X(mark), y + 4, x1, y + 30, fill=family.get(name, MUSIC), outline=None, r=6)
         c.text(X(mark) + 10, y + 17, "from %.2f" % mark if mark > 0 else "always", 14, INK, True, "lm")
-    c.line([(X(cruise), bottom + 2), (X(cruise), bottom + 40)], TEXT, 2)
-    c.text(X(cruise) + 8, bottom + 44, "running: 10 m/s = %.2f" % cruise, 14, TEXT, True, "lm")
-    c.line([(x0, bottom + 12), (x1, bottom + 12)], LINE, 1)             # two scales
+    c.line([(x0, bottom + 12), (x1, bottom + 12)], LINE, 1)
     for k in range(0, 11):
         v = k / 10
         c.line([(X(v), bottom + 12), (X(v), bottom + 18)], DIM, 1)
         if k % 2 == 0:
+            c.box(X(v) - 16, bottom + 21, X(v) + 16, bottom + 38, fill=BG, outline=None, r=0)
             c.text(X(v), bottom + 22, "%.1f" % v, 13, DIM, False, "ma")
     c.text(x0 - 16, bottom + 30, "intensity", 13, DIM, False, "rm")
-    c.line([(x0, bottom + 66), (x1, bottom + 66)], LINE, 1)
-    for speed in range(0, 23, 2):
-        v = speed / TOP_SPEED
-        c.line([(X(v), bottom + 66), (X(v), bottom + 72)], DIM, 1)
-        c.text(X(v), bottom + 76, str(speed), 13, DIM, False, "ma")
-    c.text(x0 - 16, bottom + 84, "speed, m/s", 13, DIM, False, "rm")
-    c.text(24, H - 46, "A sound plays while the intensity is at or above its mark. The showcase sets intensity = speed / top speed (22 m/s), never below the floor of the",
+    # a row for each floor: where the intensity is with the player standing still, at a run and at top speed
+    c.text(24, ry0 - 22, "IN EACH SECTION", 12, DIM, True)
+    for n, (floor, names) in enumerate(sorted(floors.items())):
+        y = ry0 + n * rrow
+        run = floor + (1 - floor) * RUN01                                # Mathf.Lerp(floor, 1, Speed01)
+        c.text(24, y + 22, ", ".join(names), 13, TEXT, False, "lm")
+        c.line([(X(floor), y + 22), (x1, y + 22)], EMBER, 3)
+        c.ellipse(X(floor) - 6, y + 16, X(floor) + 6, y + 28, fill=EMBER)
+        c.line([(X(run), y + 12), (X(run), y + 32)], TEXT, 3)
+        c.line([(x1, y + 14), (x1, y + 30)], EMBER, 3)
+        label = "standing still: %.2f, up to the %s" % (floor, up_to(floor))
+        c.box(X(floor) - 16 - c.tw(label, 13), y + 13, X(floor) - 10, y + 31, fill=BG, outline=None, r=0)
+        c.text(X(floor) - 14, y + 22, label, 13, EMBER, False, "rm")
+        label = "at a run: %.2f, up to the %s" % (run, up_to(run))
+        c.box(X(run) + 6, y + 2, X(run) + 12 + c.tw(label, 13, True), y + 18, fill=BG, outline=None, r=0)
+        c.text(X(run) + 8, y + 10, label, 13, TEXT, True, "lm")
+        if n == 0:
+            c.text(x1 + 10, y + 22, "top speed: 1", 13, EMBER, False, "lm")
+    c.text(24, H - 46, "A sound plays while the intensity is at or above its mark. The showcase sets intensity = Lerp(floor, 1, Speed01): the floor of the section the player is in when",
            14, DIM)
-    c.text(24, H - 26, "section the player is in (dashed). The marks are read from DemoSong.bytes. The kit's other seven sounds have mark 0 and no notes in the song.", 14, DIM)
+    c.text(24, H - 26, "standing still, 1 at top speed (%.0f m/s); a run is %.0f m/s, Speed01 %.2f. The marks are read from DemoSong.bytes. The kit's other seven sounds have mark 0 and no notes in the song."
+           % (TOP_SPEED, CRUISE_SPEED, RUN01), 14, DIM)
     c.text(x1 - 300, 14, "here a colour is a kind of instrument, not a route:", 12, DIM)
     c.legend(x1 - 300, 34, [(RED, "drums"), ("#7BE07B", "hi-hat"), (LIVE, "FM"), (MUSIC, "wavetable")], 13)
     c.save("unity-layers")
@@ -399,43 +425,61 @@ def intensity():
             c.text(X(f0 + k * 30), y1 + 9, "%d s" % k, 13, DIM, False, "ma")
         return X, Y
 
+    def floor_of(frame, take):
+        return next(x["intensityFloor"] for x in take["sections"] if x["id"] == frame["section"])
+
     # walking, running, a Wind-Up Burst, standing: up fast, down slowly
     frames = adaptive_take["frames"]
-    X, Y = panel(adaptive_take, 0, len(frames) - 1, 70, 1180, 100, 400, "Standing, walking, running, a Wind-Up Burst, standing again  (take adaptive-music)", 0.15, True)
-    c.text(X(8), Y(0.15) + 8, "the section's floor, 0.15", 13, EMBER)
+    floor = floor_of(frames[0], adaptive_take)
+    assert all(f["section"] == frames[0]["section"] for f in frames), "the take adaptive-music no longer stays in one section"
+    X, Y = panel(adaptive_take, 0, len(frames) - 1, 70, 1180, 100, 400, "Standing, walking, running, a Wind-Up Burst, standing again  (take adaptive-music, in %s)"
+                 % frames[0]["sectionName"].title(), floor, True)
+    c.text(X(8), Y(floor) + 8, "the section's floor, %.2f: the intensity standing still" % floor, 13, EMBER)
     burst = next(e["f"] for e in adaptive_take["events"] if e["name"] == "BurstReleased")
+    # the run before the burst: the last frame of its steady top speed, where the intensity has arrived
+    fastest = max(f["speed01"] for f in frames[:burst])
+    steady = [f for f in frames[:burst] if f["speed01"] >= fastest - 0.005]
+    run = steady[-1]
+    assert abs(run["music"]["intensity"] - (floor + (1 - floor) * run["speed01"])) < 0.01, "the intensity at a run is no longer Lerp(floor, 1, Speed01)"
+    c.text(X(steady[0]["f"]) - 4, Y(run["music"]["intensity"]) - 44, "running: Speed01 %.2f" % run["speed01"], 13, TEXT, True)
+    c.text(X(steady[0]["f"]) - 4, Y(run["music"]["intensity"]) - 26, "intensity Lerp(%.2f, 1, %.2f) = %.2f" % (floor, run["speed01"], run["music"]["intensity"]), 13, EMBER, True)
     top = max(frames[burst:], key=lambda f: f["music"]["intensity"])
-    c.text(X(burst) - 10, Y(0.62), "up: 0.6 s", 14, EMBER, True, "ra")
+    c.text(X(burst) - 10, Y(0.62), "up: %g s" % director["riseSeconds"], 14, EMBER, True, "ra")
     c.text(X(burst) - 10, Y(0.62) + 19, "for the whole range", 13, DIM, False, "ra")
     stop = next(f["f"] for f in frames[top["f"]:] if f["speed01"] <= 0.001)
-    c.text(X(stop) + 34, Y(0.36), "down: 2.5 s", 14, EMBER, True)
-    c.text(X(stop) + 34, Y(0.36) + 19, "for the whole range", 13, DIM)
+    c.text(X(stop) + 34, Y(0.70), "down: %g s" % director["fallSeconds"], 14, EMBER, True)
+    c.text(X(stop) + 34, Y(0.70) + 19, "for the whole range", 13, DIM)
+    assert top["music"]["intensity"] >= max(song["layers"]), "the burst of the take adaptive-music no longer brings in the whole band"
     c.text(X(top["f"]) + 6, Y(top["music"]["intensity"]) - 20, "%.2f: the whole band" % top["music"]["intensity"], 13, TEXT, True)
 
     # a hit
     hit = next(e["f"] for e in hurt_take["events"] if e["name"] == "Hurt")
     f0, f1 = hit - 105, hit + 120
     at_hit = hurt_take["frames"][hit]
-    floor = next(s["intensityFloor"] for s in hurt_take["sections"] if s["id"] == at_hit["section"])
+    floor = floor_of(at_hit, hurt_take)
     X, Y = panel(hurt_take, f0, f1, 70, 1180, 478, 650, "A hit  (take hurt-and-goal, in %s)" % at_hit["sectionName"].title(), floor, False)
     c.line([(X(hit), 470), (X(hit), 760)], RED, 2)
     c.text(X(hit) + 10, 486, "Hurt", 15, RED, True)
+    assert at_hit["music"]["intensity"] < min(m for m in song["layers"] if m > 0), "a hit no longer takes the intensity under every mark"
     c.text(X(hit) + 10, 506, "intensity to 0 at once: only the kick is left", 13, TEXT)
     c.text(X(f1) - 8, Y(floor) + 6, "the section's floor, %.2f" % floor, 13, EMBER, False, "ra")
     vy0, vy1 = 690, 760
     c.box(70, vy0, 1180, vy1, fill="#120E0C", outline=None, r=0)
     hframes = hurt_take["frames"][f0:f1 + 1]
+    full = director["musicVolume"]
+    assert abs(hframes[0]["music"]["volume"] - full) < 1e-4, "the take was not recorded at MusicDirector's musicVolume"
 
     def V(v):
-        return vy1 - (vy1 - vy0) * v / 0.7
+        return vy1 - (vy1 - vy0) * v / (full * 7 / 6)
 
-    for v in (0, 0.3, 0.6):
+    for v in (0, full / 2, full):
         c.line([(70, V(v)), (1180, V(v))], LINE, 1)
         c.text(62, V(v), "%g" % v, 13, DIM, False, "rm")
     c.line([(X(f["f"]), V(f["music"]["volume"])) for f in hframes], MUSIC, 3)
     low = min(hframes, key=lambda f: f["music"]["volume"])
-    back = next(f["f"] for f in hurt_take["frames"][low["f"]:] if f["music"]["volume"] >= 0.6 - 1e-4)
-    c.text(X(hit) + 10, V(0.08), "volume %.1f → %.1f in 50 ms, back in %.1f s" % (0.6, low["music"]["volume"], (back - low["f"]) / 30), 13, TEXT)
+    back = next(f["f"] for f in hurt_take["frames"][low["f"]:] if f["music"]["volume"] >= full - 1e-4)
+    c.text(X(hit) + 10, V(full * 0.14), "volume %.2f → %.2f in %.0f ms, back in %.1f s" % (full, low["music"]["volume"], director["hurtDipSeconds"] * 1000, (back - low["f"]) / 30),
+           13, TEXT)
     c.text(1188, (vy0 + vy1) / 2, "music volume", 13, MUSIC, False, "lm")
     c.legend(820, 22, [(EMBER, "music intensity"), (TEXT, "the player's Speed01")], 13)
     c.text(1188, 76, "joins at its mark:", 13, DIM)
@@ -505,22 +549,43 @@ def cues():
 
     if recorded:
         y = 606
-        label(y - 8, "The showcase's run", ["as recorded (take full-run):", "%d bars, one section each" % len(recorded)])
+        letters = "".join(letter for letter, _, _ in recorded)
+
+        def bar_of(name, section=None):                                  # the bar an event fell in
+            e = next(e for e in full_run["events"] if e["name"] == name and (section is None or full_run["frames"][e["f"]]["section"] == section))
+            return full_run["frames"][e["f"]]["music"]["bar"]
+
+        # a cue takes the next bar line, and the hold's last cue was made at the start of the bar in which the hold ended
+        holds = [(bar_of("SectionEntered", "StaticField") + 1, bar_of("SectionEntered", "SplitSignal") + 1, "E", "E held: Static Field"),
+                 (bar_of("FinalLaunch") + 1, len(recorded) - 1, "F", "F held: FinalLaunch")]
+        at = 0                                                           # the place in the arrangement
+        for i, letter in enumerate(letters):                             # the picture says: the song's own order, but for two holds
+            hold = next((h for h in holds if h[0] <= i <= h[1]), None)
+            if hold:
+                assert letter == hold[2], "bar %d of the full run is not the held %s" % (i, hold[2])
+                if i == hold[1]:                                         # the arrangement walks on from the last held bar
+                    at = max(k for k in range(16) if ARRANGEMENT[k] == hold[2]) + 1
+            else:
+                assert letter == ARRANGEMENT[at % 16], "bar %d of the full run is not in the song's order" % i
+                at += 1
+        label(y - 8, "The showcase's run", ["as recorded (take full-run):", "%d bars in the song's own order," % len(recorded), "but for two holds"])
         cw = (16 * w) / len(recorded)
         last = None
         for i, (letter, section, phase) in enumerate(recorded):
-            cell(x0 + i * cw, y, letter, cw, 34, size=13)
+            held = any(a <= i <= b for a, b, _, _ in holds)
+            cell(x0 + i * cw, y, letter, cw, 34, size=13, dim=not held)
             name = "title" if phase == "Title" else section.title()
             if name != last:
-                c.line([(x0 + i * cw, y - 8), (x0 + i * cw, y + 40)], DIM, 1)
-                short = {"The Resonator": "", "Soft Start": "Soft Start", "title": "title"}.get(name, name)
-                c.text(x0 + i * cw + 4, y + 44 if name != "title" else y - 22, short, 12, DIM)
+                c.line([(x0 + i * cw, y - 8 if name != "title" else y - 24), (x0 + i * cw, y + 40)], DIM, 1)
+                short = {"The Resonator": ""}.get(name, name)
+                c.text(x0 + i * cw + 4, y + 44 if name != "title" else y - 24, short, 12, DIM)
                 last = name
-        final = next((e["f"] for e in full_run["events"] if e["name"] == "FinalLaunch"), None)
-        if final is not None:
-            bar = full_run["frames"][final]["music"]["bar"] + 1
-            c.text(x0 + bar * cw + 4, y - 22, "FinalLaunch: F", 12, PATTERN_COLOUR["F"], True)
-        c.text(x0 + 16 * w + 12, y + 17, "", 12, DIM)
+        for a, b, letter, text in holds:
+            colour = PATTERN_COLOUR[letter]
+            xa, xb = x0 + a * cw + 2, x0 + (b + 1) * cw - 2
+            c.line([(xa, y - 5), (xa, y - 10), (xb, y - 10), (xb, y - 5)], colour, 2)
+            right = xb > x0 + 16 * w - 60
+            c.text(xb if right else xa, y - 28, text, 12, colour, True, "ra" if right else "la")
     c.text(24, H - 28, "A bar is 2 seconds (120 BPM, 16 steps). The numbers under the bars are the arrangement's bars. Rows 2 to 4 follow the engine's rules (core/sfx_song.h).",
            13, DIM)
     c.save("unity-cues")
@@ -573,7 +638,7 @@ def link():
 # ---- 7. the showcase, with the route of everything you hear -------------------------------------------------------------
 # The two frames of the full run the marks were placed on by hand: the first frame at which the player has reached this x,
 # rolling on the ground. A new recording may differ by a frame; if it differs by more, the marks point at nothing.
-ROUTE_FRAMES = [(240.2, 17.8, "FULL CYCLE"), (342.2, 13.1, "WOOFER STEPS")]          # x in metres, speed in m/s, the section
+ROUTE_FRAMES = [(240.1, 17.8, "FULL CYCLE"), (342.2, 13.1, "WOOFER STEPS")]          # x in metres, speed in m/s, the section
 
 
 def showcase_routes():
@@ -677,48 +742,69 @@ def seam():
 
 # ---- 9. the level, its sections and their patterns ---------------------------------------------------------------------
 def level_strip():
-    H = 700 if full_run else 330
-    c = Canvas(1400, H, "THE LEVEL AND ITS MUSIC", "1000 m, eight sections: each cues a pattern and sets a floor under the intensity")
+    H = 746 if full_run else 350
+    c = Canvas(1400, H, "THE LEVEL AND ITS MUSIC", "1000 m, eight sections: each sets a floor under the intensity; the song plays in its own order but for two holds")
     x0, x1 = 60, 1340
 
     def X(m):
         return x0 + (x1 - x0) * m / 1000.0
 
     y0, y1 = 100, 250
-    for n, (_, name, a, b, letter, floor) in enumerate(SECTIONS):
-        colour = PATTERN_COLOUR.get(letter, DIM)
+    for n, (_, name, a, b, hold, floor) in enumerate(SECTIONS):
+        colour = PATTERN_COLOUR.get(hold, DIM)
         c.box(X(a) + 2, y0, X(b) - 2, y1, fill=PANEL, outline=colour, r=8)
         c.rect(X(a) + 3, y0 + 1, X(b) - 3, y0 + 6, colour)
         mid = (X(a) + X(b)) / 2
         narrow = X(b) - X(a) < 90
         c.text(mid if not narrow else X(b), y0 - 12, name, 12 if narrow else 13, TEXT, True, "ms" if not narrow else "rs")
-        if letter:
-            c.text(mid, y0 + 64, letter, 54, colour, True, "mm")
-            c.text(mid, y0 + 118, "floor %.2f" % floor, 14, TEXT, False, "mm")
+        if hold == SONG_ORDER:
+            c.text(mid, y0 + 64, "song order", 16, DIM, True, "mm")
+        elif hold == KEEP:
+            for k, word in enumerate(("keeps", "what is", "held")):
+                c.text(mid, y0 + 46 + k * 18, word, 12, DIM, False, "mm")
         else:
-            c.text(mid, y0 + 58, "keeps", 12, DIM, False, "mm")
-            c.text(mid, y0 + 76, "it", 12, DIM, False, "mm")
-            c.text(mid, y0 + 118, "0", 14, TEXT, False, "mm")
+            c.text(mid, y0 + 52, hold, 54, colour, True, "mm")
+            c.text(mid, y0 + 92, "held", 14, colour, True, "mm")
+        c.text(mid, y0 + 122, ("%.2f" if narrow else "floor %.2f") % floor, 14, TEXT, False, "mm")
         c.text(X(a), y1 + 8, str(a), 13, DIM, False, "ma")
     c.text(X(1000), y1 + 8, "1000 m", 13, DIM, False, "ma")
-    c.text(x0, y1 + 34, "The large letter is the pattern the section cues (and holds, by cueing it again on every bar). The Resonator keeps the pattern it arrives with.", 13, DIM)
+    c.text(x0, y1 + 34, "The floor is the music's intensity when the player stands still in the section; speed fills the rest of the way to 1. The song walks through its 16 bars by itself,", 13, DIM)
+    c.text(x0, y1 + 52, "round and round. Static Field holds pattern E (cued again on every bar). FinalLaunch, in Overdrive, holds F until the goal: The Resonator keeps what is held.", 13, DIM)
     if not full_run:
         left_out.append("the recorded curves of unity-level-strip.png (take full-run)")
         c.save("unity-level-strip")
         return
 
     frames = [f for f in full_run["frames"] if f["phase"] == "Playing"]
-    gy0, gy1 = 350, 600
+    py0, py1 = 364, 386
+    gy0, gy1 = 396, 646
 
     def Y(v):
         return gy1 - (gy1 - gy0) * v
 
-    c.text(x0, gy0 - 34, "One run, as recorded (take full-run: the test pilot, %.0f s)" % frames[-1]["runSeconds"], 15, TEXT, True)
+    c.text(x0, py0 - 32, "One run, as recorded (take full-run: the test pilot, %.0f s)" % frames[-1]["runSeconds"], 15, TEXT, True)
+    # the bars of the song, against the distance (the furthest point so far, as for the curves below)
+    runs, far = [], -1.0
+    for f in frames:
+        if f["x"] > far and f["music"]["playing"]:
+            far = f["x"]
+            x = min(1000, max(0, far))
+            key = (f["music"]["bar"], f["music"]["letter"])
+            if runs and runs[-1][0] == key:
+                runs[-1][2] = x
+            else:
+                runs.append([key, runs[-1][2] if runs else x, x])
+    for (bar, letter), a, b in runs:
+        colour = PATTERN_COLOUR[letter]
+        c.box(X(a) + 1, py0, max(X(a) + 2, X(b) - 1), py1, fill=PANEL2, outline=colour, r=3)
+        if X(b) - X(a) >= 13:
+            c.text((X(a) + X(b)) / 2, (py0 + py1) / 2, letter, 12, colour, True, "mm")
+    c.text(x0 - 8, (py0 + py1) / 2, "bar", 13, DIM, False, "rm")
     c.box(x0, gy0, x1, gy1, fill="#120E0C", outline=None, r=0)
     for v in (0, 0.25, 0.5, 0.75, 1):
         c.line([(x0, Y(v)), (x1, Y(v))], LINE, 1)
         c.text(x0 - 8, Y(v), "%g" % v, 13, DIM, False, "rm")
-    for _, _, a, b, letter, floor in SECTIONS:
+    for _, _, a, b, hold, floor in SECTIONS:
         c.line([(X(a), gy0), (X(a), gy1)], LINE, 1)
         c.dash(X(a), Y(floor), X(b), Y(floor), EMBER, 1.5)
     # against the distance: keep the furthest point so far, so a loop (where x runs back) does not scribble
@@ -736,21 +822,19 @@ def level_strip():
     for e in full_run["events"]:
         if e["name"] in ("CheckpointReached", "FinalLaunch", "GoalReached"):
             notes.append((e["name"], full_run["frames"][e["f"]]["x"]))
-    row = 0
     for name, x in notes:
         if name == "CheckpointReached":
             c.line([(X(x), gy0), (X(x), gy1 + 8)], MUSIC, 1.5)
-            c.text(X(x) + 5, gy1 + 12, "Tuning Fork: bells, lift to 0.6", 12, MUSIC)
+            c.text(X(x) + 5, gy1 + 12, "Tuning Fork: bells, lift to %g" % director["checkpointIntensity"], 12, MUSIC)
         elif name == "FinalLaunch":
-            c.line([(X(x), gy0 - 12), (X(x), gy1 + 30)], PATTERN_COLOUR["F"], 2)
-            c.text(X(x) - 6, gy1 + 34, "FinalLaunch at %.0f m: pattern F" % x, 13, PATTERN_COLOUR["F"], True, "ra")
+            c.line([(X(x), py0 - 6), (X(x), gy1 + 30)], PATTERN_COLOUR["F"], 2)
+            c.text(X(x) - 6, gy1 + 34, "FinalLaunch at %.0f m: pattern F from the next bar" % x, 13, PATTERN_COLOUR["F"], True, "ra")
         else:
-            c.line([(X(x), gy0 - 12), (X(x), gy1 + 54)], TEXT, 2)
+            c.line([(X(x), py0 - 6), (X(x), gy1 + 54)], TEXT, 2)
             c.text(X(x) - 6, gy1 + 58, "the goal at %.0f m: the song stops, the fanfare is played by hand" % x, 13, TEXT, True, "ra")
-        row += 1
     c.legend(x0, gy1 + 34, [(EMBER, "music intensity"), (TEXT, "the player's Speed01")], 13)
     c.dash(x0, gy1 + 68, x0 + 16, gy1 + 68, EMBER, 1.5, 5, 3)
-    c.text(x0 + 24, gy1 + 68, "the section's floor", 13, TEXT, False, "lm")
+    c.text(x0 + 24, gy1 + 68, "the section's floor: the intensity standing still", 13, TEXT, False, "lm")
     c.save("unity-level-strip")
 
 

@@ -7,14 +7,18 @@ namespace SfxShowcase.Audio
 {
     /// <summary>
     /// USE 3 OF 3 – ADAPTIVE MUSIC. One <see cref="SfxMusicPlayer"/> plays one <see cref="SfxSong"/>; this component
-    /// turns the game into the five things the player understands:
+    /// lets the song play and turns the game into the five things the player understands:
     ///
+    ///  • the song itself – the device's demo song, played as it was arranged: sixteen bars, verse, chorus, breakdown,
+    ///    turnaround, round and round. The game does not choose its bars; it chooses how much of the band plays them.
     ///  • <c>intensity</c> (0..1) – how full the band is. Every instrument of the song has a threshold and plays only at
-    ///    or above it. Here it follows the player's speed: fast in, slow out.
-    ///  • <c>CuePattern(n)</c> – another pattern of the song from the next bar line: one per section of the level.
-    ///    A song with an arrangement (the demo song has one, 16 bars) treats a cue as "jump to the next bar of the
-    ///    arrangement with that pattern" and then walks on through the arrangement, so one cue lasts until the arrangement moves on (a bar, or two where a pattern repeats). To HOLD
-    ///    a pattern, this component cues it again on every bar line while the player is in the section.
+    ///    or above it. Each section of the level has a floor (the rhythm section is always there); the player's speed
+    ///    fills the rest of the way to 1: the strings, the tune on the keys, the brass, the bells. Fast in, slow out.
+    ///  • <c>CuePattern(n)</c> – another pattern of the song from the next bar line, for the two places where the level
+    ///    wants one: the breakdown in Static Field and the turnaround at the last launch. A song with an arrangement
+    ///    treats a cue as "jump to the next bar of the arrangement with that pattern" and then walks on through the
+    ///    arrangement, so one cue lasts until the arrangement moves on (a bar, or two where a pattern repeats). To HOLD
+    ///    a pattern, this component cues it again on every bar line; when the hold ends the song walks on from there.
     ///  • <c>PlaySound(instrument, velocity, note)</c> – a note by hand on one of the song's instruments, on top of the
     ///    music: the bell answer at a checkpoint, the fanfare at the goal.
     ///  • <c>volume</c>, <c>SetTrackVolume</c>, <c>SetMaster</c> – the mix: a dip when hurt, brass forward and a bigger
@@ -44,24 +48,24 @@ namespace SfxShowcase.Audio
         [Tooltip("Seconds for the intensity to fall across its whole range: layers linger after the rush.")]
         [Min(0.01f)] [SerializeField] float fallSeconds = 2.5f;
 
-        [Tooltip("The fixed intensity on the title card.")]
-        [Range(0f, 1f)] [SerializeField] float titleIntensity = 0.15f;
+        [Tooltip("The fixed intensity on the title card: the rhythm section.")]
+        [Range(0f, 1f)] [SerializeField] float titleIntensity = 0.42f;
 
         [Tooltip("The music's volume (SfxMusicPlayer.volume) when nothing ducks it. Effects sit above it.")]
-        [Range(0f, 1f)] [SerializeField] float musicVolume = 0.6f;
+        [Range(0f, 1f)] [SerializeField] float musicVolume = 0.36f;
 
-        [Header("Sections cue patterns")]
-        [Tooltip("What the music does in each section: the pattern cued on entering it and the least intensity inside it.")]
+        [Header("Sections: how full the band is, and where a pattern is held")]
+        [Tooltip("What the music does in each section: the intensity when the player stands still (speed fills the rest), and the pattern held there, if any. The song's layer marks: hat 0.16, bass 0.28, snare 0.39, strings and choir 0.47, keys 0.57, brass 0.71, bells 0.79 (the mark on the device, 0..127, divided by 127).")]
         [SerializeField] SectionCue[] sectionCues =
         {
-            new SectionCue(SectionId.SoftStart, PatternA, 0.15f),
-            new SectionCue(SectionId.RollingSines, PatternB, 0.25f),
-            new SectionCue(SectionId.FullCycle, PatternC, 0.40f),
-            new SectionCue(SectionId.WooferSteps, PatternD, 0.40f),
-            new SectionCue(SectionId.StaticField, PatternE, 0.20f),
-            new SectionCue(SectionId.SplitSignal, PatternC, 0.45f),
-            new SectionCue(SectionId.Overdrive, PatternD, 0.70f),
-            new SectionCue(SectionId.TheResonator, SectionCue.KeepPattern, 0f),
+            new SectionCue(SectionId.SoftStart, SectionCue.SongOrder, 0.42f),
+            new SectionCue(SectionId.RollingSines, SectionCue.SongOrder, 0.45f),
+            new SectionCue(SectionId.FullCycle, SectionCue.SongOrder, 0.50f),
+            new SectionCue(SectionId.WooferSteps, SectionCue.SongOrder, 0.50f),
+            new SectionCue(SectionId.StaticField, PatternE, 0.50f),
+            new SectionCue(SectionId.SplitSignal, SectionCue.SongOrder, 0.55f),
+            new SectionCue(SectionId.Overdrive, SectionCue.SongOrder, 0.60f),
+            new SectionCue(SectionId.TheResonator, SectionCue.KeepPattern, 0.42f),
         };
 
         [Tooltip("The pattern cued when the player leaves Overdrive's launch ramp: the song's turnaround (5 = F).")]
@@ -86,8 +90,8 @@ namespace SfxShowcase.Audio
             new MusicNote(MusicKit.Bells, Pitch.E6, 2f, 0f, 1f),
         };
 
-        [Tooltip("The intensity is lifted to at least this after a checkpoint.")]
-        [Range(0f, 1f)] [SerializeField] float checkpointIntensity = 0.6f;
+        [Tooltip("The intensity is lifted to at least this after a checkpoint: the whole band, bells and all.")]
+        [Range(0f, 1f)] [SerializeField] float checkpointIntensity = 0.8f;
 
         [Tooltip("For how many bars the intensity stays lifted.")]
         [Min(0f)] [SerializeField] float checkpointLiftBars = 1f;
@@ -123,8 +127,9 @@ namespace SfxShowcase.Audio
         float intensity;            // what is sent to the music player, smoothed
         float duck;                 // how far the volume is dipped, 0..1: up over hurtDipSeconds, down over hurtRecoverSeconds
         float duckTarget;           // 1 from a hit until the dip is reached, then 0
-        int heldPattern = SectionCue.KeepPattern;   // cued again on every bar line; KeepPattern = the song runs on by itself
+        int heldPattern = SectionCue.SongOrder;     // cued again on every bar line; SongOrder = the song's own arrangement plays
         int lastBar = -1;           // the bar the hold was last cued in
+        bool launched;              // the last launch has cued its pattern: no section in the song's order ends that hold
         float liftedUntil = float.NegativeInfinity;
         bool songEnded;             // the goal stopped the song and changed the mix
 
@@ -214,22 +219,25 @@ namespace SfxShowcase.Audio
 
         /// <summary>
         /// Keeps the song on <see cref="heldPattern"/>: whenever the song has moved into a new bar, the pattern is cued
-        /// again for the next bar line. Without this the demo song's arrangement would take over after one bar.
+        /// again for the next bar line. Without this the demo song's arrangement would take over after one bar –
+        /// which is exactly what happens when the hold ends (<see cref="SectionCue.SongOrder"/>).
         /// </summary>
         void HoldPattern()
         {
             int bar = music.Bar;
             if (bar == lastBar) return;
             lastBar = bar;
-            if (heldPattern != SectionCue.KeepPattern) music.CuePattern(heldPattern);
+            if (heldPattern >= 0) music.CuePattern(heldPattern);
         }
 
-        /// <summary>Speed ÷ top speed, but never below the section's floor; held down for a moment after a hit.</summary>
+        /// <summary>
+        /// The section's floor when the player stands still, 1 at top speed, in a straight line between: the rhythm
+        /// section never leaves, and speed brings in the rest of the band. Held down for a moment after a hit.
+        /// </summary>
         float TargetIntensity()
         {
             if (session != null && session.Phase == GamePhase.Title) return titleIntensity;
-            float target = player != null ? player.Speed01 : 0f;
-            target = Mathf.Max(target, currentCue.IntensityFloor);
+            float target = Mathf.Lerp(currentCue.IntensityFloor, 1f, player != null ? player.Speed01 : 0f);
             if (Time.time < liftedUntil) target = Mathf.Max(target, checkpointIntensity);
             // held down from the moment of the hit (duckTarget), not only once the volume has dipped (duck)
             return target * (1f - Mathf.Max(duck, duckTarget));
@@ -239,22 +247,35 @@ namespace SfxShowcase.Audio
 
         void OnSectionEntered(SectionId section) => EnterSection(section);
 
-        /// <summary>Back at a Tuning Fork: that section's pattern again, and the band starts from its floor.</summary>
+        /// <summary>Back at a Tuning Fork: what entering that section does (its hold begins, or a hold ends), and the band starts from its floor.</summary>
         void OnRespawned(SectionId section)
         {
+            launched = false;
             EnterSection(section);
             intensity = currentCue.IntensityFloor;
         }
 
-        /// <summary>CuePattern changes on the next bar line, so a section change is always musical.</summary>
+        /// <summary>
+        /// A section with a pattern holds it from the next bar line (CuePattern changes on a bar line, so it is always
+        /// musical); a section in the song's order ends a hold and the arrangement walks on from where it is. After
+        /// the last launch it does not: walking back from The Resonator into Overdrive leaves the turnaround held.
+        /// </summary>
         void EnterSection(SectionId section)
         {
             currentCue = FindCue(section);
-            if (currentCue.Pattern != SectionCue.KeepPattern) Cue(currentCue.Pattern);
+            if (currentCue.Pattern >= 0) Cue(currentCue.Pattern);
+            else if (currentCue.Pattern == SectionCue.SongOrder && !launched) heldPattern = SectionCue.SongOrder;
         }
 
-        /// <summary>The turnaround, held until the goal stops the song (The Resonator's own cue keeps the pattern).</summary>
-        void OnFinalLaunch() => Cue(finalLaunchPattern);
+        /// <summary>
+        /// The turnaround, held until the goal stops the song (The Resonator's own cue keeps the pattern) or the
+        /// player is put back at a Tuning Fork.
+        /// </summary>
+        void OnFinalLaunch()
+        {
+            launched = true;
+            Cue(finalLaunchPattern);
+        }
 
         /// <summary>Cues a pattern for the next bar line and holds it from then on (see <see cref="HoldPattern"/>).</summary>
         void Cue(int pattern)
@@ -267,7 +288,7 @@ namespace SfxShowcase.Audio
         {
             foreach (SectionCue cue in sectionCues)
                 if (cue.Section == section) return cue;
-            return new SectionCue(section, SectionCue.KeepPattern, 0f);
+            return new SectionCue(section, SectionCue.SongOrder, 0f);
         }
 
         // ---- moments -----------------------------------------------------------------------------------------------------------
@@ -300,8 +321,9 @@ namespace SfxShowcase.Audio
         }
 
         /// <summary>
-        /// A run begins. From the title card the song is already playing and only the section's pattern is cued; after
-        /// the goal the fanfare is cut off, the song's own mix is put back (Reload) and the song starts from pattern A.
+        /// A run begins. From the title card the song is already playing and plays on in its own order (Soft Start
+        /// holds nothing); after the goal the fanfare is cut off, the song's own mix is put back (Reload) and the song
+        /// starts from pattern A.
         /// </summary>
         void OnGameStarted()
         {
@@ -317,6 +339,7 @@ namespace SfxShowcase.Audio
             duck = 0f;
             duckTarget = 0f;
             liftedUntil = float.NegativeInfinity;
+            launched = false;
             EnterSection(SectionId.SoftStart);
         }
 

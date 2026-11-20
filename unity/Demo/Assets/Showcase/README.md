@@ -84,7 +84,7 @@ who lets go, the Wind-Up and Burst, the hills and the first loop, turning round 
 Woofer's flight, Chimes collected and scattered, respawns at a Tuning Fork and out of a pit, the low
 route, the goal and a restart, and a whole run from start to goal that also measures the two launch
 ramps. `ShowcaseAudioTests.cs`: a jump and a Chime are really heard through SFX FORGE, the Wind-Up
-rev and the roll hum sound and bend while they play, a section's pattern is cued and held, and the
+rev and the roll hum sound and bend while they play, Static Field's pattern is cued and held, and the
 music's intensity follows speed and drops on a hit.
 
 ## Map of the folder
@@ -197,16 +197,21 @@ director turns the game into five calls:
 
 ```csharp
 music.intensity = …;                        // 0..1, every frame: each instrument plays only at or above its layer mark
-music.CuePattern(2);                        // another pattern of the song, from the next bar line (see below)
+music.CuePattern(4);                        // another pattern of the song, from the next bar line (see below)
 music.PlaySound(instrument, velocity, 76);  // a note by hand on one of the song's instruments, on top of the music
 music.volume = …;                           // a dip when the player is hurt (not smoothed by the player: ramp it yourself)
 music.Stop(); music.Reload(); music.Play(); // the song ends at the goal and starts again with a new run
 ```
 
-Here intensity follows the player's speed (rising in 0.6 s, falling in 2.5 s, never below a floor per
-section), each section of the level has a pattern ([`SectionCue.cs`](Scripts/Audio/SectionCue.cs)),
-a checkpoint is answered by three bell notes started on the song's next sixteenth, and the goal stops
-the song and plays a fanfare by hand
+Here the song plays as it was arranged – the demo song's sixteen bars, A B A B C D C D E E A B C D C F,
+round and round – and the game decides how much of the band plays it. Each section of the level has a
+floor ([`SectionCue.cs`](Scripts/Audio/SectionCue.cs)): the intensity when the player stands still,
+0.42 to 0.60, which is the rhythm section (kick, hi-hat, bass, snare) and from the third section to the seventh
+the strings. Speed fills the rest of the way to 1 in a straight line (rising in 0.6 s, falling in
+2.5 s): the keys, then the brass, then the bells. Two places leave the song's order and hold one
+pattern: Static Field holds E, the breakdown, while the player is in it, and the last launch holds F,
+the turnaround, until the goal. A checkpoint is answered by three bell notes started on the song's
+next sixteenth, and the goal stops the song and plays a fanfare by hand
 ([`MusicNote.cs`](Scripts/Audio/MusicNote.cs), [`MusicKit.cs`](Scripts/Audio/MusicKit.cs),
 [`Pitch.cs`](Scripts/Audio/Pitch.cs)).
 
@@ -216,8 +221,9 @@ is 0) whose chain is 1; with a longer chain the cued pattern plays one bar and t
 song WITH an arrangement – the demo song has one, 16 bars that use all six patterns – jumps to the
 arrangement's next bar with that pattern and then walks on through the arrangement, so one cue lasts
 a bar or two. The table is in [section 5 of the Unity manual](../../../../docs/UNITY.md#cueing-patterns).
-To hold a section's pattern whatever the song does, cue it again whenever `music.Bar` changes:
-`MusicDirector.HoldPattern` is those five lines.
+To hold a pattern whatever the song does, cue it again whenever `music.Bar` changes:
+`MusicDirector.HoldPattern` is those five lines. Stop cueing and the arrangement walks on from the bar
+it is in, which is how Static Field's hold ends.
 
 ### 5. Put it in the scene – [`AudioInstaller.cs`](Scripts/Audio/AudioInstaller.cs)
 
@@ -253,8 +259,8 @@ spatialisation for live players, what happens without the native library).
 
 The videos and the manual's figures are made from the game itself, without anyone holding a controller.
 `Tests/CaptureTakes.cs` holds the takes: each is a Play mode test that plays a scripted piece of the
-game and records it. They are marked `[Explicit]`, so the ordinary test run above skips them (its summary line reads
-`passed="25" … skipped="8"`); you run one by name. A take takes well under a minute.
+game and records it. They are marked `[Explicit]`, so the ordinary test run above skips them (its summary line counts them, and the link takes of
+`Tests/LinkTakes.cs`, as skipped); you run one by name. A take takes well under a minute.
 
 ```sh
 UNITY="C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Unity.exe"   # where your Unity 6000.3 is
@@ -274,6 +280,34 @@ record SyncCheck        # out/unity-video/sync-check: three jumps and three Chim
 
 python docs/video/check_unity_capture.py            # counts, lengths, levels, clipping, and whether sound and picture agree
 ```
+
+### Recording the link
+
+The link to the device has its own takes. They need the device to be there, so they are explicit too, and end as
+"inconclusive" when the two MIDI ports are missing.
+
+1. A virtual MIDI cable with two ports, named `SFX to Unity` and `Unity to SFX` (loopMIDI makes them). Other
+   names: set `SFXFORGE_LINK_IN` and `SFXFORGE_LINK_OUT`.
+2. The emulator's server: `python .tools/vibe-fm-sdk/tools/emulator.py 8766`.
+3. The device's end: `node tests/emulator-link.mjs`. It opens the emulator in a Chrome of its own with a
+   throwaway profile, allows that page MIDI, switches SFX FORGE on and puts its MIDI out on `SFX to Unity`.
+4. Unity's end, the tests of `Tests/LinkTakes.cs`: `-testFilter SfxShowcase.Tests.LinkTakes`. They ask the device
+   for a patch and for the song, play the song that arrives, fetch it twenty times in a row, and drive the device.
+   Each step that worked logs a line starting with `LINK: ok`.
+
+The recorded session is `Tests/LinkSession.cs`: the game runs at the wall clock's speed, tells the script which
+keys to press on the device (through `out/link/cues.txt`), and writes `out/unity-video/link-session/` with a
+`link.json` of everything that crossed the ports.
+
+```sh
+node tests/emulator-link.mjs --cues out/link/cues.txt --frames out/link/emulator &      # the device, filmed
+SFXFORGE_LINK_CUES="$PWD/out/link/cues.txt" "$UNITY" -batchmode -projectPath "$PROJECT" -runTests -testPlatform PlayMode   -testFilter SfxShowcase.Tests.LinkSession -testResults "$OUT/link-session.xml" -logFile "$OUT/link-session.log"
+python docs/video/make_link_video.py                # out/video/sfx-forge-unity-link.mp4
+```
+
+Unity will not open a project twice. With the editor open on `unity/Demo`, run the headless commands on a second
+folder that links to the first: a folder with junctions to `Assets`, `Packages` and `ProjectSettings`, its own
+`Library`, and beside it a junction named `com.catsplat.sfxforge` to the package.
 
 Do not run it with `-nographics`: the pictures need the graphics card. Several takes in one run:
 `-testFilter "$TAKES.OneShots;$TAKES.HeldSounds"`. Exit code 0 means every take in the run recorded
@@ -311,10 +345,15 @@ How the rig works (`Tests/CaptureRecorder.cs`, about 350 lines; nothing in the g
   more than one block (21 ms) away from the pictures. Measured with the take `SyncCheck`: a jump's
   baked clip and a Chime's live voice start within 0.7 frames of the frame their event is in.
 - **The level.** While the rig is on, `AudioListener.volume` is 0.5 (`CaptureRecorder.ListenerVolume`).
-  At full volume the game's mix goes over full scale where the roll hum, the wind and the full band
-  sound together (the full run peaks at 0.69 at half volume, so about 1.4 at full), and Unity clips it.
-  The first recordings had those clipped samples in them. The video script brings the level back up
-  with one gain per take. The game itself is unchanged: played at full volume it still clips there.
+  Unity limits its output to full scale before `AudioRenderer` can read it, so a take recorded at 1
+  could never show that the game's mix went over: its largest sample would read exactly 1. At 0.5 the
+  mix can be measured: the game, played at full volume, peaks at the take's peak ÷ 0.5, and every take
+  asserts that this is under 0.95 (`CaptureRecorder.MixCeiling`). That is how the mix was set. With the
+  first volumes the full run reached 1.38 of full scale (rows of Chimes and the Land thump on top of
+  the band; a full-charge Burst with the rev, the hum and the wind); the music and most effects were
+  turned down (`MusicDirector.musicVolume`, the table in `SoundLibrary.cs`), and the full run now
+  peaks at 0.81 to 0.90, depending on the recording. The levels come from these measurements only; nobody has judged the balance by
+  listening. The video script brings a take's level back up with one gain.
 - **The telemetry** only listens to `GameEvents` and reads public state, like the audio folder. Which
   sound an event starts is worked out with the rules of `SoundEffects` (a soft landing is silent, a
   dense row of Chimes skips pings), read from the component so it follows its Inspector values.

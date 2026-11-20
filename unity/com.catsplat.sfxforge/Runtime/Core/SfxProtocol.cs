@@ -113,16 +113,23 @@ namespace CatSplat.SfxForge
             return all;
         }
 
-        /// <summary>One piece of a song: copies it into song (SongBytes long). True when this was the last piece.</summary>
-        public static bool TryTakeSongChunk(byte[] m, byte[] song, ref int next)
+        /// <summary>
+        /// One piece of a song: copies it into song (SongBytes long). True when every piece is there. The pieces may
+        /// come in any order: a browser's Web MIDI output can swap two neighbours (seen with the emulator, about one
+        /// transfer in twenty), and a song must not be lost to that. <paramref name="seen"/> remembers which pieces
+        /// are in (start with 0); a piece that comes a second time begins a new transfer.
+        /// </summary>
+        public static bool TryTakeSongChunk(byte[] m, byte[] song, ref ulong seen)
         {
             if (!IsOurs(m) || m[4] != SongChunk || m.Length < 9 || m[6] != SongChunks) return false;
             int k = m[5], n = m.Length - 8;
-            if (k == 0) next = 0;
-            if (k != next || k * SongChunkBytes + n > SongBytes) { next = -1; return false; }
+            if (k >= SongChunks || n != Math.Min(SongChunkBytes, SongBytes - k * SongChunkBytes)) return false;
+            ulong piece = 1UL << k;
+            if ((seen & piece) != 0) seen = 0;
             Array.Copy(m, 7, song, k * SongChunkBytes, n);
-            if (++next < SongChunks) return false;
-            next = -1;
+            seen |= piece;
+            if (seen != (1UL << SongChunks) - 1) return false;
+            seen = 0;
             return true;
         }
 

@@ -37,7 +37,7 @@ namespace SfxShowcase.Tests
         /// <summary>How far above the ground a cut puts the player's centre: a hair more than standing.</summary>
         const float CutClearance = 0.05f;
 
-        const int PatternD = 3, PatternE = 4;
+        const int PatternE = 4;
 
         CaptureRecorder recorder;
         CaptureTelemetry telemetry;
@@ -84,7 +84,7 @@ namespace SfxShowcase.Tests
             recorder.BeginRecording(telemetry);
         }
 
-        /// <summary>Stops the take, writes telemetry.json and checks the take has sound, and as much sound as picture.</summary>
+        /// <summary>Stops the take, writes telemetry.json and checks the take has sound, as much sound as picture, and a mix that stays under <see cref="CaptureRecorder.MixCeiling"/> at full volume.</summary>
         CaptureRecorder.Summary Wrap()
         {
             string folder = recorder.TakeFolder;
@@ -97,6 +97,7 @@ namespace SfxShowcase.Tests
             Assert.Greater(summary.Frames, 0, "the take has pictures");
             Assert.AreEqual(summary.PictureSeconds, summary.AudioSeconds, 0.03f, "the wav is as long as the pictures, to within one audio block");
             if (SfxNative.Available) Assert.Greater(summary.Peak, 0.01f, "the wav is not silent");
+            Assert.Less(summary.Peak / CaptureRecorder.ListenerVolume, CaptureRecorder.MixCeiling, "the game's mix, at full volume, stays under full scale");
             return summary;
         }
 
@@ -296,11 +297,11 @@ namespace SfxShowcase.Tests
             Wrap();
         }
 
-        /// <summary>Adaptive music: stand, walk, run, stop, then a Burst flat out and the layers falling away afterwards.</summary>
+        /// <summary>Adaptive music: stand (the rhythm section), walk, run, stop, then a Burst flat out (the whole band) and the layers falling away afterwards; the song walks through its own arrangement all the while.</summary>
         [UnityTest, Explicit, Timeout(TakeTimeoutMilliseconds)]
         public IEnumerator AdaptiveMusic()
         {
-            const float walkSpeed = 5.5f;                            // a quarter of top speed: the hi-hat's layer, not yet the bass's
+            const float walkSpeed = 4f;                              // Soft Start's floor 0.42 becomes about 0.53: the strings are in (0.47), the keys (0.57, at 5.6 m/s) wait for the run
             var director = UnityEngine.Object.FindFirstObjectByType<MusicDirector>();
             Assert.IsNotNull(director, "the scene has its music director");
 
@@ -346,7 +347,7 @@ namespace SfxShowcase.Tests
             Wrap();
         }
 
-        /// <summary>Sections and cues: from Woofer Steps into Static Field (pattern D to E on the bar line), past its Tuning Fork (three bells answer).</summary>
+        /// <summary>Sections and cues: from Woofer Steps into Static Field (the song leaves its own order for the breakdown, pattern E, on the bar line), past its Tuning Fork (three bells answer).</summary>
         [UnityTest, Explicit, Timeout(TakeTimeoutMilliseconds)]
         public IEnumerator SectionsAndCues()
         {
@@ -354,12 +355,13 @@ namespace SfxShowcase.Tests
             Assert.IsNotNull(music, "the scene has its music player");
             SectionInfo staticField = Sections.Get(SectionId.StaticField);
 
-            // in the dip at the end of Woofer Steps; the take begins on the bar line its pattern comes in on
+            // in the dip at the end of Woofer Steps, where the song plays in its own order; the take begins on a bar line
             yield return Rig("sections-and-cues");
             yield return StartRun();
             yield return CutTo(staticField.StartX - 12.5f);
-            yield return UntilGameTime(() => music.Pattern == PatternD, 6f);
-            if (SfxNative.Available) Assert.AreEqual(PatternD, music.Pattern, "Woofer Steps plays pattern D");
+            int barOfTheCut = music.Bar;
+            yield return UntilGameTime(() => music.Bar != barOfTheCut, 6f);
+            if (SfxNative.Available) Assert.AreNotEqual(PatternE, music.Pattern, "the song is not in its breakdown yet");
             Roll();
             yield return Seconds(3f);
 
@@ -390,9 +392,9 @@ namespace SfxShowcase.Tests
         public IEnumerator HurtAndGoal()
         {
             const int carried = 12;
-            const int patternC = 2;
             const float terraceStartX = 726f, terraceY = 1.5f;       // LevelLayout.SplitSignal: the low terrace, under a platform
             const float staticX = 736f;
+            const float splitSignalFloor = 0.55f;                    // MusicDirector.sectionCues: the intensity there at a standstill
             var music = UnityEngine.Object.FindFirstObjectByType<SfxMusicPlayer>();
             var director = UnityEngine.Object.FindFirstObjectByType<MusicDirector>();
             Assert.IsNotNull(music, "the scene has its music player");
@@ -404,19 +406,19 @@ namespace SfxShowcase.Tests
             Assert.AreEqual(terraceY + DesignTargets.StandingRadius, player.Position.y, 0.2f, "the player stands on the low terrace");
             player.AddChimes(carried);
             yield return Seconds(2f);                                // their ping has rung out before the take begins
-            yield return UntilGameTime(() => music.Pattern == patternC, 6f);
-            if (SfxNative.Available) Assert.AreEqual(patternC, music.Pattern, "Split Signal plays pattern C");
+            int barOfTheCut = music.Bar;
+            yield return UntilGameTime(() => music.Bar != barOfTheCut, 6f);          // the take begins on a bar line
             Roll();
             yield return Seconds(2.2f);
 
-            // along the terrace into the Static, at a run: the band is fuller here, so its drop to the kick is seen
+            // along the terrace into the Static, at a run: the band is well above Split Signal's floor, so its drop to the kick is seen
             input.MoveX = 1f;
             float before = 0f;
             yield return UntilGameTime(() => { if (events.Hurts == 0) before = director.Intensity; return events.Hurts > 0; }, 8f);
             input.Release();
             Assert.AreEqual(1, events.Hurts, "the Static hurt");
             Assert.Less(Mathf.Abs(player.Position.x - staticX), 4f, "and it was the Static of the low terrace");
-            Assert.GreaterOrEqual(before, 0.4f, "the band was more than kick and hi-hat before the hit");
+            Assert.GreaterOrEqual(before, splitSignalFloor + 0.1f, "the band was well above Split Signal's floor before the hit, so the drop is the hit's");
             Assert.GreaterOrEqual(events.LastScatterCount, carried, "and the carried Chimes scattered (with any picked up on the way)");
             yield return Seconds(0.25f);
             recorder.RequestStill("hurt-scatter");

@@ -17,10 +17,10 @@ namespace SfxShowcase.Tests
     /// </summary>
     public sealed class ShowcaseAudioTests : ShowcaseTestBase
     {
-        /// <summary>The demo song's breakdown, the pattern of Static Field: its arrangement only gets there after eight bars.</summary>
+        /// <summary>The demo song's breakdown, the pattern Static Field holds (the only section that holds one): the song's arrangement only gets there after eight bars.</summary>
         const int PatternE = 4;
 
-        /// <summary>For how many bars a section's pattern is watched after it was cued.</summary>
+        /// <summary>For how many bars the held pattern is watched after it was cued.</summary>
         const int BarsToHold = 3;
 
         static void IgnoreWithoutTheNativeLibrary()

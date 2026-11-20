@@ -179,13 +179,25 @@ static class Tests
         // ---- music: the song the firmware sent (SEND on its SONG page), played here by the same player
         if (msgs != null)
         {
-            var song = new byte[SfxProtocol.SongBytes]; var sounds = new SfxPatch[16]; int next = -1, seen = 0; bool whole = false;
+            var song = new byte[SfxProtocol.SongBytes]; var sounds = new SfxPatch[16]; ulong next = 0; int seen = 0; bool whole = false;
             foreach (var msg in msgs.Skip(msgs.FindLastIndex(b => b[0] == 0xF0 && b[4] == SfxProtocol.Dump && b[5] == 0)))
             {
                 if (SfxProtocol.TryParsePatch(msg, out int slot, out var patch)) { sounds[slot] = patch; seen |= 1 << slot; }
                 else if (SfxProtocol.TryTakeSongChunk(msg, song, ref next)) whole = true;
             }
             Ok(whole && seen == 0xFFFF, "the firmware's song arrives whole: 16 sounds and 39 pieces");
+            {   // the pieces in another order (a browser's MIDI output can swap neighbours), one of them twice, one too short
+                var pieces = SfxProtocol.BuildSong(song); var again = new byte[SfxProtocol.SongBytes]; ulong got = 0; int done = 0;
+                var order = Enumerable.Range(0, pieces.Length).ToArray(); (order[36], order[37]) = (order[37], order[36]); (order[9], order[10]) = (order[10], order[9]);
+                foreach (int k in order) if (SfxProtocol.TryTakeSongChunk(pieces[k], again, ref got)) done++;
+                Ok(done == 1 && again.SequenceEqual(song), "a song whose pieces come out of order arrives whole all the same");
+                got = 0; done = 0;
+                foreach (int k in order.Take(20)) SfxProtocol.TryTakeSongChunk(pieces[k], again, ref got);       // a transfer that broke off …
+                foreach (int k in Enumerable.Range(0, pieces.Length)) if (SfxProtocol.TryTakeSongChunk(pieces[k], again, ref got)) done++;   // … and a whole one after it
+                Ok(done == 1 && again.SequenceEqual(song), "a transfer that broke off does not spoil the next one");
+                var cut = pieces[3].Take(pieces[3].Length - 5).Append((byte)0xF7).ToArray(); got = 0;
+                Ok(!SfxProtocol.TryTakeSongChunk(cut, again, ref got) && got == 0, "a piece of the wrong length is not taken");
+            }
             Ok(whole && SfxProtocol.BuildSong(song).SelectMany(c => c).SequenceEqual(msgs.Where(b => b[0] == 0xF0 && b[4] == SfxProtocol.SongChunk).SelectMany(c => c)), "and packs back to the same messages");
 
             IntPtr pl = Marshal.AllocHGlobal(SfxNative.PlayerSize);
@@ -395,7 +407,7 @@ static class Tests
             if (port != null) port.Dispose();
             Ok(opened, $"input: '{ins[0]}' opens and closes cleanly");
         }
-        Console.WriteLine("  ----  receiving MIDI is NOT covered: it needs a loopback port or a device");
+        Console.WriteLine("  ----  receiving MIDI is not covered here: it needs the device. See unity/Demo/Assets/Showcase/Tests/LinkTakes.cs");
 
         Console.WriteLine(failed > 0 ? $"FAILED ({failed})" : "PASSED");
         return failed > 0 ? 1 : 0;

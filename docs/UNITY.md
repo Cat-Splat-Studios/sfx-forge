@@ -442,8 +442,10 @@ So one song is many. `SfxSong.Layer(sound)` reads a mark (0 … 1; 0 = always pl
 ![Layers against speed in the showcase](img/unity-layers.png)
 
 *Each bar starts at its sound's LAYER mark: the sound plays while the intensity is to the right of that point. The
-dashed lines are the floors the showcase's sections set. At running speed, 10 m/s, the kick, hi-hat, FM bass and
-snare play.*
+dashed lines carry the marks down. Below them, one line for each floor of the showcase's sections: the dot is the
+intensity while the player stands still there, the white tick the intensity at a run (10 m/s), the right end top
+speed. Standing still, the kick, hi-hat, FM bass and snare play in every section; in Full Cycle, Woofer Steps,
+Static Field and Split Signal the strings too; in Overdrive the FM keys as well.*
 
 The demo song's marks, read from the asset (`Assets/SfxDemo/DemoSong.asset`):
 
@@ -464,13 +466,15 @@ timpani by hand, in its fanfare. Not every pattern uses every sound either: bras
 C, D and E, the choir is only in E.
 
 `intensity` is not smoothed by the player and does not need to be: it only decides which notes start. Smooth it
-yourself so the band does not flicker in and out. The showcase lets it rise in 0.6 s and fall in 2.5 s:
+yourself so the band does not flicker in and out. The showcase aims it at a point between the section's floor
+(standing still) and 1 (top speed), and lets it rise in 0.6 s and fall in 2.5 s:
 
 ![Intensity following speed, and a hit](img/unity-intensity.png)
 
-*Two recordings. Above: the intensity (orange) follows the player's speed (white), quickly up and slowly down, and
-never drops below the section's floor. The names on the right show which sound joins at which height. Below: a hit
-drops the intensity to 0 at once and dips the music's volume; both come back by themselves.*
+*Two recordings. Above: the intensity (orange) against the player's speed (white). Standing still it rests on the
+section's floor; speed lifts it from there towards 1, quickly up and slowly down. The names on the right show which
+sound joins at which height. Below: a hit drops the intensity to 0 at once, under the floor, and dips the music's
+volume; both come back by themselves.*
 
 ### Cueing patterns
 
@@ -489,18 +493,23 @@ that bar depends on the song. This is what the engine does (`core/sfx_song.h`):
 ![One cue against a cue on every bar](img/unity-cues.png)
 
 *From the top: the demo song's arrangement; one cue of F, which lasts one bar because the arrangement goes on to A;
-a cue on every bar, which holds the pattern; a pattern outside the arrangement, which stays by itself. The last row is a whole run of the showcase as
-recorded: one pattern for each section, held bar after bar.*
+a cue on every bar, which holds the pattern; a pattern outside the arrangement, which stays by itself. The last row
+is a whole run of the showcase as recorded: the arrangement walks by itself, bar after bar, except in Static Field,
+where E is held, and from the last launch to the goal, where F is.*
 
 ### Holding a pattern: cue it again on every bar
 
 The demo song has a 16-bar arrangement, A B A B C D C D E E A B C D C F, which contains every one of its patterns. A
 cue into such a song lasts only as long as the arrangement stays on that pattern from there: one bar for most of
-them, two for E, which the arrangement has twice in a row. The showcase wants a pattern per section of the level, for as long as the player
-is there. So its `MusicDirector` cues the pattern again whenever `Bar` changes:
+them, two for E, which the arrangement has twice in a row.
+
+The showcase lets the song play in this order for most of the level: the game does not choose the bars, only how
+much of the band plays them. It holds a pattern in two places: E, the breakdown, for as long as the player is in
+Static Field, and F, the turnaround, from the last launch to the goal. To hold one, its `MusicDirector` cues the
+pattern again whenever `Bar` changes:
 
 ```csharp
-int heldPattern = -1, lastBar = -1;
+int heldPattern = -1, lastBar = -1;    // below 0: nothing is held (the director's own value is SectionCue.SongOrder)
 
 void HoldPattern()                     // called from Update
 {
@@ -513,6 +522,19 @@ void HoldPattern()                     // called from Update
 
 A cue is then always waiting at the next bar line, and the pattern stays. This works for every row of the table
 above, so it is the safe way to hold a pattern when you do not control how the song was arranged.
+
+Ending a hold needs no call: stop cueing. Each section of the showcase has a `SectionCue` whose `Pattern` says what
+happens on entering it:
+
+| `Pattern` | On entering the section |
+|---|---|
+| 0 … 7 | that pattern is cued, and held from then on |
+| `SectionCue.SongOrder` (−2) | a hold ends: `heldPattern` is set to it, and nothing is cued any more |
+| `SectionCue.KeepPattern` (−1) | nothing changes: a pattern that is held stays held |
+
+When a hold ends, the song is on a bar of its arrangement with the held pattern, and the arrangement walks on from
+there. A cue that was already waiting still takes its bar. In the recorded run Static Field gives eight bars
+of E; then the arrangement goes on with what follows its E bars: A B C D C F, and round again.
 
 ### Notes by hand: PlaySound
 
@@ -551,11 +573,26 @@ call or event in Unity.*
 "The device" is SFX FORGE on the hardware, in the browser Playground, or in the plugin. Unity talks to it over two
 MIDI ports. Without the hardware you need a virtual MIDI cable with two ports, one each way (for example loopMIDI).
 
-> **What is tested, and what is not.** MIDI is implemented for Windows only (winmm). Sending from Unity is checked by
-> the demo's editor self-test, when the machine has the "GS Wavetable" MIDI output. **Receiving MIDI in Unity has not been tested
-> against a real port or on hardware.** Everything in this section that arrives *from* the device – exported patches,
-> a fetched song, pads, encoders – is written and unit-tested at the protocol level (`tests/dotnet`), not proven end
-> to end. The song in the demo project came in as a file, not over MIDI ([below](#a-song-without-midi)).
+> **What is tested, and what is not.** MIDI is implemented for Windows only (winmm).
+>
+> **Tested end to end against the emulator**, over two loopMIDI ports, with Unity 6000.3 on Windows 11
+> (`Tests/LinkTakes.cs` in the showcase, run against `tests/emulator-link.mjs`):
+> - Unity asks for a pad's patch and for the song, and both arrive. The song that arrived was the demo project's
+>   song, byte for byte, and an `SfxMusicPlayer` played it.
+> - SEND and EXPORT pressed on the device arrive in a running game (`Tests/LinkSession.cs`, the link video).
+> - The game's intensity reaches the device: the INTENSITY on its SONG page followed the game's value. Text was
+>   sent in the same session, but the page that was open does not show it, so nobody saw it arrive.
+>
+> **Not tested:** the hardware and the plugin; pads and encoders coming *from* the device (`onPad`, `onEncoder`,
+> `SfxEncoderBinding`); `SendPatch` and `SendSong` *to* the device; the SFX Forge window's buttons, which nobody
+> has clicked against a device.
+>
+> **Found by that test.** The emulator's MIDI output sometimes delivers two neighbouring SysEx messages in the
+> wrong order: 3 of the first 60 song transfers had two pieces swapped. The package used to drop such a song; it now
+> takes a song's pieces in any order (100 of 100 transfers since). The firmware still wants the pieces of a song
+> sent *to* it in order, which was not tested.
+>
+> The song in the demo project came in as a file, not over MIDI ([below](#a-song-without-midi)).
 
 ### The SFX Forge window
 
@@ -702,8 +739,8 @@ that moment.
 | **2** | the trail: Brio is fast | Wind: it comes in above 60 % of top speed | held and bent |
 | **3** | the thin outline a collected Chime leaves | Chime: one step up the scale for each Chime of a combo | live voice |
 | **4** | the next Chimes | the next steps of that scale | live voice |
-| **5** | the speed meter | the music's intensity is the same value: the faster, the more of the band | music |
-| **6** | the section's name | entering the section cued its pattern, here C | music |
+| **5** | the speed meter | the music's intensity rises with it, from the section's floor: the faster, the more of the band | music |
+| **6** | the section's name | entering the section set the floor under the intensity. The song plays on in its own order; the pattern of the moment is in the line under the frame | music |
 | **7** | a Tuning Fork, just passed | TuningFork | baked clip |
 | **8** | the same Tuning Fork | the song's bells answer it, played by hand with `PlaySound` | music |
 | **9** | a Woofer | Woofer, when Brio lands on it | baked clip |
@@ -754,26 +791,32 @@ and one table at the end gives each sound its route, the MIDI note it is tuned t
 | Sound | Route | Note | Volume | Varies with the game |
 |---|---|---|---|---|
 | Jump | Baked | E5 | 0.70 | |
-| Land | Baked | – | 1.00 | silent below 4 m/s; louder up to 25 m/s |
+| Land | Baked | – | 0.80 | silent below 4 m/s; louder up to 25 m/s |
 | FootstepLeft / Right | Baked | – | 0.35 | alternate; the source's pitch 1.0 … 1.3 with speed |
-| TuckStart | Baked | B4 | 0.60 | |
-| RollHum | Held | E2 | 0.50 | pitch 0 … +12, cutoff −1 … +1.5 octaves, level 0.35 … 1 with speed |
-| WindUpRev | Held | E3 | 0.60 | retriggered on each tap; pitch 0 … +12, `fm` 0 … 0.6, cutoff 0 … +1 with charge |
-| Burst | Baked | – | 0.90 | volume 50 … 100 % with charge |
-| Chime | Live | E5 | 0.80 | one step up E minor pentatonic for each Chime of a combo, up to 10 steps |
-| ChimeScatter | Live | E5 | 0.70 | a run of 5 … 8 pings, 55 ms apart, falling and fading |
-| Woofer | Baked | E3 | 0.90 | |
-| Hurt | Baked | D3 | 0.90 | |
-| ClipperPop | Baked | B4 | 0.85 | |
-| TuningFork | Baked | E5 | 0.80 | |
-| Goal | Baked | E4 | 0.90 | |
-| Wind | Held | – | 0.60 | from 60 % of top speed: level 0 … 1, band −1.5 … +1.5 octaves |
+| TuckStart | Baked | B4 | 0.45 | |
+| RollHum | Held | E2 | 0.27 | pitch 0 … +12, cutoff −1 … +1.5 octaves, level 0.35 … 1 with speed |
+| WindUpRev | Held | E3 | 0.35 | retriggered on each tap; pitch 0 … +12, `fm` 0 … 0.6, cutoff 0 … +1 with charge |
+| Burst | Baked | – | 0.60 | volume 50 … 100 % with charge |
+| Chime | Live | E5 | 0.55 | one step up E minor pentatonic for each Chime of a combo, up to 10 steps |
+| ChimeScatter | Live | E5 | 0.50 | a run of 5 … 8 pings, 55 ms apart, falling and fading |
+| Woofer | Baked | E3 | 0.80 | |
+| Hurt | Baked | D3 | 0.80 | |
+| ClipperPop | Baked | B4 | 0.75 | |
+| TuningFork | Baked | E5 | 0.70 | |
+| Goal | Baked | E4 | 0.80 | |
+| Wind | Held | – | 0.30 | from 60 % of top speed: level 0 … 1, band −1.5 … +1.5 octaves |
 | Skid | Baked | – | 0.60 | |
 | Respawn | Baked | E4 | 0.70 | |
 | UiConfirm | Baked | B5 | 0.70 | |
 
 The song is in E minor. Every pitched effect is played as a note of E minor pentatonic, so the effects sound like
 part of the band. Noise (footsteps, wind, the Burst) has no note.
+
+The volumes, and the music's volume of 0.36 (`MusicDirector.musicVolume`), were set by measurement: recorded takes
+of the game must peak under 0.95 of full scale ([section 9](#the-mix-is-measured-not-heard)). Before that the
+loudest moments went over full scale: rows of Chimes and the Land thump on top of the band, and a full-charge Burst
+with the tuck, the rev, the hum and the wind at once. Nobody has listened to the result. The numbers say that the
+mix does not clip in the takes. They do not say that it is balanced.
 
 ### The three routes, file by file
 
@@ -789,31 +832,40 @@ part of the band. Noise (footsteps, wind, the Burst) has no note.
 
 ![The level, its sections and their patterns](img/unity-level-strip.png)
 
-*Above: the level to scale, with the pattern each section cues and the floor it puts under the intensity. Below: one
-run as recorded, against the distance. The intensity (orange) is the player's speed (white), smoothed, and held up by
-each section's floor (dashed).*
+*Above: the level to scale, with the floor each section puts under the intensity and the pattern it holds, if any.
+Below: one run as recorded, against the distance. Each section's floor (dashed) is the intensity when the player
+stands still; the intensity (orange) rises from it towards 1 with the player's speed (white), smoothed.*
 
 | The game | The music | The call |
 |---|---|---|
-| every frame | intensity = the player's `Speed01`, never below the section's floor; up in 0.6 s, down in 2.5 s | `intensity` |
-| on the title card | intensity fixed at 0.15; the whole arrangement plays | |
-| `SectionEntered` | the section's pattern from the next bar line, and held there | `CuePattern`, again whenever `Bar` changes |
-| `FinalLaunch` | the song's turnaround, pattern F, held until the goal | `CuePattern(5)` |
+| all the time | the demo song in its own order: 16 bars, A B A B C D C D E E A B C D C F, round and round | none: the player walks the song's arrangement |
+| every frame | intensity towards `Mathf.Lerp(floor, 1, Speed01)`: the section's floor standing still, 1 at top speed (22 m/s), a straight line between; up in 0.6 s, down in 2.5 s | `intensity` |
+| on the title card | intensity fixed at 0.42: kick, hi-hat, FM bass, snare. The whole arrangement plays | |
+| `SectionEntered` | the section's floor. In Static Field also pattern E from the next bar line, held there. A section without a pattern ends a hold | `CuePattern`, again whenever `Bar` changes |
+| `FinalLaunch` | the song's turnaround, pattern F, held until the goal | `CuePattern(5)`, again whenever `Bar` changes |
+| `Respawned` | as on entering that section, and the intensity starts from its floor | |
 | `Hurt` | intensity to 0 at once; volume to 50 % over 50 ms; both back over 2 s | `intensity`, `volume` |
-| `CheckpointReached` | bells play E5, B5, E6 a sixteenth apart, starting on the song's next sixteenth; intensity at least 0.6 for a bar | `PlaySound(13, velocity, note)` |
+| `CheckpointReached` | bells play E5, B5, E6 a sixteenth apart, starting on the song's next sixteenth; intensity at least 0.8 for a bar, which is above every layer mark of the song | `PlaySound(13, velocity, note)` |
 | `GoalReached` | the song stops. Strings hold E3, brass plays E4 G4 B4 E5, bells and timpani on the last note, in a bigger room | `Stop`, `SetTrackVolume`, `SetMaster(SfxMaster.ReverbSize, 110)`, `PlaySound`, `ReleaseSound` |
 | `GameStarted` after a goal | the fanfare is cut, the song's own mix comes back, the song starts at pattern A | `Reload`, `Play` |
 
-| Section | From – to | Pattern | Intensity floor |
-|---|---|---|---|
-| Soft Start | 0 – 90 m | A | 0.15 |
-| Rolling Sines | 90 – 220 m | B | 0.25 |
-| Full Cycle | 220 – 340 m | C | 0.40 |
-| Woofer Steps | 340 – 460 m | D | 0.40 |
-| Static Field | 460 – 600 m | E | 0.20 |
-| Split Signal | 600 – 800 m | C | 0.45 |
-| Overdrive | 800 – 960 m | D | 0.70 |
-| The Resonator | 960 – 1000 m | keeps the pattern | 0 |
+| Section | From – to | Holds | Intensity floor | The floor lets through |
+|---|---|---|---|---|
+| Soft Start | 0 – 90 m | – | 0.42 | kick, hi-hat, FM bass, snare |
+| Rolling Sines | 90 – 220 m | – | 0.45 | the same |
+| Full Cycle | 220 – 340 m | – | 0.50 | and strings, choir |
+| Woofer Steps | 340 – 460 m | – | 0.50 | the same |
+| Static Field | 460 – 600 m | E, the breakdown | 0.50 | the same. E is the one pattern with notes for the choir |
+| Split Signal | 600 – 800 m | – | 0.55 | the same |
+| Overdrive | 800 – 960 m | – (F from the last launch) | 0.60 | and FM keys |
+| The Resonator | 960 – 1000 m | what is held: F | 0.42 | kick, hi-hat, FM bass, snare |
+
+"–" is `SectionCue.SongOrder`: the song plays in its own order. The Resonator's cue is `SectionCue.KeepPattern`. The
+last column is what plays while the player stands still, where the pattern of the moment has notes for it. Moving
+adds the rest: with the floor at 0.42, the FM keys come in at about 25 % of top speed, brass at 50 %, bells at 63 %; with
+the floor at 0.60, brass at about 27 % and bells at 47 %. Flat running tops out at 10 m/s, 45 % of top speed.
+
+The music's volume is 0.36 (`musicVolume`), halved for a moment after a hit.
 
 ### Copy this into your game
 
@@ -828,7 +880,7 @@ each section's floor (dashed).*
 | **2** | Write your sounds as patches, in one file, with a table of route, note and volume | `SoundLibrary.cs` |
 | **3** | One-shots: bake what is always the same; play live what the game decides | `SoundEffects.cs`, `LiveVoicePool.cs` |
 | **4** | Held sounds: one `SfxPlayer` each, started with its note, bent every frame, released | `ContinuousSounds.cs`, `HeldSound.cs` |
-| **5** | Music: one `SfxMusicPlayer` with a song, and a script that sets `intensity`, cues patterns, and plays notes by hand | `MusicDirector.cs`, and [a first song](#a-first-song) |
+| **5** | Music: one `SfxMusicPlayer` with a song, and a script that sets `intensity` from a floor and the game's speed, holds a pattern where the level wants one, and plays notes by hand | `MusicDirector.cs`, and [a first song](#a-first-song) |
 | **6** | Put it in the scene: follow the installer top to bottom, in code or by hand in the Inspector | `AudioInstaller.cs` |
 | **7** | Or take the folder: copy `Scripts/Audio` (16 files), ten files of `Scripts/Core`, and the song `Assets/SfxDemo/DemoSong.asset` | below |
 
@@ -858,9 +910,11 @@ you copied them into. Then raise the events from your game. Or replace the subsc
 own events, and the reads of speed, rolling, grounded and charge with your own values, and take nothing from Core.
 
 **The song belongs to the folder.** `MusicKit.cs` names the demo song's instruments by index (bells 13, brass 5,
-strings 15, timpani 0), and `MusicDirector`'s section cues name its patterns A to F. Copy
-`unity/Demo/Assets/SfxDemo/DemoSong.asset` with its `.meta` and pass it to `Install`. With a song of your own, change
-`MusicKit.cs`, the section cues and the two phrases (`checkpointAnswer`, `fanfare`) to fit it.
+strings 15, timpani 0). `MusicDirector` names its patterns E and F for the two holds, and its section floors are
+placed between the song's layer marks. Copy `unity/Demo/Assets/SfxDemo/DemoSong.asset` with its `.meta` and pass it
+to `Install`. With a song of your own, change `MusicKit.cs`, the section cues (floors and holds),
+`finalLaunchPattern` and the two phrases (`checkpointAnswer`, `fanfare`) to fit it. The volumes were measured with
+this song and these effects: measure again.
 
 ---
 
@@ -1327,7 +1381,8 @@ Sound can be asserted. The demo's and the showcase's Play mode tests do it in th
 | a baked clip really comes out | `AudioSource.GetOutputData`, largest sample | `ShowcaseAudioTests.AJumpIsHeardThroughSfxForge` |
 | the game bends a held sound | read `pitchSemitones`, `fm`, `level` after the game moved | `ShowcaseAudioTests.TheWindUpRevAndTheRollHumFollowThePlayer` |
 | the music runs and moves on | `IsPlaying`, `Step`, `Bar` | `SfxDemoTests.TheMusicPlaysAndFollowsTheSpeed` |
-| a cue took, and held | wait for `Pattern`, then watch it for three bars | `ShowcaseAudioTests.EnteringASectionCuesItsPatternAndTheMusicStaysOnIt` |
+| a cue took, and held | wait for `Pattern`, then watch it for three bars | `ShowcaseAudioTests.EnteringASectionCuesItsPatternAndTheMusicStaysOnIt` (Static Field, pattern E) |
+| the mix does not clip | record a take at half volume; assert that its largest sample ÷ 0.5 is under 0.95 | `CaptureTakes`, every take ([below](#the-mix-is-measured-not-heard)) |
 | intensity follows the game | read `intensity` (or your director's own value) | `ShowcaseAudioTests.TheMusicsIntensityFollowsSpeedAndDropsOnAHit` |
 
 Four rules that make such tests reliable:
@@ -1342,12 +1397,49 @@ Four rules that make such tests reliable:
 The commands, headless, are in [the showcase's README](../unity/Demo/Assets/Showcase/README.md#check-it-test-it-rebuild-it).
 Only one Unity process can have the project open.
 
+### The mix is measured, not heard
+
+Unity limits its output to full scale before a script can read it. A recording made at listener volume 1 can
+therefore never show that the mix went over: its largest sample reads exactly 1. So the showcase's capture rig
+records every take with `AudioListener.volume` at 0.5 (`CaptureRecorder.ListenerVolume`). The largest sample of the
+take, divided by 0.5, is then what the game reaches at full volume, and every take asserts that this is under
+`CaptureRecorder.MixCeiling`, 0.95 of full scale:
+
+```csharp
+Assert.Less(summary.Peak / CaptureRecorder.ListenerVolume, CaptureRecorder.MixCeiling);
+```
+
+Measured this way, the full run used to peak at 1.38 of full scale. With the volumes of
+[section 7](#the-sound-table-soundlibrary) the takes peak at:
+
+| Take | Peak at full volume |
+|---|---|
+| `full-run` | 0.90 |
+| `adaptive-music` | 0.88 |
+| `held-sounds` | 0.87 |
+| `sections-and-cues` | 0.67 |
+| `hurt-and-goal` | 0.63 |
+| `one-shots` | 0.63 |
+
+Each is `audio.peak` in the take's `telemetry.json`, divided by `audio.listenerVolume`. A take does not peak at
+the same value every time it is recorded: an earlier recording of the same code gave 0.81 for the full run and
+0.82 to 0.83 for the next two. So the room under the ceiling is about a tenth of full scale at best, and a take
+could fail this assertion on an unlucky recording.
+
+What this does not tell you:
+
+| | |
+|---|---|
+| **Nobody has listened** | every level in the showcase comes from these measurements. A peak says that nothing clips. It says nothing about whether the effects and the music are balanced |
+| **Only what was recorded** | the takes are scripted runs. A player can stack sounds in a way no take does; the ceiling leaves 0.05 of full scale for that and no more |
+| **Only when recorded** | the takes are `[Explicit]` tests: they run when asked for, not with the ordinary Play mode run. A changed volume is not checked until the takes are recorded again |
+
 ### Limits
 
 | | |
 |---|---|
 | **Platforms** | the native library is built for Windows x64 only. Elsewhere `SfxNative.Available` is false, `Bake` returns null and the players stay silent, each kind with one warning |
-| **MIDI** | Windows only (winmm). Receiving has not been tested against a real port |
+| **MIDI** | Windows only (winmm). Tested against the emulator over a virtual cable, not against the hardware or the plugin ([section 6](#6-from-the-device-to-the-game)) |
 | **No spatialization** | `SfxPlayer` and `SfxMusicPlayer` add their sound to a 2D mix. For 3D, bake a clip |
 | **One patch per player** | up to 16 overlapping notes of it. A different patch reshapes what still sounds |
 | **Memory** | each `SfxPlayer` and `SfxMusicPlayer` holds its own engine with its effects: about 0.6 MB |
@@ -1384,6 +1476,9 @@ Only one Unity process can have the project open.
 | a note by hand is off the beat | `PlaySound` is not quantised. Wait for `Step` or `Bar` to change |
 | "could not open every MIDI port" | another program holds the port, or its name changed. Choose it again in **Window > SFX Forge** |
 | the window lists no ports | no MIDI device and no virtual cable. The window says what to install |
+| the emulator in the browser sends nothing | its tab is hidden or minimized: the browser throttles it and the firmware stops sending. Keep the tab visible. Also check that **MIDI** is on in its top bar and **MIDI out** names the port Unity listens on |
+| the browser never offers MIDI | Web MIDI needs Chrome or Edge, and the page must be allowed to use MIDI devices (with SysEx) |
+| a song from the device never arrives, though messages come in | before this fix: two pieces arrived swapped. Update the package; `SfxProtocol.TryTakeSongChunk` now takes them in any order |
 | editing a preset in Play mode changes nothing | the sound was baked. Live players follow an edit; baked clips are rendered at start |
 
 ---

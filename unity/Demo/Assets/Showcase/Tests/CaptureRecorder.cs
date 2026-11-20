@@ -42,11 +42,16 @@ namespace SfxShowcase.Tests
         public const int FramesPerSecond = 30;
 
         /// <summary>
-        /// The listener's volume while the rig is on. At full volume the game's mix reaches full scale when the roll
-        /// hum, the wind and the full band sound together, and Unity clips it there. A take is recorded with this much
-        /// room instead; whoever uses the wav brings the level back up (make_unity_videos.py does).
+        /// The listener's volume while the rig is on. Unity limits its output to full scale before anything can read
+        /// it, so a take recorded at 1 can never show that the game's mix went over: its largest sample would read
+        /// exactly 1. A take is recorded with this much room instead, which makes the mix measurable: the game, played
+        /// at 1, peaks at <see cref="Summary.Peak"/> ÷ this. Every take asserts that this stays under
+        /// <see cref="MixCeiling"/>; whoever uses the wav brings the level back up (make_unity_videos.py does).
         /// </summary>
         public const float ListenerVolume = 0.5f;
+
+        /// <summary>The most the game's mix may reach at full volume, of full scale (1 would be the edge of clipping).</summary>
+        public const float MixCeiling = 0.95f;
 
         /// <summary>Samples of multisampling of the render target: the art is flat shapes with inked edges.</summary>
         const int Antialiasing = 4;

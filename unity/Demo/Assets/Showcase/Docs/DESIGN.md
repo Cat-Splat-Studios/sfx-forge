@@ -80,19 +80,20 @@ follow is damped; it never snaps.
 ## 3. The level: First Harmonic
 
 Left to right, about 1 000 m. Ground height wanders over ~40 m in total. Each section is a named piece
-of data in the level definition (name, start x, end x, music pattern, intensity floor) so the music and
-HUD can ask "which section is the player in?".
+of data in the level definition (name, start x, end x) so the music and HUD can ask "which section is
+the player in?". What the music does in each – how full the band is at the least, and whether a pattern
+is held – is the `MusicDirector`'s own table (section 5, "Music").
 
-| # | Section | x range (m) | Length | Purpose | The player should feel | Music pattern |
+| # | Section | x range (m) | Length | Purpose | The player should feel | Music |
 |---|---|---|---|---|---|---|
-| 1 | **Soft Start** | 0 – 90 | 90 | Teach running and jumping. Flat ground, two low steps, three lines of Chimes at running height, one arc of Chimes that traces a jump. No hazards. | Safe; "oh, it keeps accelerating". | A |
-| 2 | **Rolling Sines** | 90 – 220 | 130 | First slopes. Three sine hills, each taller than the last; Chimes hang in the valleys along the line a Tucked Brio takes. One Clipper on the flat top of hill two, easy to jump. | Speed comes from the ground; tucking downhill is a gift. | B |
-| 3 | **Full Cycle** | 220 – 340 | 120 | First loop. A long downhill run-up, one loop (radius 6 m), Chimes placed around the inside of the loop, then a gentle rise that bleeds the speed off. **Tuning Fork 1 at x = 335.** | The first "wow"; the world turned over and I stayed on. | C |
-| 4 | **Woofer Steps** | 340 – 460 | 120 | Springs. A staircase of square-wave terraces too tall to jump; a vertical Woofer at the foot of each (three), Chime columns showing each flight. Ends with one diagonal Woofer that throws Brio across a gap onto the next section. | Bouncy, rhythmic, playful; a breather from speed. | D |
-| 5 | **Static Field** | 460 – 600 | 140 | The hazard stretch. **Tuning Fork 2 at x = 466, on the landing flat before the hazards.** Saw-tooth ridges with a Static burr below each one's drop, four Clippers on the flats, two short pits (respawn pits). Slower, precise; Chimes mark the safe line. | Tension; I have something to lose now. | E (breakdown) |
-| 6 | **Split Signal** | 600 – 800 | 200 | High route and low route. **Tuning Fork 3 at x = 604, before the hill** (a respawn gets another try at the high route). A ramp at the start: arriving fast (or using the diagonal Woofer at its lip) lands Brio on the **high route** – floating sine platforms, long Chime arcs, no enemies, fast. Missing it drops to the **low route** – a trough with three Clippers, two Static burrs and a Woofer at x ≈ 700 that offers a second chance to reach the high route. Both rejoin at x = 790. | High: flying, rewarded. Low: busy but fair, never a punishment box. | C |
-| 7 | **Overdrive** | 800 – 960 | 160 | Speed finale. A horizontal Woofer starts it, then a long downhill, two loops back to back (radius 6 m, then 7 m), a final valley with a second horizontal Woofer (the loops cost too much speed for the launch without it) and a launch ramp that throws Brio in a long arc over a field of Chimes. No hazards at all. | Everything learned, at full speed; the band at full volume. | D, then F is cued when Brio leaves the launch ramp (x ≈ 930) |
-| 8 | **The Resonator** | 960 – 1 000 | 40 | The goal. Flat landing strip, the Resonator arch at x = 980, 20 m of run-out. | Arrival; a clean ending chord. | song stops; fanfare (section 5) |
+| 1 | **Soft Start** | 0 – 90 | 90 | Teach running and jumping. Flat ground, two low steps, three lines of Chimes at running height, one arc of Chimes that traces a jump. No hazards. | Safe; "oh, it keeps accelerating". | The song in its own order |
+| 2 | **Rolling Sines** | 90 – 220 | 130 | First slopes. Three sine hills, each taller than the last; Chimes hang in the valleys along the line a Tucked Brio takes. One Clipper on the flat top of hill two, easy to jump. | Speed comes from the ground; tucking downhill is a gift. | The song in its own order |
+| 3 | **Full Cycle** | 220 – 340 | 120 | First loop. A long downhill run-up, one loop (radius 6 m), Chimes placed around the inside of the loop, then a gentle rise that bleeds the speed off. **Tuning Fork 1 at x = 335.** | The first "wow"; the world turned over and I stayed on. | The song in its own order |
+| 4 | **Woofer Steps** | 340 – 460 | 120 | Springs. A staircase of square-wave terraces too tall to jump; a vertical Woofer at the foot of each (three), Chime columns showing each flight. Ends with one diagonal Woofer that throws Brio across a gap onto the next section. | Bouncy, rhythmic, playful; a breather from speed. | The song in its own order |
+| 5 | **Static Field** | 460 – 600 | 140 | The hazard stretch. **Tuning Fork 2 at x = 466, on the landing flat before the hazards.** Saw-tooth ridges with a Static burr below each one's drop, four Clippers on the flats, two short pits (respawn pits). Slower, precise; Chimes mark the safe line. | Tension; I have something to lose now. | Pattern E, the breakdown, held |
+| 6 | **Split Signal** | 600 – 800 | 200 | High route and low route. **Tuning Fork 3 at x = 604, before the hill** (a respawn gets another try at the high route). A ramp at the start: arriving fast (or using the diagonal Woofer at its lip) lands Brio on the **high route** – floating sine platforms, long Chime arcs, no enemies, fast. Missing it drops to the **low route** – a trough with three Clippers, two Static burrs and a Woofer at x ≈ 700 that offers a second chance to reach the high route. Both rejoin at x = 790. | High: flying, rewarded. Low: busy but fair, never a punishment box. | The song in its own order again |
+| 7 | **Overdrive** | 800 – 960 | 160 | Speed finale. A horizontal Woofer starts it, then a long downhill, two loops back to back (radius 6 m, then 7 m), a final valley with a second horizontal Woofer (the loops cost too much speed for the launch without it) and a launch ramp that throws Brio in a long arc over a field of Chimes. No hazards at all. | Everything learned, at full speed; the whole band. | The song in its own order; then F, the turnaround, is cued when Brio leaves the launch ramp (x ≈ 930) and held |
+| 8 | **The Resonator** | 960 – 1 000 | 40 | The goal. Flat landing strip, the Resonator arch at x = 980, 20 m of run-out. | Arrival; a clean ending chord. | F stays held until the goal; there the song stops; fanfare (section 5) |
 
 Level rules:
 
@@ -271,37 +272,62 @@ Mixing rules: effects sit above the music; no effect is longer than 1.5 s except
 and the fork (13). At most one instance of each looping sound. Footsteps are the quietest sound in
 the game. Chime pings never stack more than four voices.
 
+> **As built.** The volumes are the last column of the table at the bottom of `SoundLibrary.cs`, and
+> the music's is `MusicDirector.musicVolume` (0.36). They were set from measurements, not by ear: the
+> whole mix, at full listener volume, has to stay under 0.95 of full scale in every recorded take
+> (`AUDIO-NOTES.md` section 4, "The mix"). Nobody has judged the balance by listening yet.
+
 ### Music
 
 One `SfxMusicPlayer` playing `DemoSong`, driven by one small `MusicDirector` class.
 
-- **Intensity follows speed.** Target = Brio's speed ÷ the speed cap, clamped 0..1, never below the
-  current section's *intensity floor*. The value sent to `SfxMusicPlayer.intensity` is smoothed: it
-  rises quickly (about 0.6 s to follow a speed-up) and falls slowly (about 2.5 s), so layers arrive
-  with the rush and linger after it. Standing still in Soft Start is kick and little else; Overdrive
-  at full speed is the whole band.
-- **Sections cue patterns** with `CuePattern` (which changes on the next bar line, so it is always
-  musical):
+- **The song plays as it was arranged.** The demo song has a 16-bar arrangement,
+  A B A B C D C D E E A B C D C F, and the level lets it walk through that, round and round. The
+  game does not choose the song's bars; it chooses how much of the band plays them. (The first build
+  cued and held one pattern per section, A B C D E C D, with floors of 0.15 to 0.70: at running speed
+  that was the rhythm section on a one-bar loop, not the demo song.)
+- **Intensity follows speed, from a floor.** Every instrument of the song has a layer mark and plays
+  only when the intensity is at or above it. Each section has an *intensity floor*: the intensity when
+  Brio stands still. Target = the floor at rest, 1 at the speed cap, a straight line between
+  (`Mathf.Lerp(floor, 1, Speed01)`). The value sent to `SfxMusicPlayer.intensity` is smoothed: it
+  rises quickly (0.6 s across the whole range) and falls slowly (2.5 s), so layers arrive with the
+  rush and linger after it.
 
-| Section | Pattern | Intensity floor |
+  The song's layer marks (the mark on the device, 0..127, divided by 127):
+
+  | Kick | Hi-hat | FM bass | Snare | Strings and choir | FM keys | Brass | Bells |
+  |---|---|---|---|---|---|---|---|
+  | 0 | 0.16 | 0.28 | 0.39 | 0.47 | 0.57 | 0.71 | 0.79 |
+
+  So every floor below keeps the rhythm section (kick, hat, bass, snare) playing when Brio stands
+  still; from Full Cycle to Overdrive the strings and choir are there too, in Overdrive the keys as well; and
+  moving brings in the keys, then the brass, then the bells.
+- **Two places hold a pattern** with `CuePattern` (which changes on the next bar line, so it is always
+  musical), cued again on every bar line for as long as the hold lasts: Static Field holds E, the
+  breakdown, while Brio is in it, and the last launch holds F, the turnaround, until the goal. When
+  a hold ends the arrangement walks on from the bar it is in.
+
+| Section | Intensity floor | Pattern |
 |---|---|---|
-| Title card | A | 0 (fixed at 0.15 until the game starts) |
-| Soft Start | A (0) | 0.15 |
-| Rolling Sines | B (1) | 0.25 |
-| Full Cycle | C (2) | 0.40 |
-| Woofer Steps | D (3) | 0.40 |
-| Static Field | E (4) | 0.20 |
-| Split Signal | C (2) | 0.45 |
-| Overdrive | D (3), then F (5) at the launch ramp | 0.70 |
-| The Resonator | – (see goal) | – |
+| Title card | 0.42, fixed until the game starts | the song's own order |
+| Soft Start | 0.42 | the song's own order |
+| Rolling Sines | 0.45 | the song's own order |
+| Full Cycle | 0.50 | the song's own order |
+| Woofer Steps | 0.50 | the song's own order |
+| Static Field | 0.50 | E (4) held |
+| Split Signal | 0.55 | the song's own order: the hold ends |
+| Overdrive | 0.60 | the song's own order, then F (5) held from the launch ramp |
+| The Resonator | 0.42 | whatever is held stays held (F), until the goal stops the song |
 
 - **On hurt:** the band flinches. Intensity is forced to 0 at once (only the kick remains) and the
   music volume dips to 50 %; both recover over 2 s through the normal smoothing. No pattern change.
-- **On respawn:** the pattern of the section the Tuning Fork stands in is cued again; intensity starts
-  from that section's floor.
+- **On respawn:** the music does what it does on entering the section the Tuning Fork stands in (a
+  respawn in Static Field holds E again; anywhere else a hold ends), and the intensity starts from
+  that section's floor.
 - **At a checkpoint:** the music answers the fork with three BELLS notes (music-kit sound 13) played
   through `PlaySound` – E, B, E an octave up, a sixteenth apart – on top of the running song, and the
-  intensity is lifted to at least 0.6 for one bar. The song itself does not stop or change.
+  intensity is lifted to at least 0.8 for one bar, which is above every layer mark: the whole band,
+  bells included. The song itself does not stop or change.
 - **At the goal:** the song stops (`Stop`), then a fanfare is played live on the music kit with
   `PlaySound`: BRASS (sound 5) plays E – G – B – E (up), an eighth note apart at the song's tempo,
   with BELLS (13) doubling the last note, STRINGS (15) holding an E chord root under it, and one
@@ -327,7 +353,8 @@ The technical director checks these at the end.
    roll hum and the wind.
 4. **Both playback routes are shown, and when to use each.** Baked `SfxPreset` clips for frequent
    one-shots; live `SfxPlayer` for modulated sounds – with a comment at each choice saying why.
-5. **Adaptive music in a handful of lines.** Speed drives `intensity`; sections call `CuePattern`;
+5. **Adaptive music in a handful of lines.** The song plays in its own order; a floor per section and
+   speed drive `intensity`; the breakdown and the turnaround are held with `CuePattern`;
    hurt, checkpoint and goal each do something audible with `PlaySound`, volume or `Stop` – all in one
    small `MusicDirector` a reader can take in at once.
 6. **Clean seam, easy to lift out.** Gameplay raises `GameEvents`; only the audio folder references

@@ -183,26 +183,29 @@ namespace SfxShowcase.Audio
             pitchEnv: 64, engineA: 0, engineB: 0, cutoff: 120, resonance: 0, decay: 35);
 
         // ---- how each sound is played: the route, the note it is tuned to, its place in the mix ------------------------------
+        // The volumes were set from measurements, not by ear: with the music at MusicDirector.musicVolume the whole mix,
+        // at full listener volume, stays under 0.95 of full scale in every capture take (Tests/CaptureRecorder.MixCeiling).
+        // Raise one and record the takes again to see whether there is still room.
 
         static readonly SoundDefinition[] Table =
         {
             //                 sound                    patch          route                   note      volume
             new SoundDefinition(GameSound.Jump,          Jump,          SoundRoute.Baked,       Pitch.E5, 0.70f),
-            new SoundDefinition(GameSound.Land,          Land,          SoundRoute.Baked,       0,        1.00f),
+            new SoundDefinition(GameSound.Land,          Land,          SoundRoute.Baked,       0,        0.80f),
             new SoundDefinition(GameSound.FootstepLeft,  FootstepLeft,  SoundRoute.Baked,       0,        0.35f),
             new SoundDefinition(GameSound.FootstepRight, FootstepRight, SoundRoute.Baked,       0,        0.35f),
-            new SoundDefinition(GameSound.TuckStart,     TuckStart,     SoundRoute.Baked,       Pitch.B4, 0.60f),
-            new SoundDefinition(GameSound.RollHum,       RollHum,       SoundRoute.LiveHeld,    Pitch.E2, 0.50f),
-            new SoundDefinition(GameSound.WindUpRev,     WindUpRev,     SoundRoute.LiveHeld,    Pitch.E3, 0.60f),
-            new SoundDefinition(GameSound.Burst,         Burst,         SoundRoute.Baked,       0,        0.90f),
-            new SoundDefinition(GameSound.Chime,         Chime,         SoundRoute.LiveOneShot, Pitch.E5, 0.80f),
-            new SoundDefinition(GameSound.ChimeScatter,  ChimeScatter,  SoundRoute.LiveOneShot, Pitch.E5, 0.70f),
-            new SoundDefinition(GameSound.Woofer,        Woofer,        SoundRoute.Baked,       Pitch.E3, 0.90f),
-            new SoundDefinition(GameSound.Hurt,          Hurt,          SoundRoute.Baked,       Pitch.D3, 0.90f),
-            new SoundDefinition(GameSound.ClipperPop,    ClipperPop,    SoundRoute.Baked,       Pitch.B4, 0.85f),
-            new SoundDefinition(GameSound.TuningFork,    TuningFork,    SoundRoute.Baked,       Pitch.E5, 0.80f),
-            new SoundDefinition(GameSound.Goal,          Goal,          SoundRoute.Baked,       Pitch.E4, 0.90f),
-            new SoundDefinition(GameSound.Wind,          Wind,          SoundRoute.LiveHeld,    0,        0.60f),
+            new SoundDefinition(GameSound.TuckStart,     TuckStart,     SoundRoute.Baked,       Pitch.B4, 0.45f),
+            new SoundDefinition(GameSound.RollHum,       RollHum,       SoundRoute.LiveHeld,    Pitch.E2, 0.27f),
+            new SoundDefinition(GameSound.WindUpRev,     WindUpRev,     SoundRoute.LiveHeld,    Pitch.E3, 0.35f),
+            new SoundDefinition(GameSound.Burst,         Burst,         SoundRoute.Baked,       0,        0.60f),
+            new SoundDefinition(GameSound.Chime,         Chime,         SoundRoute.LiveOneShot, Pitch.E5, 0.55f),
+            new SoundDefinition(GameSound.ChimeScatter,  ChimeScatter,  SoundRoute.LiveOneShot, Pitch.E5, 0.50f),
+            new SoundDefinition(GameSound.Woofer,        Woofer,        SoundRoute.Baked,       Pitch.E3, 0.80f),
+            new SoundDefinition(GameSound.Hurt,          Hurt,          SoundRoute.Baked,       Pitch.D3, 0.80f),
+            new SoundDefinition(GameSound.ClipperPop,    ClipperPop,    SoundRoute.Baked,       Pitch.B4, 0.75f),
+            new SoundDefinition(GameSound.TuningFork,    TuningFork,    SoundRoute.Baked,       Pitch.E5, 0.70f),
+            new SoundDefinition(GameSound.Goal,          Goal,          SoundRoute.Baked,       Pitch.E4, 0.80f),
+            new SoundDefinition(GameSound.Wind,          Wind,          SoundRoute.LiveHeld,    0,        0.30f),
             new SoundDefinition(GameSound.Skid,          Skid,          SoundRoute.Baked,       0,        0.60f),
             new SoundDefinition(GameSound.Respawn,       Respawn,       SoundRoute.Baked,       Pitch.E4, 0.70f),
             new SoundDefinition(GameSound.UiConfirm,     UiConfirm,     SoundRoute.Baked,       Pitch.B5, 0.70f),

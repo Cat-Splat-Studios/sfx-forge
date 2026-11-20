@@ -16,8 +16,8 @@ must wire, and which sound answers which game event. Every sound is SFX FORGE at
 | `LiveVoicePool.cs` | A small pool of `SfxPlayer` voices for live one-shots. |
 | `ContinuousSounds.cs` | **Use 2 – sounds bent while they play.** Roll hum, wind, Wind-Up rev, driven from `IPlayerState` every frame. |
 | `HeldSound.cs` | Hold / let go / retrigger for one sustained `SfxPlayer`. |
-| `MusicDirector.cs` | **Use 3 – adaptive music.** Intensity from speed, a pattern per section, hurt / checkpoint / goal moments. |
-| `SectionCue.cs`, `MusicNote.cs`, `MusicKit.cs` | The music's data: a section's pattern and floor, one hand-played note, the song's instrument indices. |
+| `MusicDirector.cs` | **Use 3 – adaptive music.** The demo song in its own order, intensity from a floor per section up to 1 with speed, two held patterns, hurt / checkpoint / goal moments. |
+| `SectionCue.cs`, `MusicNote.cs`, `MusicKit.cs` | The music's data: a section's floor and the pattern it holds (if any), one hand-played note, the song's instrument indices. |
 | `AudioInstaller.cs`, `PresetFactory.cs` | Builds and wires the `Audio` object. The entry point the scene builder calls. |
 
 Audio only listens and reads: it subscribes to `GameEvents` in `OnEnable`, unsubscribes in `OnDisable`, reads
@@ -54,9 +54,9 @@ The builder does this in `Editor/ShowcaseAudio.cs`, the only editor file that na
 | `Audio/Effects/Footsteps` | `AudioSource` | – |
 | `Audio/Effects/Live Voice 1..3` | `AudioSource`, `SfxPlayer` | `preset` = none (the pool assigns it per trigger), `volume` = 0.8, `playOnEnable` = false |
 | `Audio/Continuous` | `ContinuousSounds` | `Wire(context.Player, rollHum, wind, windUp)` → `player`, `rollHumPlayer`, `windPlayer`, `windUpPlayer` |
-| `Audio/Continuous/Roll Hum` | `AudioSource`, `SfxPlayer` | `preset` = RollHum, `volume` = 0.5, `playOnEnable` = false |
-| `Audio/Continuous/Wind` | `AudioSource`, `SfxPlayer` | `preset` = Wind, `volume` = 0.6, `playOnEnable` = false |
-| `Audio/Continuous/Wind-Up Rev` | `AudioSource`, `SfxPlayer` | `preset` = WindUpRev, `volume` = 0.6, `playOnEnable` = false |
+| `Audio/Continuous/Roll Hum` | `AudioSource`, `SfxPlayer` | `preset` = RollHum, `volume` = 0.27, `playOnEnable` = false |
+| `Audio/Continuous/Wind` | `AudioSource`, `SfxPlayer` | `preset` = Wind, `volume` = 0.3, `playOnEnable` = false |
+| `Audio/Continuous/Wind-Up Rev` | `AudioSource`, `SfxPlayer` | `preset` = WindUpRev, `volume` = 0.35, `playOnEnable` = false |
 
 Every `AudioSource` is 2D (`spatialBlend` 0), `playOnAwake` false, no clip. `SfxPlayer` and `SfxMusicPlayer` add
 their sound to the `AudioSource` beside them and keep it running themselves.
@@ -73,12 +73,12 @@ in the last column) and played with `AudioSource.PlayOneShot`. "Live" = synthesi
 | # | Game event / state | Patch (`SoundLibrary`) | Engine, starts from | How it is played | Variation from the game | Note |
 |---|---|---|---|---|---|---|
 | 1 | `Jumped` | `Jump` | UI BLIP, POWER-UP | Baked | – | E5 |
-| 2 | `Landed(impactSpeed)` | `Land` | IMPACT, THUD | Baked | Silent below 4 m/s; volume 25 %..100 % from 4 to 25 m/s | – |
+| 2 | `Landed(impactSpeed)` | `Land` | IMPACT, THUD | Baked | Silent below 4 m/s; 25 %..100 % of its volume from 4 to 25 m/s | – |
 | 3 | `Footstep(speed01)` | `FootstepLeft` / `FootstepRight` | FOLEY, FOOTSTEP | Baked, two clips, own `AudioSource` | Alternates left / right; source pitch 1.0..1.3 with speed | – |
 | 4 | `TuckStarted` | `TuckStart` | SCI-FI FM, LASER | Baked | – | B4 |
 | 5 | state: `IsRolling && IsGrounded` | `RollHum` | SCI-FI FM, ENGINE HUM | Live, held (`ContinuousSounds`) | Held as the note E2 (`Play(1, 0, 40)`); `pitchSemitones` 0..12, `cutoffOctaves` −1..+1.5, `level` 0.35..1 with `Speed01` | E2 |
 | 6 | `WindUpCharged(charge01)`, state `IsCharging` / `Charge01` | `WindUpRev` | SCI-FI FM, ENGINE HUM / WARP | Live, held; retriggered on every tap | `pitchSemitones` 0..12, `fm` 0..0.6, `cutoffOctaves` 0..1 with charge (falls again as it leaks); released on `BurstReleased` or when `IsCharging` goes false | E3 |
-| 7 | `BurstReleased(charge01)` | `Burst` | FOLEY, WHOOSH + PUNCH | Baked | Volume 50 %..100 % with charge | – |
+| 7 | `BurstReleased(charge01)` | `Burst` | FOLEY, WHOOSH + PUNCH | Baked | 50 %..100 % of its volume with charge | – |
 | 8 | `ChimeCollected(combo)` | `Chime` | UI BLIP, COIN | Live one-shot (`LiveVoicePool`) | One step up E minor pentatonic per combo count, capped at 10 steps (two octaves); at most one ping per 45 ms | E5 |
 | 9 | `ChimesScattered(count)` | `ChimeScatter` | UI BLIP, COIN + CRUSH | Live one-shots: a run of 5–8 pings, 55 ms apart | More pings with more Chimes; each ping a pentatonic step lower and quieter | E5 |
 | 10 | `WooferBounced` | `Woofer` | SCI-FI FM, WARP / POWER-UP | Baked | – | E3 |
@@ -92,6 +92,9 @@ in the last column) and played with `AudioSource.PlayOneShot`. "Live" = synthesi
 | 18 | `UiConfirmed` | `UiConfirm` | UI BLIP, SELECT | Baked | – | B5 |
 | 19 | `SectionEntered(section)` | – | – | Music only | – | – |
 
+"Its volume" is the sound's own volume in the table at the bottom of `SoundLibrary.cs` (a held sound's is its
+`SfxPlayer.volume`, a pooled live one-shot's is its velocity): Land 0.8 and Burst 0.6 at the most, for example.
+
 There is no event for the end of a roll: the roll hum ends when the state says the roll ended. The held
 sounds are started with their MIDI note like every other pitched sound (`HeldSound.Hold`); the wind is noise
 and is started with note 0, at the patch's own FREQ.
@@ -100,25 +103,53 @@ and is started with note 0, at the patch's own FREQ.
 
 | Game event / state | What the music does | SFX FORGE call |
 |---|---|---|
-| every frame | Intensity = `Speed01`, never below the section's floor; rises in 0.6 s, falls in 2.5 s. Fixed at 0.15 on the title card. | `SfxMusicPlayer.intensity` |
-| `SectionEntered(section)` | The section's pattern from the next bar line, and held there: A, B, C, D, E, C, D, – (floors 0.15, 0.25, 0.40, 0.40, 0.20, 0.45, 0.70, 0). | `CuePattern`, again whenever `Bar` changes |
+| always | The song plays its own 16-bar arrangement, A B A B C D C D E E A B C D C F, round and round, at volume 0.36 (`musicVolume`). | `SfxMusicPlayer.song`, `playOnEnable`, `volume` |
+| every frame | Intensity = the section's floor when the player stands still, 1 at top speed, a straight line between (`Mathf.Lerp(floor, 1, Speed01)`); rises in 0.6 s, falls in 2.5 s. Fixed at 0.42 on the title card. | `SfxMusicPlayer.intensity` |
+| `SectionEntered(section)` | The section's floor: 0.42, 0.45, 0.50, 0.50, 0.50, 0.55, 0.60, 0.42. Static Field also holds pattern E, the breakdown, from the next bar line; The Resonator leaves a hold as it is; every other section ends a hold, and the arrangement walks on from the bar it is in. | `CuePattern(4)`, again whenever `Bar` changes |
 | `FinalLaunch` | The turnaround, pattern F, held until the goal stops the song. | `CuePattern(5)`, again whenever `Bar` changes |
-| `Hurt` | Intensity to 0 at once; volume to 50 % over 50 ms; both recover over 2 s. | `intensity`, `volume` |
-| `Respawned(section)` | That section's pattern again; intensity starts from its floor. | `CuePattern` |
-| `CheckpointReached` | BELLS play E5, B5, E6 a sixteenth apart on top of the song, starting on the song's next sixteenth (`Step`); intensity at least 0.6 for one bar. | `PlaySound(13, velocity, note)` |
+| `Hurt` | Intensity to 0 at once; volume to 50 % of its own over 50 ms; both recover over 2 s. | `intensity`, `volume` |
+| `Respawned(section)` | What entering that section does (a hold begins or ends); intensity starts from its floor. | `CuePattern` in Static Field |
+| `CheckpointReached` | BELLS play E5, B5, E6 a sixteenth apart on top of the song, starting on the song's next sixteenth (`Step`); intensity at least 0.8 for one bar (above every layer mark: the whole band). | `PlaySound(13, velocity, note)` |
 | `GoalReached` | The song stops. The fanfare's instruments are brought forward and the room made bigger, then: STRINGS hold E3, BRASS plays E4 G4 B4 E5 an eighth apart, BELLS E6 and TIMPANI on the last note. | `Stop`, `SetTrackVolume`, `SetMaster(ReverbSize)`, `PlaySound`, `ReleaseSound` |
-| `GameStarted` | From the title card: pattern A is cued. After a goal: the fanfare is cut, the song's own mix is restored and the song starts again at pattern A. | `CuePattern`, `Reload`, `Play` |
+| `GameStarted` | From the title card: nothing is cued, the song plays on where it is. After a goal: the fanfare is cut, the song's own mix is restored and the song starts again at pattern A. | `Reload`, `Play` (after a goal only) |
 
 ## 4. Decisions worth knowing
 
 - **Speed.** `Speed01` is the player's speed of travel ÷ the speed cap: along the ground, or sideways in the
   air. A Woofer's throw straight up or a fall does not raise the intensity or start the wind.
-- **Holding a section's pattern.** The demo song has a 16-bar arrangement (A B A B C D C D E E A B C D C F) that
-  contains every pattern. With an arrangement, `CuePattern(n)` means "jump to the arrangement's next bar with
-  pattern n, then walk on", so one cue lasts one bar (two for E). `MusicDirector.HoldPattern` cues the
-  section's pattern again each time `SfxMusicPlayer.Bar` changes; a cue pending at every bar line keeps the
-  pattern. On the title card nothing is held and the whole arrangement plays. A song without an arrangement
-  (`SfxSong.ArrangementBars == 0`) holds a cued pattern by itself.
+- **The song in its own order.** The demo song has a 16-bar arrangement (A B A B C D C D E E A B C D C F) that
+  contains every pattern, and the showcase lets it play: on the title card and in five of the eight sections
+  nothing is cued, and in Overdrive nothing until the last launch. A section's row in `MusicDirector.sectionCues` is its intensity floor and one of three things
+  (`SectionCue.Pattern`): `SongOrder` (−2) – the song plays in its own order, and a hold that was on ends;
+  0..7 – that pattern is held in the section; `KeepPattern` (−1) – whatever is held stays held. The first build
+  held one pattern per section with low floors, which at running speed was the rhythm section on a one-bar loop.
+- **The floors and the layer marks.** The song's layer marks are kick 0, hi-hat 0.16, FM bass 0.28, snare 0.39,
+  strings and choir 0.47, FM keys 0.57, brass 0.71, bells 0.79 (the device's value ÷ 127; a take's
+  `telemetry.json` lists them under `song.instruments`). The lowest floor, 0.42, is above the snare's mark, so
+  the rhythm section plays wherever the player stands still; 0.50 (Full Cycle, Woofer Steps, Static Field) adds
+  the strings and choir, 0.60 (Overdrive) the keys. Speed fills the rest of the way to 1: in Soft Start the
+  keys are reached at about a quarter of top speed, the brass at half, the bells at about 63 %.
+- **Holding a pattern.** With an arrangement, `CuePattern(n)` means "jump to the arrangement's next bar with
+  pattern n, then walk on", so one cue lasts one bar (two for E). `MusicDirector.HoldPattern` cues the held
+  pattern again each time `SfxMusicPlayer.Bar` changes; a cue pending at every bar line keeps the pattern. Two
+  holds exist: E while the player is in Static Field, and F from `FinalLaunch` to the goal (The Resonator is
+  `KeepPattern`, so entering it does not end the hold). When a hold ends nothing more is cued and the
+  arrangement walks on from the bar it is in: its two E bars are followed by A, bar 11 of the 16 (in the
+  recorded full run the song leaves Static Field's E with A B C D C F). A song without an arrangement
+  (`SfxSong.ArrangementBars == 0`) and with a chain of 1 holds a cued pattern by itself; with a longer chain
+  the cue lasts one bar.
+- **The mix.** The volumes – `MusicDirector.musicVolume` 0.36 and the last column of the table in
+  `SoundLibrary.cs` – were set from measurements, not by ear. Unity limits its
+  output to full scale before `AudioRenderer` can read it, so a recording made at listener volume 1 cannot show
+  that the mix went over. The capture takes are recorded at listener volume 0.5
+  (`CaptureRecorder.ListenerVolume`), and each asserts that its peak ÷ 0.5 – the peak of the game played at full
+  volume – is under 0.95 (`CaptureRecorder.MixCeiling`). With the first build's volumes (music 0.6, effects
+  up to 1.0) the full run reached 1.38 of full scale; the loudest moments were rows of Chimes and the Land thump
+  on top of the band, and a full-charge Burst (burst, tuck, rev, hum and wind at once). The takes as recorded
+  now peak at 0.90 (full run), 0.88 (adaptive music), 0.87 (held sounds), 0.67 (sections and cues), 0.63 (one-shots)
+  and 0.63 (hurt and goal) of full scale; an earlier recording of the same code gave 0.81 to 0.83 for the first
+  three, so a take's peak moves by about a tenth between recordings. That is all that has been checked: the peaks are measured, the
+  balance between the music and the effects has not been judged by listening.
 - **The package does not smooth `SfxMusicPlayer.volume`** (it is applied per audio block; the four live values
   of an `SfxPlayer` glide over 30 ms). A dip in one step is a click, so the hurt dip is ramped over 50 ms.
 - **Notes played by hand are not quantised.** `PlaySound` sounds at once. The checkpoint's phrase waits for the

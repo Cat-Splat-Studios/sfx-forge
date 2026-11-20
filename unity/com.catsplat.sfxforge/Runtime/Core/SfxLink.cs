@@ -17,7 +17,8 @@ namespace CatSplat.SfxForge
         readonly int[] lastCc = new int[8];
         readonly byte[] songIn = new byte[SfxProtocol.SongBytes];
         readonly SfxPatch[] sounds = new SfxPatch[SfxProtocol.Slots];
-        int songNext = -1, soundsSeen;
+        int soundsSeen;
+        ulong songSeen;
 
         public SfxLink() { Forget(); }
 
@@ -86,7 +87,7 @@ namespace CatSplat.SfxForge
                         sounds[slot] = patch; soundsSeen |= 1 << slot;
                         PatchReceived?.Invoke(slot, patch);
                     }
-                    else if (SfxProtocol.TryTakeSongChunk(m, songIn, ref songNext))
+                    else if (SfxProtocol.TryTakeSongChunk(m, songIn, ref songSeen))
                     {
                         SongReceived?.Invoke((byte[])songIn.Clone(), soundsSeen == 0xFFFF ? (SfxPatch[])sounds.Clone() : null);
                         soundsSeen = 0;
@@ -119,7 +120,7 @@ namespace CatSplat.SfxForge
         public bool RequestPatch(int slot) => output != null && output.SendSysEx(SfxProtocol.BuildRequest(slot));
 
         /// <summary>Asks for the 16 sounds and the song of the device; the answer comes as SongReceived.</summary>
-        public bool RequestSong() { soundsSeen = 0; return output != null && output.SendSysEx(SfxProtocol.BuildRequestSong()); }
+        public bool RequestSong() { soundsSeen = 0; songSeen = 0; return output != null && output.SendSysEx(SfxProtocol.BuildRequestSong()); }
 
         /// <summary>16 sounds and a packed song to the device (it replaces what is there).</summary>
         public bool SendSong(SfxPatch[] patches, byte[] song)

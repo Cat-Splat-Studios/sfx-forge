@@ -294,11 +294,15 @@ version, with every step, is `../README.md` ("Use SFX FORGE in your own Unity ga
      `pitchSemitones`, `cutoffOctaves`, `fm`, `level` written every frame: the roll hum, the wind and the
      Wind-Up rev.
 
-5. **Adaptive music in a handful of lines.** `MusicDirector.cs` drives one `SfxMusicPlayer`:
-   `music.intensity = …` from the player's speed (fast in, slow out, never below the section's floor),
-   `music.CuePattern(n)` when `SectionEntered` arrives – and again on every bar line, because a song with
-   an arrangement (the demo song) treats a cue as "jump to the arrangement's next bar with this pattern"
-   and then walks on; only a song without an arrangement, or a pattern outside it, holds a cue by itself –
+5. **Adaptive music in a handful of lines.** `MusicDirector.cs` drives one `SfxMusicPlayer`. The song
+   plays in its own order (the demo song's 16-bar arrangement); the game decides how much of the band
+   plays it: `music.intensity = …` runs from the section's floor when the player stands still to 1 at
+   top speed (fast in, slow out). `music.CuePattern(n)` is used in the two places that want one
+   pattern – the breakdown while the player is in Static Field (`SectionEntered`) and the turnaround
+   from the last launch (`FinalLaunch`) – and again on every bar line while that hold lasts, because a
+   song with an arrangement treats a cue as "jump to the arrangement's next bar with this pattern" and
+   then walks on; only a pattern outside the arrangement, or a song with no arrangement and a chain of 1, holds a cue by itself.
+   When the hold ends the arrangement walks on from where it is. Then
    `music.PlaySound(instrument, velocity, note)` for the checkpoint's bell answer (started on the song's
    next sixteenth: notes by hand are not quantised) and the goal's fanfare, `music.volume` for the dip
    when hurt (ramped over 50 ms here: the player applies `volume` per audio block without smoothing), and

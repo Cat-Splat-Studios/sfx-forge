@@ -375,7 +375,7 @@ namespace SfxShowcase.Tests
                 .Append(Text("music.layers lists the song's sounds (by index) whose layer mark the intensity reaches; whether one has notes depends on the pattern.")).Append(',')
                 .Append(Text("sounds is worked out from the events with the rules of SoundEffects; held sounds and live voices are read from their SfxPlayers.")).Append(',')
                 .Append(Text("A held sound's 'held' is true from Hold to LetGo; 'sounding' is its SfxPlayer's IsPlaying, which stays true while the tail fades. Its values are the last ones written.")).Append(',')
-                .Append(Text("The take was recorded at audio.listenerVolume, so that the loudest stretches are not clipped; the game itself plays at 1.")).Append(',')
+                .Append(Text("The take was recorded at audio.listenerVolume, which makes the mix measurable (Unity limits its output to full scale): the game itself plays at 1 and peaks at audio.peak / audio.listenerVolume, which every take asserts to be under 0.95.")).Append(',')
                 .Append(Text("song.byHand lists the notes MusicDirector plays with PlaySound: start and length in sixteenths from the 'music' entry of that name in sounds.")).Append("],\n");
             AppendSong(json);
             AppendSections(json);

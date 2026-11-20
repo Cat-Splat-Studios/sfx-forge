@@ -9,13 +9,24 @@ its sound (audio.wav, as SFX FORGE made it in Unity) and telemetry.json: what th
 A video is a list of parts (below): a take, or a slide. This file lays each frame out - the game's picture, beside it
 what SFX FORGE is doing in that frame (read from the telemetry), the caption - and ffmpeg joins pictures and sound. A
 take's sound is its own wav, cut where its pictures are cut; a slide is silent. Nothing else is ever heard. Each take is
-brought to one loudness with a single gain (measured with ffmpeg's ebur128, never above -2 dBFS). Results: out/video/*.mp4.
+brought to one loudness with a single gain (measured with ffmpeg's ebur128, never above -2 dBFS before the AAC encoder,
+which adds up to a decibel and a half). Results: out/video/*.mp4.
 
-The takes are recorded at half the listener's volume (CaptureRecorder.ListenerVolume), because at full volume the game's
-mix is clipped where the roll hum, the wind and the full band sound together. The gain here brings the level back up.
+The takes are recorded at half the listener's volume (CaptureRecorder.ListenerVolume): Unity limits its output to full
+scale before a take can read it, so only a take with room above it shows what the game's mix reaches (every take asserts
+that this stays under full scale at full volume). The gain here brings the level back up.
 
-Which instrument has notes in which pattern is not in the telemetry: it is read from the song itself,
+The song plays in its own order, the arrangement in the telemetry (song.arrangement). Where the song is in it is not in
+the telemetry: it is worked out from the pattern of each bar with the rule of core/sfx_song.h (a bar line goes on to the
+next bar of the arrangement with the pattern that plays). Whether a pattern is HELD is worked out from the events with the
+rules of MusicDirector.cs: a section with a pattern holds it, a section in the song's order ends the hold, the final
+launch holds the pattern named there.
+
+Which instrument has notes in which pattern is not in the telemetry either: it is read from the song itself,
 unity/Demo/Assets/SfxDemo/DemoSong.bytes (the packed format of core/sfx_song.h).
+
+The pages of code in the second video are excerpts carried in this file. excerpt() checks every line of them against the
+source file named above it, so a page cannot show code that is no longer there.
 """
 import bisect
 import glob
@@ -42,6 +53,20 @@ GAME = (40, 128, 1376, 774)                          # where the game's picture 
 SIDE = (1440, 128, 440, 774)                         # the panel beside it
 UNLIT, GLOW = "#2A221D", "#3A2414"
 SONG = os.path.join(ROOT, "unity", "Demo", "Assets", "SfxDemo", "DemoSong.bytes")
+AUDIO = os.path.join(ROOT, "unity", "Demo", "Assets", "Showcase", "Scripts", "Audio")
+LETTERS = "ABCDEFGH"
+SONG_ORDER = -2                                      # SectionCue.SongOrder: no pattern is held, the song plays in its own order
+
+
+def final_launch_pattern():
+    """The pattern MusicDirector cues and holds at the final launch: it is not in the telemetry."""
+    found = re.search(r"int finalLaunchPattern = Pattern([A-H]);", open(os.path.join(AUDIO, "MusicDirector.cs"), encoding="utf-8").read())
+    if not found:
+        sys.exit("MusicDirector.cs no longer names its finalLaunchPattern: final_launch_pattern() must follow it")
+    return LETTERS.index(found.group(1))
+
+
+FINAL_LAUNCH = final_launch_pattern()
 
 
 def mono(size, bold=False):
@@ -95,6 +120,9 @@ class Recording:
             [i for i in self.instruments if i["index"] in by_hand - in_song]
         self.only_by_hand = by_hand - in_song
         self.marks = sorted({i["layer"] for i in self.lamps if i["layer"] > 0})
+        self.floor = {s["id"]: s["intensityFloor"] for s in t["sections"]}
+        self.arrangement = t["song"]["arrangement"]
+        self.follow_song(t)
         sixteenth = 60.0 / t["song"]["bpm"] / 4 * FPS                       # in pictures
         self.hand = {}                               # instrument: [(first frame, last frame)] of notes played by hand
         self.steps, self.played = [], []             # the frames of the footsteps; every other sound: (frame, name, note, route)
@@ -124,6 +152,38 @@ class Recording:
                              capture_output=True, text=True).stderr
         self.loudness = float(re.findall(r"I:\s+(-?[\d.]+) LUFS", out)[-1])
         self.peak = float(np.abs(self.sound).max())
+
+    def follow_song(self, t):
+        """For every frame: the pattern MusicDirector holds (None: the song's own order), and the bar of the arrangement."""
+        cue = {s["id"]: s["pattern"] for s in t["sections"]}
+        changes = {}                                 # frame: the pattern held from it on
+        for e in t["events"]:
+            if e["name"] in ("SectionEntered", "Respawned"):
+                pattern = cue.get(e["value"], SONG_ORDER)
+                if pattern >= 0 or pattern == SONG_ORDER:        # SectionCue.KeepPattern leaves what is held
+                    changes[e["f"]] = pattern if pattern >= 0 else None
+            elif e["name"] == "FinalLaunch":
+                changes[e["f"]] = FINAL_LAUNCH
+        held = cue.get(self.frames[0]["section"], SONG_ORDER)    # a take that begins in a section began with its cue
+        held = held if held >= 0 else None
+        arr, at, bar = self.arrangement, None, None
+        self.holds, self.arranged = [], []
+        for k, f in enumerate(self.frames):
+            held = changes.get(k, held)
+            m = f["music"]
+            if not m["playing"] or not arr:
+                at, bar = None, None
+            elif bar is None:                        # the first bar seen: bars since Play, if nothing was cued before
+                at = m["bar"] % len(arr)
+                if arr[at] != m["pattern"]:
+                    at = arr.index(m["pattern"]) if m["pattern"] in arr else None
+                bar = m["bar"]
+            elif m["bar"] != bar:                    # a bar line: on to the next bar of the arrangement with this pattern
+                start = -1 if at is None else at
+                at = next((j % len(arr) for j in range(start + 1, start + 1 + len(arr)) if arr[j % len(arr)] == m["pattern"]), None)
+                bar = m["bar"]
+            self.holds.append(held)
+            self.arranged.append(at)
 
     def gain(self, target):
         """One number for the whole take: to the target loudness, but no sample above -2 dBFS."""
@@ -217,38 +277,60 @@ def panel(d, take, k, focus):
         if right:
             d.text((px + pw - d.textlength(right, font=small), yy + 1), right, font=small, fill=DIM)
 
-    head(y + 14, "SECTION", "section")
-    d.text((px, y + 36), f["sectionName"], font=font(30), fill=TEXT)
+    head(y + 12, "SECTION", "section")
+    d.text((px, y + 31), f["sectionName"], font=font(28), fill=TEXT)
 
-    head(y + 84, "PATTERN", "pattern")
-    if m["playing"]:
-        d.text((px, y + 102), m["letter"] or "-", font=font(46), fill=EMBER)
-        d.text((px + 50, y + 122), "bar %d" % (m["bar"] + 1), font=font(24, False), fill=TEXT)
+    hold = take.holds[k]                                 # the song: its pattern, its bar, where it is in its arrangement
+    if not m["playing"]:
+        head(y + 76, "THE SONG", "pattern")
+        d.text((px, y + 106), "the song has stopped", font=font(24, False), fill=DIM)
+    else:
+        if hold is None:
+            head(y + 76, "THE SONG", "pattern", "in its own order")
+        else:
+            head(y + 76, "THE SONG", "pattern")
+            right = "%s IS HELD" % LETTERS[hold] if m["pattern"] == hold else "%s from the next bar line" % LETTERS[hold]
+            d.text((px + pw - d.textlength(right, font=label), y + 76), right, font=label, fill=EMBER)
+        d.text((px, y + 90), m["letter"] or "-", font=font(46), fill=EMBER)
+        d.text((px + 50, y + 110), "bar %d" % (m["bar"] + 1), font=font(24, False), fill=TEXT)
         for s in range(16):                              # the sixteen steps of the bar
             sx = px + 168 + s * 14 + (s // 4) * 6
-            d.rectangle([sx, y + 126, sx + 10, y + 144], fill=EMBER if s == m["step"] else ("#5A4A3E" if s % 4 == 0 else UNLIT))
-    else:
-        d.text((px, y + 116), "the song has stopped", font=font(24, False), fill=DIM)
+            d.rectangle([sx, y + 114, sx + 10, y + 132], fill=EMBER if s == m["step"] else ("#5A4A3E" if s % 4 == 0 else UNLIT))
+    at = take.arranged[k]                                # the arrangement: one cell a bar, the bar that plays lit
+    cell = font(15)
+    for n, pattern in enumerate(take.arrangement):
+        cx = px + n * 24 + (n // 4) * 5
+        here = m["playing"] and n == at
+        waits = m["playing"] and hold is not None and pattern == hold       # a bar of the pattern that is held or cued
+        d.rectangle([cx, y + 150, cx + 21, y + 174], fill=EMBER if here else UNLIT, outline=EMBER if here or waits else "#5A4A3E", width=2 if waits else 1)
+        letter = LETTERS[pattern]
+        d.text((cx + 11 - d.textlength(letter, font=cell) / 2, y + 152), letter, font=cell, fill=BG if here else (TEXT if waits else DIM))
 
-    head(y + 170, "INTENSITY", "intensity", "from the player's speed")
-    d.rounded_rectangle([px, y + 198, px + pw, y + 216], 4, fill=UNLIT)
+    floor = take.floor.get(f["section"]) if m["playing"] and f["phase"] == "Playing" else None
+    head(y + 190, "INTENSITY", "intensity", "from the section's floor to 1, by speed")
+    d.rounded_rectangle([px, y + 218, px + pw, y + 236], 4, fill=UNLIT)
     if m["playing"]:
-        d.rounded_rectangle([px, y + 198, px + max(8, int(pw * min(1.0, m["intensity"]))), y + 216], 4, fill=EMBER)
+        d.rounded_rectangle([px, y + 218, px + max(8, int(pw * min(1.0, m["intensity"]))), y + 236], 4, fill=EMBER)
     for mark in take.marks:                              # where each layer comes in
         tx = px + int(pw * mark)
-        d.line([tx, y + 194, tx, y + 220], fill=TEXT, width=2)
-    d.text((px + pw - d.textlength("%.2f" % m["intensity"], font=name), y + 224), "%.2f" % m["intensity"], font=name, fill=TEXT if m["playing"] else DIM)
-    d.text((px, y + 226), "a mark: a layer joins", font=small, fill=DIM)
+        d.line([tx, y + 214, tx, y + 240], fill=TEXT, width=2)
+    if floor is not None:                                # where the intensity rests when the player stands still
+        tx = px + int(pw * floor)
+        d.polygon([(tx, y + 238), (tx - 6, y + 247), (tx + 6, y + 247)], fill=EMBER)
+    d.text((px + pw - d.textlength("%.2f" % m["intensity"], font=name), y + 246), "%.2f" % m["intensity"], font=name, fill=TEXT if m["playing"] else DIM)
+    d.text((px, y + 250), "a line: a layer joins", font=small, fill=DIM)
+    d.polygon([(px + 178, y + 256), (px + 172, y + 266), (px + 184, y + 266)], fill=EMBER)
+    d.text((px + 192, y + 250), "the floor", font=small, fill=DIM)
 
-    head(y + 258, "VOLUME", "volume")                    # SfxMusicPlayer.volume: it dips after a hit
-    d.rounded_rectangle([px + 96, y + 262, px + pw - 60, y + 274], 3, fill=UNLIT)
-    d.rounded_rectangle([px + 96, y + 262, px + 96 + max(4, int((pw - 156) * min(1.0, m["volume"]))), y + 274], 3, fill=EMBER if m["playing"] else "#5A4A3E")
-    d.text((px + pw - d.textlength("%.2f" % m["volume"], font=name), y + 256), "%.2f" % m["volume"], font=name, fill=TEXT)
+    head(y + 280, "VOLUME", "volume")                    # SfxMusicPlayer.volume: it dips after a hit
+    d.rounded_rectangle([px + 96, y + 284, px + pw - 60, y + 296], 3, fill=UNLIT)
+    d.rounded_rectangle([px + 96, y + 284, px + 96 + max(4, int((pw - 156) * min(1.0, m["volume"]))), y + 296], 3, fill=EMBER if m["playing"] else "#5A4A3E")
+    d.text((px + pw - d.textlength("%.2f" % m["volume"], font=name), y + 278), "%.2f" % m["volume"], font=name, fill=TEXT)
 
-    head(y + 292, "LAYERS", "layers", "lit: it plays now")
+    head(y + 312, "LAYERS", "layers", "lit: it plays now")
     rows = (len(take.lamps) + 1) // 2
     for n, i in enumerate(take.lamps):
-        cx, yy = px + 204 * (n // rows), y + 318 + (n % rows) * 25
+        cx, yy = px + 204 * (n // rows), y + 337 + (n % rows) * 25
         by_hand = any(a <= k < b for a, b in take.hand.get(i["index"], []))
         let_in = m["playing"] and i["index"] in m["layers"]
         on = by_hand or (let_in and i["index"] in NOTES[m["pattern"]])
@@ -261,11 +343,11 @@ def panel(d, take, k, focus):
         d.text((cx + 22, yy), INSTRUMENT_NAME.get(i["name"], i["name"]), font=name if on else value, fill=TEXT if on else DIM)
         right = "by hand" if by_hand or i["index"] in take.only_by_hand else ("%.2f" % i["layer"] if i["layer"] > 0 else "always")
         d.text((cx + 190 - d.textlength(right, font=small), yy + 3), right, font=small, fill=EMBER if on else DIM)
-    d.text((px, y + 318 + rows * 25 + 2), "ring: let in, but no notes in this pattern", font=small, fill=DIM)
+    d.text((px, y + 337 + rows * 25 + 1), "ring: let in, but no notes in this pattern", font=small, fill=DIM)
 
-    head(y + 478, "FOLLOWING THE GAME", "held", "held, bent every frame")
+    head(y + 496, "FOLLOWING THE GAME", "held", "held, bent every frame")
     for n, (key, text) in enumerate(HELD):
-        yy = y + 504 + n * 27
+        yy = y + 521 + n * 27
         v = f["held"][key]
         on = v["held"]                                   # from Hold to LetGo; the tail after that is not shown
         lamp(d, px, yy + 4, on)
@@ -275,18 +357,18 @@ def panel(d, take, k, focus):
             d.rounded_rectangle([px + 168, yy + 6, px + 168 + max(4, int(100 * min(1.0, v["level"]))), yy + 18], 3, fill=EMBER)
             bend = "+%.1f st" % v["pitchSemitones"] if key != "Wind" else "%+.1f oct" % v["cutoffOctaves"]
             d.text((px + pw - d.textlength(bend, font=small), yy + 3), bend, font=small, fill=TEXT)
-    yy = y + 504 + 3 * 27
+    yy = y + 521 + 3 * 27
     n = bisect.bisect_right(take.steps, k)
     on = n > 0 and k - take.steps[n - 1] < 4
     lamp(d, px, yy + 4, on)
     d.text((px + 22, yy), "Footsteps", font=name if on else value, fill=TEXT if on else DIM)
     d.text((px + pw - d.textlength("baked", font=small), yy + 3), "baked", font=small, fill=DIM)
 
-    head(y + 622, "JUST PLAYED", "played", "sound, route")
+    head(y + 640, "JUST PLAYED", "played", "sound, route")
     n = bisect.bisect_right(take.at, k)
-    rows = [p for p in take.played[max(0, n - 4):n] if k - p[0] < 6 * FPS]
+    rows = [p for p in take.played[max(0, n - 3):n] if k - p[0] < 6 * FPS]
     for r, (at, what, note, route) in enumerate(reversed(rows)):
-        yy = y + 648 + r * 27
+        yy = y + 665 + r * 27
         fresh = k - at < 8
         colour = EMBER if fresh else (TEXT if r == 0 else DIM)
         d.text((px, yy), what, font=name if r == 0 else value, fill=colour)
@@ -471,20 +553,20 @@ def showcase():
 
     run = [                                           # the run itself begins at 3.0 s of the take
         (0.0, "BRIO: FIRST HARMONIC", "Every sound you hear is synthesized while the game runs. There is no audio file."),
-        (6.0, "SOFT START", "Each Chime in a row is one step higher up a scale. A live voice plays it."),
-        (enter("RollingSines"), "ROLLING SINES", "A new section cues its pattern. The song changes on the next bar line: A to B."),
-        (enter("RollingSines", 6.5), "ROLLING SINES", "INTENSITY is your speed. A lit lamp is an instrument that plays now."),
+        (6.0, "SOFT START", "Each Chime in a row is one step higher up a scale, up to ten steps. A live voice plays it."),
+        (enter("RollingSines"), "ROLLING SINES", "The music is the device's demo song, in its own order: sixteen bars, round and round."),
+        (enter("RollingSines", 6.5), "ROLLING SINES", "INTENSITY: the section's floor when you stand still, 1 at top speed. A lit lamp plays now."),
         (enter("FullCycle"), "FULL CYCLE", "A roll holds a hum. Its pitch and filter follow your speed."),
-        (enter("FullCycle", 4.5), "FULL CYCLE", "At top speed the wind joins and the band is full."),
-        (take.when("CheckpointReached", 0), "WOOFER STEPS", "A Tuning Fork is a checkpoint. The song's own bells answer it, in time."),
+        (enter("FullCycle", 4.5), "FULL CYCLE", "At top speed the wind joins, and every layer is let in."),
+        (take.when("CheckpointReached", 0), "FULL CYCLE", "A Tuning Fork is a checkpoint. The song's own bells answer it, in time."),
         (enter("WooferSteps", 5.6), "WOOFER STEPS", "Jump, landing, Woofer: baked once at the start, then played as ordinary clips."),
-        (enter("StaticField"), "STATIC FIELD", "Pattern E. Popping a Clipper is a baked clip, tuned to the song's key."),
-        (enter("StaticField", 6.7), "STATIC FIELD", "JUST PLAYED names each sound as it plays, and the route it took."),
-        (enter("SplitSignal"), "SPLIT SIGNAL", "Back to pattern C. A roll brings the hum and the wind back."),
+        (enter("StaticField"), "STATIC FIELD", "Static Field holds pattern E, the song's breakdown. It is cued again on every bar line."),
+        (enter("StaticField", 6.7), "STATIC FIELD", "A Clipper pop is a baked clip, tuned to the song's key. JUST PLAYED names each sound's route."),
+        (enter("SplitSignal"), "SPLIT SIGNAL", "The hold ends, and the song walks on through its arrangement from where it is."),
         (enter("SplitSignal", 6.6), "SPLIT SIGNAL", "Footsteps are two baked clips. Their pitch rises with your speed."),
         (enter("SplitSignal", 12.1), "SPLIT SIGNAL", "Nineteen sound effects, one song. All of it is patches and numbers."),
-        (enter("Overdrive"), "OVERDRIVE", "The floor is 0.70 here: the band stays full. At speed, brass and bells join."),
-        (enter("Overdrive", 7.1), "OVERDRIVE", "The last ramp cues pattern F, the song's turnaround."),
+        (enter("Overdrive"), "OVERDRIVE", "Overdrive's floor is %.2f: the FM keys stay at a standstill. At speed, brass and bells join." % take.floor["Overdrive"]),
+        (enter("Overdrive", 7.1), "OVERDRIVE", "Leaving the last ramp cues pattern %s, the song's turnaround. It is held until the goal." % LETTERS[FINAL_LAUNCH]),
         (enter("TheResonator"), "THE RESONATOR", "The goal stops the song. The fanfare is played by hand on the song's own instruments."),
     ]
     parts = [
@@ -553,23 +635,38 @@ HOLD = ["// HeldSound.cs - hold: start the patch, as a MIDI note",
         "",
         "// HeldSound.cs - let go: it fades over the patch's RELEASE",
         "Player.Release();"]
-INTENSITY = ["// MusicDirector.cs - Update: fast in, slow out",
-             "float target = TargetIntensity();        // the player's Speed01, or the section's floor",
+SECTIONS = ["// MusicDirector.cs - each section: the pattern it holds or the song's order, and its floor",
+            "new SectionCue(SectionId.SoftStart, SectionCue.SongOrder, 0.42f),",
+            "new SectionCue(SectionId.RollingSines, SectionCue.SongOrder, 0.45f),",
+            "new SectionCue(SectionId.FullCycle, SectionCue.SongOrder, 0.50f),",
+            "new SectionCue(SectionId.WooferSteps, SectionCue.SongOrder, 0.50f),",
+            "new SectionCue(SectionId.StaticField, PatternE, 0.50f),",
+            "new SectionCue(SectionId.SplitSignal, SectionCue.SongOrder, 0.55f),",
+            "new SectionCue(SectionId.Overdrive, SectionCue.SongOrder, 0.60f),",
+            "new SectionCue(SectionId.TheResonator, SectionCue.KeepPattern, 0.42f),"]
+INTENSITY = ["// MusicDirector.cs - TargetIntensity: the section's floor at rest, 1 at top speed",
+             "float target = Mathf.Lerp(currentCue.IntensityFloor, 1f, player != null ? player.Speed01 : 0f);",
+             "",
+             "// Update: fast in, slow out",
+             "float target = TargetIntensity();",
              "float seconds = target > intensity ? riseSeconds : fallSeconds;",
              "intensity = Mathf.MoveTowards(intensity, target, Time.deltaTime / seconds);",
-             "",
-             "music.intensity = intensity;             // music is the SfxMusicPlayer"]
-CUES = ["// MusicDirector.cs - a new section: its pattern, from the next bar line",
-        "heldPattern = pattern;",
-        "music.CuePattern(pattern);",
+             "...",
+             "music.intensity = intensity;"]
+CUES = ["// MusicDirector.cs - a pattern is cued for the next bar line ...",
+        "void Cue(int pattern)",
+        "{",
+        "    heldPattern = pattern;",
+        "    music.CuePattern(pattern);",
+        "}",
         "",
-        "// and again on every bar, so the song stays on it",
+        "// ... and again in every new bar, or the song's arrangement walks on",
         "void HoldPattern()",
         "{",
         "    int bar = music.Bar;",
         "    if (bar == lastBar) return;",
         "    lastBar = bar;",
-        "    if (heldPattern != SectionCue.KeepPattern) music.CuePattern(heldPattern);",
+        "    if (heldPattern >= 0) music.CuePattern(heldPattern);",
         "}"]
 MOMENTS = ["// MusicDirector.cs - hurt: only the kick is left, and the music dips",
            "duckTarget = 1f;",
@@ -579,10 +676,27 @@ MOMENTS = ["// MusicDirector.cs - hurt: only the kick is left, and the music dip
            "",
            "// the goal: the song stops, the fanfare is played on its instruments",
            "music.Stop();",
+           "...",
            "music.SetMaster(SfxMaster.ReverbSize, fanfareReverbSize);",
            "...",
            "music.PlaySound(note.Sound, note.Velocity, note.MidiNote);",
+           "...",
            "music.ReleaseSound(note.Sound, note.MidiNote);"]
+
+
+def excerpt(lines):
+    """Checks a page of code against its source: every line must be a line of the file named in the comment above it."""
+    source, name = None, ""
+    for line in lines:
+        text = line.strip()
+        if text.startswith("//"):                    # this file's own comments; one that begins with a file's name opens it
+            found = re.match(r"// (\w+\.cs) - ", text)
+            if found:
+                name = found.group(1)
+                source = {row.strip() for row in open(os.path.join(AUDIO, name), encoding="utf-8")}
+        elif text and text != "..." and text not in source:
+            sys.exit("a page of code shows a line that is not in %s: %s" % (name, text))
+    return lines
 
 
 def how():
@@ -602,39 +716,42 @@ def how():
               code(FIRST, {14})),
 
         Slide(9.5, "2  BAKED", "Route 1, baked. Render the patch into a clip once, then play it like any clip. For short sounds that are always the same.",
-              code(BAKED, {4})),
+              code(excerpt(BAKED), {4})),
         Clip("one-shots", [(0.0, "2  BAKED", "Two jumps and two landings, all baked clips.")],
              last=first_chime, focus="played"),
 
         Slide(9.0, "3  LIVE", "Route 2, a live voice. An SfxPlayer synthesizes the sound when it plays, so each one can have its own pitch.",
-              code(LIVE, {10})),
-        Clip("one-shots", [(first_chime, "3  LIVE", "Each Chime is one step higher. Watch JUST PLAYED: step 0, 1, 2 ..."),
+              code(excerpt(LIVE), {10})),
+        Clip("one-shots", [(first_chime, "3  LIVE", "Each Chime is one step higher, up to step 10. Watch JUST PLAYED."),
                            (shots.when("Skidded") + 0.3, "3  LIVE", "The skid and the Woofer are baked. Each sound has the route that fits it.")],
              first=first_chime, focus="played"),
 
         Slide(10.0, "4  HELD", "Route 3, held. Start a sustained patch on its own SfxPlayer, write its live values every frame, then let go.",
-              code(HOLD, {4})),
+              code(excerpt(HOLD), {4})),
         Clip("held-sounds", [(0.0, "4  HELD", "The Wind-Up rev starts again on each tap. Its pitch follows the charge."),
                              (held.when("BurstReleased") + 1.2, "4  HELD", "That was the Burst, a baked whoosh. Next a roll: a hum is held while Brio rolls."),
                              (held.when("TuckStarted", nth=1) + 1.3, "4  HELD", "Faster: the hum is higher, brighter and louder, and the wind joins.")],
              focus="held"),
 
-        Slide(8.5, "5  MUSIC: INTENSITY", "One SfxMusicPlayer plays one song. Write intensity every frame: it decides which instruments play.",
-              code(INTENSITY, {5})),
-        Clip("adaptive-music", [(0.0, "5  MUSIC: INTENSITY", "Standing: 0.15, the kick alone. Walking, then running: hi-hat, bass and snare come in."),
+        Slide(9.0, "5  MUSIC: THE SONG", "One SfxMusicPlayer plays one song, in the song's own order. A section sets a floor; one section holds a pattern.",
+              code(excerpt(SECTIONS), {5})),
+        Slide(8.5, "5  MUSIC: INTENSITY", "Write intensity every frame: it decides which instruments play. Here the player's speed fills it from the floor to 1.",
+              code(excerpt(INTENSITY), {1, 8})),
+        Clip("adaptive-music", [(0.0, "5  MUSIC: INTENSITY", "Standing: %.2f, the rhythm section. Walking, then running: strings, then FM keys come in." % adaptive.floor["SoftStart"]),
                                 (burst - 2.6, "5  MUSIC: INTENSITY", "Now a Wind-Up at rest."),
-                                (burst, "5  MUSIC: INTENSITY", "A Burst to top speed: strings and FM keys join. The band thins out more slowly.")],
+                                (burst, "5  MUSIC: INTENSITY", "A Burst, nearly top speed: brass and bells join. The band thins out more slowly.")],
              focus="layers"),
 
-        Slide(9.0, "5  MUSIC: CUES", "CuePattern changes the pattern on the next bar line. Cue it again on every bar to stay on it.",
-              code(CUES, {2, 10})),
-        Clip("sections-and-cues", [(0.0, "5  MUSIC: CUES", "Woofer Steps holds pattern D. Entering Static Field cues pattern E."),
-                                   (cues.when("SectionEntered", "StaticField") + 0.1, "5  MUSIC: CUES", "The change comes on the bar line. At the Tuning Fork, the song's bells answer.")],
+        Slide(9.0, "5  MUSIC: CUES", "CuePattern changes the pattern on the next bar line. Cue it again in every bar to hold it.",
+              code(excerpt(CUES), {4, 13})),
+        Clip("sections-and-cues", [(0.0, "5  MUSIC: CUES", "Woofer Steps: the song in its own order. Static Field will cue pattern E."),
+                                   (cues.when("SectionEntered", "StaticField") + 0.1, "5  MUSIC: CUES",
+                                    "The change comes on the bar line, and E is held. The song's bells answer the Tuning Fork.")],
              focus="pattern"),
 
         Slide(10.0, "5  MUSIC: MOMENTS", "The game's moments are a few more calls: a dip when you are hurt, notes played by hand at the goal.",
-              code(MOMENTS, {4, 10})),
-        Clip("hurt-and-goal", [(0.0, "5  MUSIC: MOMENTS", "A run in Split Signal: hi-hat, bass and snare."),
+              code(excerpt(MOMENTS), {4, 11})),
+        Clip("hurt-and-goal", [(0.0, "5  MUSIC: MOMENTS", "Split Signal: rhythm section, strings, then FM keys."),
                                (hit, "5  MUSIC: MOMENTS", "A hit: Chimes scatter, the band drops to the kick, the volume dips."),
                                (hurt.when("SectionEntered", "TheResonator"), "5  MUSIC: MOMENTS", "Both came back in two seconds. Now the goal."),
                                (goal + 0.3, "5  MUSIC: MOMENTS", "The song stops. Strings, brass, bells and timpani: PlaySound, by hand.")],
