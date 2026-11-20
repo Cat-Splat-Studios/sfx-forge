@@ -391,6 +391,93 @@ namespace Inspector.Harness
         }
 
         [Test]
+        public void ASongAssetFromANewerVersionSaysSoAndStillShows()
+        {
+            Assert.AreEqual(1, song.Format); Assert.IsFalse(song.IsFromNewerVersion); Assert.IsFalse(song.IsNewer);
+            var panel = Panel(song);
+            Assert.IsFalse(panel.NewerBanner.Shown);
+
+            SfxPresetPanelTests.FromFormat(song, 2);
+            Assert.AreEqual(2, song.Format); Assert.IsTrue(song.IsFromNewerVersion);
+            panel = Panel(song);
+            Assert.IsTrue(panel.ShowsSong, "the song this version reads of it shows");
+            Assert.IsTrue(panel.NewerBanner.Shown);
+            Assert.AreEqual("FROM A NEWER SFX FORGE", panel.NewerBanner.Bold);
+            StringAssert.Contains("asset format 2", panel.NewerBanner.Small);
+            StringAssert.Contains("Saving it here loses", panel.NewerBanner.Small);
+            Assert.AreEqual("120 BPM", panel.SongTile(SfxSongPanel.TileTempo).ValueText);
+            Assert.AreEqual("", panel.MessageText);
+        }
+
+        [Test]
+        public void APackedSongOfAHigherFormatIsANewerSongNotNoSong()
+        {
+            byte[] later = (byte[])song.data.Clone();
+            later[0] = 6;
+            song.Set(song.sounds, later);
+            Assert.IsTrue(song.IsNewer); Assert.IsFalse(song.IsValid);
+            Assert.AreEqual(0, song.Bpm, "nothing of it is read");
+            var panel = Panel(song);
+            Assert.IsFalse(panel.ShowsSong);
+            StringAssert.StartsWith("A NEWER SONG | ", panel.MessageText);
+            StringAssert.Contains("format 6, this version of SFX Forge knows up to 5", panel.MessageText);
+            Assert.IsFalse(panel.NewerBanner.Shown, "the asset itself is of this version");
+            Assert.IsNull(SfxSongPanel.RenderBar(song, 0, 1f), "and nothing of it plays");
+
+            // a longer one, as a later format may well be
+            byte[] longer = new byte[later.Length + 512];
+            later.CopyTo(longer, 0);
+            song.Set(song.sounds, longer);
+            Assert.IsTrue(song.IsNewer);
+            StringAssert.StartsWith("A NEWER SONG | ", Panel(song).MessageText);
+
+            // broken is not newer: this version's number with the wrong length, no bytes at all, a byte no song begins with
+            byte[] cut = new byte[100]; cut[0] = 5;
+            song.Set(song.sounds, cut);
+            Assert.IsFalse(song.IsNewer); Assert.IsFalse(song.IsValid);
+            StringAssert.StartsWith("NO SONG YET | ", Panel(song).MessageText);
+            song.Set(song.sounds, new byte[0]);
+            Assert.IsFalse(song.IsNewer);
+            song.Set(song.sounds, new byte[] { 0xF0, 1, 2 });
+            Assert.IsFalse(song.IsNewer);
+            // nor is a cut-off one that happens to begin with a higher number: one byte, or one byte short of a song
+            song.Set(song.sounds, new byte[] { 0x40 });
+            Assert.IsFalse(song.IsNewer);
+            StringAssert.StartsWith("NO SONG YET | ", Panel(song).MessageText);
+            byte[] short6 = new byte[SfxProtocol.SongBytes - 1]; short6[0] = 6;
+            song.Set(song.sounds, short6);
+            Assert.IsFalse(song.IsNewer);
+            StringAssert.StartsWith("NO SONG YET | ", Panel(song).MessageText);
+
+            // and the asset being newer as well: both are said
+            song.Set(song.sounds, later);
+            SfxPresetPanelTests.FromFormat(song, 2);
+            panel = Panel(song);
+            Assert.IsTrue(panel.NewerBanner.Shown);
+            StringAssert.StartsWith("A NEWER SONG | ", panel.MessageText);
+        }
+
+        [Test]
+        public void SeveralSongsWithOneFromANewerVersionSaySo()
+        {
+            var other = Demo();
+            var both = Panel(song, other);
+            Assert.IsFalse(both.NewerBanner.Shown, "two songs of this version: no banner");
+            SfxPresetPanelTests.FromFormat(other, 2);
+            both = Panel(song, other);
+            Assert.IsFalse(both.ShowsSong);
+            StringAssert.StartsWith("SELECT ONE SONG | ", both.MessageText);
+            Assert.IsTrue(both.NewerBanner.Shown);
+            Assert.AreEqual("ONE OF THESE 2 SONGS IS FROM A NEWER SFX FORGE", both.NewerBanner.Bold);
+            StringAssert.Contains("asset format 2", both.NewerBanner.Small);
+            SfxPresetPanelTests.FromFormat(song, 3);
+            both = Panel(song, other);
+            Assert.AreEqual("2 OF THESE 2 SONGS ARE FROM A NEWER SFX FORGE", both.NewerBanner.Bold);
+            StringAssert.Contains("asset format 3", both.NewerBanner.Small, "the highest of them");
+            Object.DestroyImmediate(other);
+        }
+
+        [Test]
         public void NoSongAndSeveralSongsOnlySaySo()
         {
             var empty = ScriptableObject.CreateInstance<SfxSong>();

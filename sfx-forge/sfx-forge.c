@@ -49,6 +49,16 @@ VIBE_PARALLEL_AUDIO
 #define SX_REQUEST  0x04           /* in:           F0 7D 56 42 04 <slot> F7  -> answers with a dump */
 #define SX_SONG     0x05           /* both ways:    F0 7D 56 42 05 <chunk> <chunks> <up to 200 song bytes> F7 (in: in any order) */
 #define SX_REQ_SONG 0x06           /* in:           F0 7D 56 42 06 F7 -> answers with 16 dumps and the song */
+#define SX_REQ_IDENT 0x07          /* in (1.4.0):   F0 7D 56 42 07 F7 (these 6 bytes, no others) -> answers with the identity */
+#define SX_IDENT    0x08           /* out:          F0 7D 56 42 08 <18 bytes, each 0..127> F7. One that comes in is left alone */
+/* The identity: what this device is and what it holds, so that a game can ask before it sends. Fields are only ever
+   added at the end: a reader takes the first 18 and ignores what follows. A firmware before 1.4.0 never answers. */
+#define FW_MAJOR 1                 /* the firmware's version: firmware.json says the same (tests/check-identity.mjs) */
+#define FW_MINOR 4
+#define FW_PATCH 0
+#define ID_HARDWARE 1              /* 0 unknown, 1 VIBE FM (the SDK's host: emulator, plugin, VIBE Box - not told apart from here) */
+#define ID_PROFILE  1              /* what SFX FORGE 1.x offers on VIBE FM */
+#define ID_FLAGS    0x0F           /* bit0 pads, bit1 encoders for the game (LINK), bit2 takes a song's sounds (LOAD 16-31), bit3 takes telemetry */
 #define SONG_CHUNK  200
 #define SONG_CHUNKS ((SFX_SONG_BYTES + SONG_CHUNK - 1) / SONG_CHUNK)
 #define CC_TELEMETRY 10            /* in, channel 2: CC 10..17 */
@@ -426,10 +436,43 @@ static void export_pump(void)
   }
 }
 
+/* The answer to SX_REQ_IDENT. The host takes one SysEx a block: an answer that does not fit now (a second request in
+   the same block, a song going out) waits, and goes with the next draw or event. */
+static int ident_due;
+static void ident_pump(void)
+{
+  static const uint8_t b[6 + 18] = { 0xF0, 0x7D, 0x56, 0x42, SX_IDENT, ID_HARDWARE, FW_MAJOR, FW_MINOR, FW_PATCH, ID_PROFILE,
+    SFX_PATCH_VERSION, SFX_SONG_VERSION, SLOTS, 2 /* kits */, SFX_PATTERNS, STEPS, SFX_LANES, SFX_ARR_MAX, SFX_PLAYER_VOICES,
+    SFX_ENGINE_COUNT, SFX_WT_TABLES, SFX_P_COUNT, ID_FLAGS, 0xF7 };
+  while (ident_due > 0 && !vibe_midi_send_sysex(b, sizeof b)) ident_due--;
+}
+
+/* A pad's dump that was asked for (SX_REQUEST, or EXPORT on the device) waits in the same way: without this an identity
+   that holds the host's one SysEx of the block would make the dump vanish. One bit for each pad; the dump is made of
+   the kit that is selected when it goes. While the sounds and the song go out it waits for them to end, so that a
+   pad of the selected kit does not land among the song's sounds. */
+static uint32_t dump_due;
+static void dump_pump(void)
+{
+  if (export_at >= 0) return;
+  for (int i = 0; i < SLOTS && dump_due; i++)
+    if (dump_due >> i & 1) { if (sysex_dump(i)) return; dump_due &= ~(1u << i); }
+}
+
+/* all that waits to go out, in this order; called from every draw, every event and every request */
+static void out_pump(void)
+{
+  if (ident_due) ident_pump();
+  if (export_at >= 0) export_pump();
+  if (dump_due) dump_pump();
+}
+
 static void sysex_in(const uint8_t *b, int n)
 {
   if (n < 6 || b[0] != 0xF0 || b[1] != 0x7D || b[2] != 0x56 || b[3] != 0x42 || b[n - 1] != 0xF7) return;
+  if (b[4] == SX_IDENT || (b[4] == SX_REQ_IDENT && n != 6)) return;   /* an identity (our own, echoed) is nobody's request; a request is 6 bytes */
   linked = 1;
+  if (b[4] == SX_REQ_IDENT) { if (ident_due < 4) ident_due++; out_pump(); return; }
   uint64_t now = vibe_frames();
   /* Our own echo. A virtual MIDI cable's port is an input as well as an output, and a host that listens on every input
      (the emulator does) hands back what was just sent. A dump that comes in while the sounds and the song are going
@@ -450,8 +493,8 @@ static void sysex_in(const uint8_t *b, int n)
     int k = 0;
     for (int i = 5; i < n - 1 && k < 24; i++) link_text[k++] = b[i] >= 32 && b[i] < 127 ? (char)b[i] : ' ';
     link_text[k] = 0;
-  } else if (b[4] == SX_REQUEST && n == 7 && b[5] < SLOTS) sysex_dump(b[5]);
-  else if (b[4] == SX_REQ_SONG) { export_at = 0; export_pump(); }
+  } else if (b[4] == SX_REQUEST && n == 7 && b[5] < SLOTS) { dump_due |= 1u << b[5]; out_pump(); }
+  else if (b[4] == SX_REQ_SONG) { export_at = 0; out_pump(); }
   else if (b[4] == SX_SONG && n > 8 && b[6] == SONG_CHUNKS) {                 /* a song from the game, piece by piece */
     /* Every piece is put where it belongs, and the song is taken when all 39 are here. So the pieces may come in any
        order: a MIDI path can swap two neighbours (a browser's Web MIDI output does, now and then). And more than once:
@@ -757,7 +800,7 @@ static void soft_sound(int f)                        /* F1-F6 on the sound pages
   case 2: if (!has_undo[sel]) { say("NOTHING TO UNDO"); return; }
           { sfx_patch t = *p; int8_t n = pad_preset[sel]; *p = undo[sel]; pad_preset[sel] = undo_preset[sel]; undo[sel] = t; undo_preset[sel] = n; } say("UNDO"); break;
   case 3: keep_undo(sel); sfx_patch_random(p, &rng); pad_preset[sel] = -1; say("RANDOM"); break;
-  case 4: sysex_dump(sel); say("EXPORTED"); return;
+  case 4: dump_due |= 1u << sel; out_pump(); say("EXPORTED"); return;
   case 5: bank_save(); say("SAVED"); return;
   }
   changed(sel);
@@ -831,7 +874,7 @@ static void soft_song(int f)                         /* F1-F6 on the SONG page *
   case 1: pattern_copy(); break;
   case 2: pattern_clear(); break;
   case 3: demo(); break;
-  case 4: export_at = 0; say("SENDING"); export_pump(); break;
+  case 4: export_at = 0; say("SENDING"); out_pump(); break;
   case 5: bank_save(); say("SAVED"); break;
   }
 }
@@ -1213,7 +1256,7 @@ static void pick(int slot, int down)                 /* hear a pad's sound and s
 void vibe_on_event(const vibe_event *e)
 {
   int id, r = vf_event(e, &id);
-  if (export_at >= 0) export_pump();
+  out_pump();
   if (r != VF_NO) return;
   if (tour_on && e->down && (e->type == VIBE_EV_PAD || e->type == VIBE_EV_NOTE || (e->type == VIBE_EV_BUTTON && e->id != VB_SHIFT))) { tour_end(); return; }   /* any touch ends the tour */
   switch (e->type) {
@@ -1792,7 +1835,7 @@ void vibe_on_draw(uint16_t *fb)
   static const char *const SUB[4] = { "OSC", "TONE", "FILTER", "WAVE" };
   char buf[24];
   (void)fb;
-  if (export_at >= 0) export_pump();
+  out_pump();
   tour_pump();
   vg_clear(BG);
   if (help) {

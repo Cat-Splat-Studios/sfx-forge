@@ -95,6 +95,169 @@ static class Tests
         SfxProtocol.Apply(ref mods, SfxTelemetry.Pitch, 127); SfxProtocol.Apply(ref mods, SfxTelemetry.Cutoff, 64);
         Ok(mods.pitchSemitones == 24f && mods.cutoffOctaves == 0f && SfxProtocol.ToCc(0.5f) == 64 && SfxProtocol.ToCc(float.NaN) == 0, "telemetry maps as on the device");
 
+        // ---- the identity: what a device says it is (firmware 1.4.0 on), and what is done with it
+        {
+            var ask = SfxProtocol.BuildRequestIdentity();
+            Ok(ask.SequenceEqual(new byte[] { 0xF0, 0x7D, 0x56, 0x42, 0x07, 0xF7 }), "REQUEST IDENTITY is F0 7D 56 42 07 F7, six bytes");
+            var fm = new SfxDeviceInfo { hardware = 1, major = 1, minor = 4, patch = 0, profile = SfxProfile.VibeFm1, flags = 15 };
+            var id = SfxProtocol.BuildIdentity(fm);
+            var want = new byte[] { 0xF0, 0x7D, 0x56, 0x42, 0x08, 1, 1, 4, 0, 1, 2, 5, 16, 2, 8, 16, 24, 32, 16, 5, 6, 25, 15, 0xF7 };
+            Ok(id.SequenceEqual(want) && SfxProtocol.IdentityBytes == 18, "IDENTITY of firmware 1.4.0 on VIBE FM is F0 7D 56 42 08, these 18 bytes, F7: " + SfxLink.Describe(id));
+            bool back = SfxProtocol.TryParseIdentity(id, out var got);
+            Ok(back && got.Equals(fm) && got.profile == SfxProfile.VibeFm1 && got.HasPads && got.HasEncoders && got.TakesSongSounds && got.TakesTelemetry && got.IsAtLeast(1, 4, 0) && !got.IsAtLeast(1, 4, 1) && got.IsAtLeast(1, 3, 9),
+               "an identity survives build -> parse: hardware, version, the profile of this package, all four flags");
+            Ok(got.ToString() == "VIBE FM, firmware 1.4.0, profile 1", $"and reads \"{got}\"");
+            bool everyField = true;
+            for (int i = 0; i < 300; i++)
+            {
+                var d = new SfxDeviceInfo { hardware = rng.Next(128), major = rng.Next(128), minor = rng.Next(128), patch = rng.Next(128), flags = rng.Next(128) };
+                d.profile = new SfxProfile { id = rng.Next(128), patchFormat = rng.Next(128), songFormat = rng.Next(128), sounds = rng.Next(128), kits = rng.Next(128), patterns = rng.Next(128), steps = rng.Next(128),
+                                             lanes = rng.Next(128), bars = rng.Next(128), voices = rng.Next(128), engines = rng.Next(128), wavetables = rng.Next(128), patchValues = rng.Next(128) };
+                everyField &= SfxProtocol.TryParseIdentity(SfxProtocol.BuildIdentity(d), out var d2) && d2.Equals(d);
+            }
+            Ok(everyField, "300 random identities survive build -> parse, field by field");
+            var flagsOnly = fm; flagsOnly.flags = SfxDeviceInfo.FlagEncoders | SfxDeviceInfo.FlagTelemetry;
+            Ok(!flagsOnly.HasPads && flagsOnly.HasEncoders && !flagsOnly.TakesSongSounds && flagsOnly.TakesTelemetry, "the flags are read bit by bit");
+
+            var longer = id.Take(id.Length - 1).Concat(new byte[] { 9, 99, 0, 127, 0xF7 }).ToArray();
+            Ok(SfxProtocol.TryParseIdentity(longer, out var fromLater) && fromLater.Equals(fm), "an identity with more bytes at its end (a later firmware) is read: the first 18, the rest ignored");
+            var shorter = id.Take(5 + 17).Append((byte)0xF7).ToArray();
+            Ok(shorter.Length == 6 + 17 && !SfxProtocol.TryParseIdentity(shorter, out _), "17 bytes are not an identity");
+            bool over = true;
+            for (int i = 5; i < id.Length - 1; i++) { var b2 = (byte[])id.Clone(); b2[i] = 0x80; over &= !SfxProtocol.TryParseIdentity(b2, out _); }
+            var overLate = (byte[])longer.Clone(); overLate[overLate.Length - 3] = 200;
+            Ok(over && !SfxProtocol.TryParseIdentity(overLate, out _), "a byte over 127 anywhere in it, also after the 18th, and it is not an identity");
+            Ok(!SfxProtocol.TryParseIdentity(ask, out _) && !SfxProtocol.TryParseIdentity(SfxProtocol.BuildLoad(0, laser), out _) && !SfxProtocol.TryParseIdentity(null, out _)
+               && !SfxProtocol.TryParseIdentity(new byte[] { 0xF0, 0x7D, 0x56, 0x4C, 8, 1, 1, 4, 0, 1, 2, 5, 16, 2, 8, 16, 24, 32, 16, 5, 6, 25, 15, 0xF7 }, out _),
+               "a request, a patch, nothing, another device's SysEx: none is an identity");
+
+            // an identity as long as a patch message (35) and as long as a song's piece (208) is neither
+            byte[] Padded(int length) { var m = new byte[length]; Array.Copy(id, m, id.Length - 1); m[4] = SfxProtocol.Identity; m[length - 1] = 0xF7; return m; }
+            var as35 = Padded(7 + SfxPatch.Bytes); var as208 = Padded(8 + SfxProtocol.SongChunkBytes);
+            var asPatch = SfxProtocol.BuildLoad(0, laser); asPatch[4] = SfxProtocol.Identity;            // a valid patch's bytes under the identity's command
+            var songBuf = new byte[SfxProtocol.SongBytes]; ulong seenBits = 0;
+            bool notPatch = !SfxProtocol.TryParsePatch(as35, out _, out _) && !SfxProtocol.TryParsePatch(asPatch, out _, out _) && !SfxProtocol.TryParsePatch(id, out _, out _);
+            bool notPiece = !SfxProtocol.TryTakeSongChunk(as208, songBuf, ref seenBits) && !SfxProtocol.TryTakeSongChunk(as35, songBuf, ref seenBits) && !SfxProtocol.TryTakeSongChunk(id, songBuf, ref seenBits) && seenBits == 0 && songBuf.All(x => x == 0);
+            Ok(as35.Length == 35 && as208.Length == 208 && notPatch && notPiece && SfxProtocol.TryParseIdentity(as35, out _) && SfxProtocol.TryParseIdentity(as208, out _),
+               "an identity is neither a patch nor a piece of a song, also when it is 35 or 208 bytes long");
+
+            // the link: an identity in the middle of a song that is arriving
+            using (var link = new SfxLink())
+            {
+                var theSong = new byte[SfxProtocol.SongBytes]; theSong[0] = 5; for (int i = 1; i < theSong.Length; i++) theSong[i] = (byte)(i * 7 % 128);
+                var pieces = SfxProtocol.BuildSong(theSong);
+                int songs = 0, patches = 0, identities = 0; byte[] arrived = null; SfxDeviceInfo said = default;
+                link.SongReceived += (s, _) => { songs++; arrived = s; };
+                link.PatchReceived += (_, _) => patches++;
+                link.IdentityReceived += d => { identities++; said = d; };
+                Ok(link.Device == null && !link.IdentityUnanswered && link.LastRefusal == null, "a link that asked nothing knows no device, and does not say one failed to answer");
+                for (int k = 0; k < pieces.Length; k++)
+                {
+                    if (k == 20) { link.Take(id); link.Take(id); link.Take(as208); link.Take(ask); }       // (the emulator delivers everything twice, and hands back what was sent)
+                    link.Take(pieces[k]);
+                }
+                Ok(songs == 1 && arrived != null && arrived.SequenceEqual(theSong) && patches == 0 && identities == 3 && said.Equals(fm) && link.Device.HasValue && link.Device.Value.Equals(fm),
+                   "identities (twice, and a long one) and a request come back in the middle of a song: the song arrives whole, once; no patch; the device is known");
+                Ok(link.SendPatch(0, laser) == false && link.LastRefusal == null && !link.SendSong(new SfxPatch[16], theSong) && link.LastRefusal == null,
+                   "a device of this package's formats is refused nothing (without a port nothing is sent, and that is no refusal)");
+
+                var later = fm; later.major = 2; later.minor = 0; later.profile.patchFormat = 3;
+                link.Take(SfxProtocol.BuildIdentity(later));
+                bool refusedPatch = !link.SendPatch(0, laser); string whyPatch = link.LastRefusal;
+                bool refusedSong = !link.SendSong(new SfxPatch[16], theSong); string whySong = link.LastRefusal;
+                Ok(refusedPatch && whyPatch != null && whyPatch.Contains("patch format 3") && whyPatch.Contains("update the package") && refusedSong && whySong != null,
+                   $"a device that says patch format 3 is sent no patch and no song: \"{whyPatch}\"");
+                var olderSong = fm; olderSong.profile.songFormat = 4;
+                link.Take(SfxProtocol.BuildIdentity(olderSong));
+                bool patchGoes = !link.SendPatch(0, laser) && link.LastRefusal == null;
+                refusedSong = !link.SendSong(new SfxPatch[16], theSong); whySong = link.LastRefusal;
+                Ok(patchGoes && refusedSong && whySong != null && whySong.Contains("song format 4") && whySong.Contains("update the device's firmware"),
+                   $"a device that says song format 4 is sent patches but no song: \"{whySong}\"");
+
+                // asked again: what the device said before is forgotten, and a second without an answer says so
+                bool knownBefore = link.Device.HasValue && SfxLink.Refusal(link.Device, true) != null;
+                link.Asked();
+                bool forgotten = link.Device == null && !link.IdentityUnanswered && SfxLink.Refusal(link.Device, true) == null;
+                System.Threading.Thread.Sleep((int)(SfxLink.IdentityAnswerSeconds * 1000) + 100);
+                bool unanswered = link.IdentityUnanswered;
+                link.Take(id);
+                Ok(knownBefore && forgotten && unanswered && !link.IdentityUnanswered && link.Device.Value.Equals(fm),
+                   "asking again forgets the earlier answer (and its refusal); a second without one reads as unanswered; the next answer is taken");
+
+                // a patch and a song in a higher format come in: newer is said, once each, and nothing of them is taken
+                var said2 = new List<string>();
+                link.NewerReceived += said2.Add;
+                var newerDump = SfxProtocol.BuildDump(3, laser); newerDump[6] = 3;
+                var cutDump = newerDump.Take(20).Append((byte)0xF7).ToArray();
+                int patchesBefore = patches, songsBefore = songs;
+                link.Take(newerDump); link.Take(newerDump); link.Take(cutDump); link.Take(SfxProtocol.BuildDump(3, laser));
+                Ok(said2.Count == 1 && said2[0].Contains("a patch in format 3") && said2[0].Contains("knows up to 2") && patches == patchesBefore + 1,
+                   $"a dump in patch format 3, delivered twice, is said to be newer once and not taken; a cut-off one says nothing; this version's is taken: \"{(said2.Count > 0 ? said2[0] : "")}\"");
+                var laterSong = (byte[])theSong.Clone(); laterSong[0] = 6;
+                foreach (var piece in SfxProtocol.BuildSong(laterSong)) { link.Take(piece); link.Take(piece); }
+                Ok(said2.Count == 2 && said2[1].Contains("a song in format 6") && said2[1].Contains("knows up to 5") && songs == songsBefore,
+                   $"a song in format 6, every piece twice, is said to be newer once and does not arrive as a song: \"{(said2.Count > 1 ? said2[1] : "")}\"");
+                foreach (var piece in pieces) link.Take(piece);
+                Ok(songs == songsBefore + 1 && arrived.SequenceEqual(theSong) && said2.Count == 2, "and this version's song after it arrives whole");
+
+                link.Close();
+                Ok(link.Device == null && link.LastRefusal == null, "closing the link forgets the device");
+            }
+            Ok(SfxLink.Refusal(null, true) == null && SfxLink.Refusal(null, false) == null && SfxLink.Refusal(SfxDeviceInfo.AssumedBefore14, true) == null,
+               "a device that never answered is refused nothing: it is taken for a firmware before 1.4");
+            var assumed = SfxDeviceInfo.AssumedBefore14;
+            Ok(assumed.ToString() == "VIBE FM, firmware before 1.4, profile 1" && assumed.profile == SfxProfile.VibeFm1 && !assumed.IsAtLeast(1, 0, 0) && assumed.HasPads && assumed.HasEncoders && assumed.TakesTelemetry && !assumed.TakesSongSounds,
+               $"and reads \"{assumed}\" (whether it takes a song's sounds is not known)");
+
+            // newer is not broken
+            var newerPatch = laser.Pack(); newerPatch[0] = 3; newerPatch[SfxPatch.Bytes - 1] = SfxPatch.Checksum(newerPatch, 0);
+            var brokenPatch = laser.Pack(); brokenPatch[5] ^= 1;
+            var olderPatch = laser.Pack(); olderPatch[0] = 1;
+            var inMessage = SfxProtocol.BuildLoad(2, laser); inMessage[6] = 9;
+            Ok(SfxPatch.IsNewer(newerPatch, 0) && !SfxPatch.TryUnpack(newerPatch, 0, out _) && !SfxPatch.IsNewer(laser.Pack(), 0) && !SfxPatch.IsNewer(brokenPatch, 0) && !SfxPatch.IsNewer(olderPatch, 0)
+               && SfxPatch.IsNewer(inMessage, 6) && !SfxPatch.IsNewer(inMessage, 7) && !SfxPatch.IsNewer(null, 0) && !SfxPatch.IsNewer(newerPatch, 28) && !SfxPatch.IsNewer(newerPatch, -1) && !SfxPatch.IsNewer(new byte[] { 0xF0 }, 0),
+               "a patch with a higher version byte is newer (and not unpacked); this version's, a damaged one, an older one, a status byte are not");
+            var longerPatch = newerPatch.Concat(new byte[4]).ToArray();
+            Ok(!SfxPatch.IsNewer(new byte[] { 9 }, 0) && !SfxPatch.IsNewer(newerPatch.Take(27).ToArray(), 0) && !SfxPatch.IsNewer(newerPatch, 1) && SfxPatch.IsNewer(longerPatch, 0) && SfxPatch.IsNewer(longerPatch, 4) == (longerPatch[4] > 2),
+               "fewer than 28 bytes are a cut-off patch, not a newer one, whatever they begin with; more than 28 may be one");
+            var song6 = new byte[SfxProtocol.SongBytes]; song6[0] = 6;
+            var song5 = new byte[SfxProtocol.SongBytes]; song5[0] = 5;
+            Ok(SfxProtocol.IsNewerSong(song6) && SfxProtocol.IsNewerSong(song6.Concat(new byte[300]).ToArray()) && !SfxProtocol.IsNewerSong(song5) && !SfxProtocol.IsNewerSong(new byte[] { 0x40 })
+               && !SfxProtocol.IsNewerSong(song6.Take(SfxProtocol.SongBytes - 1).ToArray()) && !SfxProtocol.IsNewerSong(null) && !SfxProtocol.IsNewerSong(new byte[0])
+               && SfxProtocol.NewerIn(SfxProtocol.BuildLoad(0, laser)) == null && SfxProtocol.NewerIn(SfxProtocol.BuildRequestIdentity()) == null && SfxProtocol.NewerIn(null) == null,
+               "a packed song of a higher format and at least today's length is newer; one byte, a cut-off one, this version's are not");
+
+            // the profile
+            var p1 = SfxProfile.VibeFm1;
+            Ok(p1.id == 1 && p1.patchFormat == 2 && p1.songFormat == 5 && p1.sounds == 16 && p1.kits == 2 && p1.patterns == 8 && p1.steps == 16 && p1.lanes == 24 && p1.bars == 32 && p1.voices == 16
+               && p1.engines == 5 && p1.wavetables == 6 && p1.patchValues == 25, "the profile of VIBE FM is made of the package's constants: " + p1);
+            bool allFit = true;
+            for (int i = 0; i < 500; i++)
+            {
+                var p = new SfxPatch { engine = (SfxEngine)rng.Next(SfxPatch.EngineCount) };
+                for (int k = 0; k < SfxPatch.ParamCount; k++) p[(SfxParam)k] = (byte)rng.Next(128);
+                allFit &= p1.Fits(p);
+            }
+            var fewer = p1; fewer.engines = 4;
+            var otherFormat = p1; otherFormat.patchFormat = 3;
+            var raw = laser; raw.filterCutoff = 200;                                             // (set past the indexer, which cuts to 127)
+            Ok(allFit && p1.Fits(laser) && fewer.Fits(laser) && !fewer.Fits(SfxPatch.Create(SfxEngine.Wavetable)) && !otherFormat.Fits(laser) && !p1.Fits(raw) && !p1.Fits(new SfxPatch { engine = (SfxEngine)7 }),
+               "every patch of this version fits it; not one with an engine the device lacks, another format, or a value over 127");
+            var s5 = new byte[SfxProtocol.SongBytes]; s5[0] = 5; s5[1] = 16; s5[66] = 32;
+            var s6 = (byte[])s5.Clone(); s6[0] = 6;
+            var tooLong = (byte[])s5.Clone(); tooLong[1] = 17;
+            var tooManyBars = (byte[])s5.Clone(); tooManyBars[66] = 33;
+            var highByte = (byte[])s5.Clone(); highByte[5000] = 128;
+            var s4 = new byte[SfxProtocol.SongBytesV4]; s4[0] = 4; s4[1] = 16; s4[82] = 8;
+            var s1 = new byte[SfxProtocol.SongBytesV1]; s1[0] = 1; s1[1] = 16;
+            var wrongLength = new byte[SfxProtocol.SongBytesV3]; wrongLength[0] = 5;
+            var shortBars = p1; shortBars.bars = 4;
+            var onlyOld = p1; onlyOld.songFormat = 4;
+            Ok(p1.Fits(s5) && p1.Fits(s4) && p1.Fits(s1) && !p1.Fits(s6) && !p1.Fits(tooLong) && !p1.Fits(tooManyBars) && !p1.Fits(highByte) && !p1.Fits(wrongLength) && !p1.Fits((byte[])null) && !p1.Fits(new byte[0])
+               && !shortBars.Fits(s5) && !shortBars.Fits(s4) && shortBars.Fits(s1) && !onlyOld.Fits(s5) && onlyOld.Fits(s4),
+               "a packed song fits it in every format up to its own; not a newer one, a wrong length, a byte over 127, more steps or more bars than the device holds");
+        }
+
         // ---- what the real firmware sent in the test performance
         List<byte[]> msgs = File.Exists(midiFile) ? ReadMidi(midiFile) : null;
         float[] device = File.Exists(wavFile) ? ReadWavLeft(wavFile) : null;

@@ -580,6 +580,14 @@ Linked over MIDI, the game drives the device while you listen and adjust. The **
 | **2** | encoders 1 – 4 send CC 20 – 23 to the game: tune a game value from here |
 | **3** | green while a game is linked, with any text it sent |
 
+From firmware 1.4.0 a game can also ask the device what it is. The device answers with its **identity**: the
+hardware, the firmware's version, the formats of its sounds and songs, and what it holds – 16 sounds in each of 2
+kits, 8 patterns of 16 steps, 24 automation lanes, 32 bars, 16 voices, 5 engines, 6 wavetables. Today every device
+answers the same; the question is there so that later firmwares for other hardware, and a Unity side that can do
+more than a device, can be told apart without breaking what is made now. An older firmware does not answer, and the
+game takes that for a VIBE FM with a firmware before 1.4. Nothing shows on the device when it is asked, except that
+the LINK light comes on as for any message from a game.
+
 The protocol, byte by byte, is in the [README](../README.md#the-link-device--game-engine). The Unity package is in
 `unity/com.catsplat.sfxforge`; the demo project in `unity/Demo` shows all of it in one scene.
 
@@ -594,7 +602,9 @@ The protocol, byte by byte, is in the [README](../README.md#the-link-device--gam
 | **SHIFT + MENU, twice** | factory reset: both kits and the song as they came, and saved so. Press it once and it asks; twice within three seconds does it |
 
 The game and the device read songs from every earlier version of the format. A kit or song *stored on the device* by
-an earlier version is not read; the factory kits and the demo appear instead.
+an earlier version is not read; the factory kits and the demo appear instead. The same holds the other way: a
+sound or song from a *newer* version is not taken by this firmware (it keeps what it has), and a kit or song stored
+by a newer firmware is not read. The next SAVE then writes over it.
 
 ---
 

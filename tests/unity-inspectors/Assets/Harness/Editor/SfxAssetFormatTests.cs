@@ -1,0 +1,174 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using CatSplat.SfxForge;
+using CatSplat.SfxForge.Editor;
+using NUnit.Framework;
+using UnityEditor;
+using UnityEngine;
+
+namespace Inspector.Harness
+{
+    /// <summary>
+    /// The number an asset keeps of the asset format that wrote it, with real asset files: copies of this project's
+    /// own (which have no such line) are written into a folder of their own, as they are and with "format: 2" put
+    /// in, and Unity imports them. The folder is deleted afterwards.
+    /// </summary>
+    public class SfxAssetFormatTests
+    {
+        const string Folder = "Assets/FormatTemp";
+        const string JumpPath = "Assets/Data/Presets/Jump.asset", DemoPath = "Assets/Data/DemoSong.asset";
+        const string After = "  m_EditorClassIdentifier:";        // the line the new ones are put after
+
+        readonly List<string> warnings = new List<string>();
+
+        void OnLog(string text, string stack, LogType type) { if (type == LogType.Warning) warnings.Add(text); }
+        int Warned(string name) => warnings.FindAll(w => w.Contains("'" + name + "'") && w.Contains("newer SFX Forge")).Count;
+
+        [SetUp]
+        public void SetUp()
+        {
+            if (!AssetDatabase.IsValidFolder(Folder)) AssetDatabase.CreateFolder("Assets", "FormatTemp");
+            warnings.Clear();
+            Application.logMessageReceived += OnLog;
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            Application.logMessageReceived -= OnLog;
+            AssetDatabase.DeleteAsset(Folder);
+        }
+
+        // (a name of its own each run: the warning is said once a session for an asset file)
+        static string Unique(string word) => word + Guid.NewGuid().ToString("N").Substring(0, 8);
+
+        /// <summary>A copy of an asset file under another name, with lines put in after its class line; imported and loaded.</summary>
+        static T Copy<T>(string source, string name, string linesIn, string folder = Folder) where T : ScriptableObject
+        {
+            string text = File.ReadAllText(source).Replace("\r\n", "\n");
+            Assert.IsFalse(text.Contains("\n  format:"), source + " is an asset from before the format number was kept");
+            string was = "  m_Name: " + Path.GetFileNameWithoutExtension(source) + "\n";
+            StringAssert.Contains(was, text);
+            text = text.Replace(was, "  m_Name: " + name + "\n");
+            if (linesIn != null)
+            {
+                int at = text.IndexOf(After, StringComparison.Ordinal);
+                Assert.GreaterOrEqual(at, 0);
+                at = text.IndexOf('\n', at) + 1;
+                text = text.Insert(at, linesIn);
+            }
+            string path = folder + "/" + name + ".asset";
+            File.WriteAllText(path, text);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+            var asset = AssetDatabase.LoadAssetAtPath<T>(path);
+            Assert.IsNotNull(asset, path);
+            return asset;
+        }
+
+        [Test]
+        public void AnAssetFileWithoutTheLineIsFormatOne()
+        {
+            Assert.AreEqual(1, SfxPreset.CurrentFormat); Assert.AreEqual(1, SfxSong.CurrentFormat);
+            var jump = AssetDatabase.LoadAssetAtPath<SfxPreset>(JumpPath);
+            var demo = AssetDatabase.LoadAssetAtPath<SfxSong>(DemoPath);
+            Assert.AreEqual(1, jump.Format); Assert.IsFalse(jump.IsFromNewerVersion);
+            Assert.AreEqual(1, demo.Format); Assert.IsFalse(demo.IsFromNewerVersion);
+
+            string name = Unique("Plain");
+            var copy = Copy<SfxPreset>(JumpPath, name, null);
+            Assert.AreEqual(1, copy.Format); Assert.IsFalse(copy.IsFromNewerVersion);
+            Assert.IsTrue(copy.patch.Equals(jump.patch));
+            var songCopy = Copy<SfxSong>(DemoPath, Unique("PlainSong"), null);
+            Assert.AreEqual(1, songCopy.Format); Assert.IsTrue(songCopy.IsValid);
+            Assert.AreEqual(0, Warned(name), "nothing is said of an asset of this version");
+            Assert.IsFalse(((SfxPresetPanel)SfxPresetEditor.Build(new SerializedObject(copy))).NewerBanner.Shown);
+        }
+
+        [Test]
+        public void AnAssetFileThatSaysFormatTwoIsFromANewerVersionAndSaysSoOnce()
+        {
+            var jump = AssetDatabase.LoadAssetAtPath<SfxPreset>(JumpPath);
+            string name = Unique("Later");
+            var later = Copy<SfxPreset>(JumpPath, name, "  format: 2\n  somethingThisVersionDoesNotKnow: 7\n");
+            Assert.AreEqual(2, later.Format); Assert.IsTrue(later.IsFromNewerVersion);
+            Assert.IsTrue(later.patch.Equals(jump.patch), "what this version reads of it is all there");
+            Assert.AreEqual(1, Warned(name), "one warning when it is loaded: " + string.Join(" / ", warnings));
+
+            // loaded again (imported again), asked again: nothing more is said
+            AssetDatabase.ImportAsset(AssetDatabase.GetAssetPath(later), ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+            later = AssetDatabase.LoadAssetAtPath<SfxPreset>(Folder + "/" + name + ".asset");
+            SfxAssetFormat.WarnIfNewer(later, later.Format);
+            Assert.AreEqual(2, later.Format);
+            Assert.AreEqual(1, Warned(name), "and no second one: " + string.Join(" / ", warnings));
+
+            // the Inspector says it too
+            var panel = (SfxPresetPanel)SfxPresetEditor.Build(new SerializedObject(later));
+            Assert.IsTrue(panel.NewerBanner.Shown);
+            StringAssert.Contains("asset format 2", panel.NewerBanner.Small);
+
+            string songName = Unique("LaterSong");
+            var song = Copy<SfxSong>(DemoPath, songName, "  format: 2\n");
+            Assert.AreEqual(2, song.Format); Assert.IsTrue(song.IsFromNewerVersion);
+            Assert.IsTrue(song.IsValid, "the song this version reads of it plays"); Assert.AreEqual(120, song.Bpm);
+            Assert.AreEqual(1, Warned(songName));
+        }
+
+        [Test]
+        public void SavingANewerAssetHereLosesWhatThisVersionDoesNotKnow()
+        {
+            string name = Unique("Saved");
+            var later = Copy<SfxPreset>(JumpPath, name, "  format: 2\n  savedBy: 2\n  somethingThisVersionDoesNotKnow: 7\n");
+            string path = AssetDatabase.GetAssetPath(later);
+            StringAssert.Contains("somethingThisVersionDoesNotKnow", File.ReadAllText(path));
+            StringAssert.Contains("  savedBy: 2", File.ReadAllText(path));
+            later.patch.level = 77;
+            EditorUtility.SetDirty(later);
+            AssetDatabase.SaveAssetIfDirty(later);
+            string saved = File.ReadAllText(path);
+            StringAssert.DoesNotContain("somethingThisVersionDoesNotKnow", saved, "what the banner warns of: Unity writes only what this version's class has");
+            StringAssert.Contains("  format: 2", saved, "the number stays as the file had it");
+            StringAssert.Contains("  savedBy: 1", saved, "and the file says which version wrote it back: a newer one can tell it was cut down");
+            StringAssert.DoesNotContain("  savedBy: 2", saved);
+            StringAssert.Contains("  level: 77", saved);
+        }
+
+        [Test]
+        public void ANewAssetIsWrittenWithThisVersionsNumber()
+        {
+            var made = SfxForgeEditorLink.CreatePreset(SfxPatch.Default, Folder, "Made");
+            string text = File.ReadAllText(AssetDatabase.GetAssetPath(made));
+            StringAssert.Contains("  format: 1", text);
+            StringAssert.Contains("  savedBy: 1", text);
+            Assert.AreEqual(1, made.Format);
+            var song = SfxForgeEditorLink.CreateSong(SfxSongPanelTests.Demo().sounds, SfxSongPanelTests.Demo().data, Folder, "MadeSong");
+            StringAssert.Contains("  format: 1", File.ReadAllText(AssetDatabase.GetAssetPath(song)));
+        }
+
+        [Test]
+        public void TwoNewerAssetsOfTheSameNameInTwoFoldersAreWarnedOfEach()
+        {
+            string name = Unique("Twin"), sub = Folder + "/Other";
+            AssetDatabase.CreateFolder(Folder, "Other");
+            var here = Copy<SfxPreset>(JumpPath, name, "  format: 2\n");
+            Assert.AreEqual(1, Warned(name));
+            var there = Copy<SfxPreset>(JumpPath, name, "  format: 2\n", sub);
+            Assert.AreNotSame(here, there);
+            Assert.AreEqual(2, Warned(name), "one for each file: " + string.Join(" / ", warnings));
+            for (int i = 0; i < 2; i++) { SfxAssetFormat.WarnIfNewer(here, here.Format); SfxAssetFormat.WarnIfNewer(there, there.Format); }
+            AssetDatabase.ImportAsset(sub + "/" + name + ".asset", ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+            Assert.AreEqual(2, Warned(name), "and no more than that");
+        }
+
+        [Test]
+        public void TheWarningIsSaidOnceForAnAsset()
+        {
+            var one = ScriptableObject.CreateInstance<SfxPreset>(); one.name = Unique("Once");
+            var same = ScriptableObject.CreateInstance<SfxPreset>(); same.name = Unique("Never");
+            for (int i = 0; i < 3; i++) { SfxAssetFormat.WarnIfNewer(one, 3); SfxAssetFormat.WarnIfNewer(same, 1); }
+            Assert.AreEqual(1, Warned(one.name)); Assert.AreEqual(0, Warned(same.name));
+            StringAssert.Contains("asset format 3", warnings.Find(w => w.Contains(one.name)));
+            UnityEngine.Object.DestroyImmediate(one); UnityEngine.Object.DestroyImmediate(same);
+        }
+    }
+}

@@ -119,6 +119,41 @@ namespace Inspector.Harness
             Assert.AreEqual("B0 14 45", view.MessageText(5));
         }
 
+        /// <summary>Linked, and the device said what it is.</summary>
+        public static SfxForgeModel LinkedAndKnown()
+        {
+            var m = Linked();
+            m.identity = new SfxDeviceInfo { hardware = SfxDeviceInfo.HardwareVibeFm, major = 1, minor = 4, patch = 0, profile = SfxProfile.VibeFm1, flags = 15 }.ToString();
+            m.identityKnown = true;
+            return m;
+        }
+
+        [Test]
+        public void TheLinkSaysWhatTheDeviceIsOrThatItDidNotAnswer()
+        {
+            var m = Linked();
+            var view = View(m);
+            Assert.AreEqual("", view.IdentityText, "asked a moment ago, nothing known yet: no line");
+
+            m = LinkedAndKnown();
+            view = View(m);
+            Assert.AreEqual("VIBE FM, firmware 1.4.0, profile 1", view.IdentityText);
+            Assert.AreEqual("LINKED | in: VIBE FM   out: VIBE FM", view.StatusText, "the state above it is as it was");
+
+            m.identity = SfxForgeModel.NoIdentity; m.identityKnown = false;
+            view.Refresh();
+            Assert.AreEqual("no identity: firmware before 1.4, or nothing answers", view.IdentityText);
+
+            m.identity = SfxDeviceInfo.AssumedBefore14.ToString();
+            view.Refresh();
+            Assert.AreEqual("VIBE FM, firmware before 1.4, profile 1", view.IdentityText);
+
+            m.isOpen = false; m.hasOutput = false; m.inputName = m.outputName = null;
+            view.Refresh();
+            Assert.AreEqual("", view.IdentityText, "not connected: nothing is said of a device");
+            Assert.AreEqual("", View(NotConnected()).IdentityText);
+        }
+
         [Test]
         public void TheModelKeepsTheLastThirtyTwoPatchesAndSixMessages()
         {

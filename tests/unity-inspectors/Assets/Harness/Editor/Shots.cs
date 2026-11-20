@@ -30,6 +30,7 @@ namespace Inspector.Harness
             ("sound-lfo",      () => Sound(Wavetable(), SfxUnits.PageLfo)),
             ("sound-fx",       () => Sound("Wind", SfxUnits.PageFx)),
             ("sound-multi",    () => Sound(new UnityEngine.Object[] { Preset("Jump"), Preset("Chime"), Preset("RollHum") }, SfxUnits.PageOsc)),
+            ("sound-newer",    () => Sound(NewerSound(), SfxUnits.PageOsc)),     // an asset a later version made
             ("sound-nonative", () => { SfxUI.PretendNativeMissing = true; try { return Sound("Jump", SfxUnits.PageOsc); } finally { SfxUI.PretendNativeMissing = false; } }),
             ("kit",            KitSheet.Build),
             // the demo song with FM BASS (sound 7) chosen, as the device's pictures have it
@@ -39,6 +40,7 @@ namespace Inspector.Harness
             ("song-master",    () => Song(SfxSongPanel.PageMaster, 0, 127)),
             ("song-auto",      () => Song(SfxSongPanel.PageAuto, 5, 127)),      // pattern F: the bass's CUTOFF rises
             ("song-none",      () => SfxSongEditor.Build(new SerializedObject(EmptySong()))),
+            ("song-newer",     () => SfxSongEditor.Build(new SerializedObject(NewerSong()))),
         };
 
         // Window > SFX Forge: its view, fed with a made-up state (no MIDI port is opened). 340 is the window's smallest width.
@@ -46,6 +48,7 @@ namespace Inspector.Harness
         static readonly (string name, Func<VisualElement> build)[] WindowPictures =
         {
             ("window",          () => SfxForgeWindow.Build(SfxForgeViewTests.Linked())),
+            ("window-known",    () => SfxForgeWindow.Build(SfxForgeViewTests.LinkedAndKnown())),      // the device said what it is
             ("window-off",      () => SfxForgeWindow.Build(SfxForgeViewTests.NotConnected())),
             ("window-noports",  () => SfxForgeWindow.Build(new SfxForgeModel())),
         };
@@ -71,6 +74,23 @@ namespace Inspector.Harness
             var panel = (SfxSongPanel)SfxSongEditor.Build(new SerializedObject(SfxSongPanelTests.Demo()));
             panel.Sound = 6; panel.Pattern = pattern; panel.Intensity = intensity; panel.Page = page;
             return panel;
+        }
+
+        static SfxPreset NewerSound()
+        {
+            var preset = UnityEngine.Object.Instantiate(Preset("Jump"));
+            preset.name = "Jump";
+            return SfxPresetPanelTests.FromFormat(preset, 2);
+        }
+
+        // a song asset a later version made, whose packed song is of a later format too
+        static SfxSong NewerSong()
+        {
+            var song = SfxSongPanelTests.Demo();
+            byte[] later = (byte[])song.data.Clone();
+            later[0] = 6;
+            song.Set(song.sounds, later);
+            return SfxPresetPanelTests.FromFormat(song, 2);
         }
 
         static SfxSong EmptySong()

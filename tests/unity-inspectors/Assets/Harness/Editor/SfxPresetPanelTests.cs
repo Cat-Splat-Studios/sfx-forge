@@ -332,6 +332,50 @@ namespace Inspector.Harness
             panel.Mutate();
         }
 
+        /// <summary>Makes an asset one that a later asset format wrote (the number is not public: through its serialized field).</summary>
+        public static T FromFormat<T>(T asset, int format) where T : Object
+        {
+            var so = new SerializedObject(asset);
+            so.FindProperty("format").intValue = format;
+            so.ApplyModifiedPropertiesWithoutUndo();
+            return asset;
+        }
+
+        [Test]
+        public void ASoundFromANewerVersionSaysSoOverItsPages()
+        {
+            var panel = Panel(a);
+            Assert.AreEqual(1, a.Format); Assert.IsFalse(a.IsFromNewerVersion);
+            Assert.IsFalse(panel.NewerBanner.Shown, "a sound of this version has no banner");
+
+            FromFormat(a, 2);
+            Assert.AreEqual(2, a.Format); Assert.IsTrue(a.IsFromNewerVersion);
+            panel = Panel(a);
+            Assert.IsTrue(panel.NewerBanner.Shown);
+            Assert.AreEqual("FROM A NEWER SFX FORGE", panel.NewerBanner.Bold);
+            StringAssert.Contains("asset format 2, this version knows 1", panel.NewerBanner.Small);
+            StringAssert.Contains("Saving it here loses", panel.NewerBanner.Small);
+            Assert.AreEqual(SfxUnits.ParamText(SfxParam.BaseFreq, a.patch.baseFreq), panel.Tile(1).ValueText, "what is read of it shows as ever");
+
+            panel = Panel(a, b);
+            Assert.IsTrue(panel.NewerBanner.Shown);
+            Assert.AreEqual("ONE OF THESE 2 SOUNDS IS FROM A NEWER SFX FORGE", panel.NewerBanner.Bold);
+            FromFormat(b, 3);
+            panel = Panel(a, b);
+            Assert.AreEqual("2 OF THESE 2 SOUNDS ARE FROM A NEWER SFX FORGE", panel.NewerBanner.Bold);
+            StringAssert.Contains("asset format 3", panel.NewerBanner.Small, "the highest of them");
+
+            FromFormat(a, 1); FromFormat(b, 1);
+            Assert.IsFalse(Panel(a, b).NewerBanner.Shown);
+        }
+
+        [Test]
+        public void NotConnectedTheLinkLineSaysSo()
+        {
+            Assume.That(!SfxLink.Shared.HasOutput, "no MIDI port is open in this editor");
+            StringAssert.StartsWith("NOT CONNECTED | ", Panel(a).LinkText);
+        }
+
         [Test]
         public void HowLongAPictureTakes()
         {
