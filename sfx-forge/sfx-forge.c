@@ -1354,7 +1354,7 @@ static const char *const HELP_SONG[] = {
   "PADS 1-8", "pattern A-H, from the next bar line",
   "PADS 9-16", "INTENSITY, low to high",
   "SHIFT+PAD 1-8", "ARRANGEMENT: add that pattern as a bar",
-  "SHIFT+PAD 9 16", "take the last bar away · all (press twice)",
+  "SHIFT+PAD 9-15 16", "take the last bar away · all (press twice)",
   "ENCODER 1 2", "PATTERN · CHAIN: A to here play in a row",
   "ENCODER 3 4", "INTENSITY (CC 14) · LAYER of the sound",
   "A   B", "TEMPO (SHIFT: SWING) · steps in a pattern",
@@ -1993,10 +1993,11 @@ static void draw_mix(void)
   for (int s = 0; s < SLOTS; s++) {
     uint32_t c = ENGINE_RGB[patches[s].engine];
     int x, y, off = silent(s), solo = (SONG.solo >> s) & 1, k = 0;
+    int room = solo || ((SONG.mute >> s) & 1) ? 4 : 6;                         /* (the S or M in the corner takes two letters' room) */
     const char *n = pad_name(s);
     tile_at(s, &x, &y);
     vg_round(x, y, 55, 54, 7, s == sel ? 0x3E2C23 : PANEL);
-    while (k < 6 && n[k]) { buf[k] = n[k]; k++; }
+    while (k < room && n[k]) { buf[k] = n[k]; k++; }
     buf[k] = 0;
     vg_text(buf, x + 5, y + 3, VG_SMALL, off ? 0x6A5248 : TEXT, VG_LEFT);
     vg_rect(x + 5, y + 26, 45, 7, LINE);                                       /* the fader; the mark: 100, as designed */
