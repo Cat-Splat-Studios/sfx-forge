@@ -320,6 +320,7 @@ typedef struct {
   uint8_t gate[SFX_TRACKS];               /* steps a sequenced note still holds (0: no length given) */
   uint8_t aut[SFX_LANES];                 /* where each automation lane stands (sfx_auto) */
   int arr_pos, hold;                      /* the bar of the arrangement; hold: a cued pattern outside it loops until the next cue */
+  int loop;                               /* 1: the pattern repeats until a cue (sfx_player_set_loop); 0: arrangement or chain */
   double pos;                             /* steps since the start */
   int step, bar; float frac;              /* where it is: step -1 = not yet */
   int tail, wet;                          /* samples the effects may still ring after the last voice; a voice sent to them */
@@ -337,7 +338,7 @@ static inline void sfx_player_init(sfx_player *p, float sr)
   p->mods.pitch_st = p->mods.cutoff_oct = p->mods.fm = 0.0f; p->mods.level = 1.0f;
   for (int t = 0; t < SFX_TRACKS; t++) p->gate[t] = 0;
   for (int l = 0; l < SFX_LANES; l++) p->aut[l] = 0;
-  p->arr_pos = 0; p->hold = 0;
+  p->arr_pos = 0; p->hold = 0; p->loop = 0;
   p->intensity = 1.0f; p->running = 0; p->pattern = 0; p->cue = -1; p->pos = 0.0; p->step = -1; p->bar = -1; p->frac = 0.0f; p->tail = 0; p->wet = 0;
   sfx_fx_init(&p->fx, sr);
 }
@@ -392,6 +393,18 @@ static inline void sfx_player_cue(sfx_player *p, int pattern)
 {
   if (pattern < 0 || pattern >= SFX_PATTERNS) return;
   if (p->running) p->cue = pattern; else p->pattern = pattern;
+}
+
+/* 1 = the pattern repeats until a cue; 0 = arrangement or chain. Leaving it: on in the arrangement from its
+   first bar with the pattern that plays, else from the top - as sfx_player_start does. */
+static inline void sfx_player_set_loop(sfx_player *p, int on)
+{
+  on = on != 0;
+  if (p->loop && !on) {
+    p->arr_pos = -1; p->hold = 0;
+    for (int i = 0; i < p->song.arr_len && i < SFX_ARR_MAX; i++) if (p->song.arr[i] == p->pattern) { p->arr_pos = i; break; }
+  }
+  p->loop = on;
 }
 
 /* the voices from..to of this piece, each through its sound's fader and pan to the dry mix and to its three sends */
@@ -450,12 +463,13 @@ static inline uint32_t sfx_player_render(sfx_player *p, float *l, float *r, int 
         sfx__render(p, from, k); from = k;
         for (int t = 0; t < SFX_TRACKS; t++)                       /* a note with a length: its steps are over */
           if (p->gate[t] && --p->gate[t] == 0) sfx_player_note_off(p, SFX_KEY_SEQ + t);
-        if ((int)bar != p->bar) {                                  /* a bar line: the cue, else the chain */
+        if ((int)bar != p->bar) {                                  /* a bar line: the cue, else the loop, else the chain */
           int bars = s->arr_len <= SFX_ARR_MAX ? s->arr_len : 0;
           if (p->cue >= 0) {                                       /* a cue: on in the arrangement from its next bar with that pattern – or, outside it, that pattern until the next cue */
             p->pattern = p->cue; p->cue = -1; p->hold = bars > 0;
             for (int i = 1; i <= bars; i++) { int at = (p->arr_pos + i + bars) % bars; if (s->arr[at] == p->pattern) { p->arr_pos = at; p->hold = 0; break; } }
           }
+          else if (p->loop) { }                                    /* LOOP: the pattern stays */
           else if (p->bar >= 0 && bars && !p->hold) { p->arr_pos = (p->arr_pos + 1) % bars; p->pattern = s->arr[p->arr_pos] % SFX_PATTERNS; }
           else if (p->bar >= 0 && !bars && s->chain > 1) p->pattern = (p->pattern + 1) % s->chain;
           for (int l = 0; l < SFX_LANES; l++) p->aut[l] = 0;       /* every bar starts with the knobs where they were made */

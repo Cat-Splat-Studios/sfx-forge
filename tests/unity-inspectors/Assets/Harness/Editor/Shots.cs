@@ -41,6 +41,15 @@ namespace Inspector.Harness
             ("song-auto",      () => Song(SfxSongPanel.PageAuto, 5, 127)),      // pattern F: the bass's CUTOFF rises
             ("song-none",      () => SfxSongEditor.Build(new SerializedObject(EmptySong()))),
             ("song-newer",     () => SfxSongEditor.Build(new SerializedObject(NewerSong()))),
+            // the tools of a sound: the drawer under its keys, a tab each (the level line is over the keys in every sound picture)
+            ("sound-tools-new",   ToolsNew),                    // after a click on ZAP
+            ("sound-tools-vary",  ToolsVary),                   // MORE LIKE THIS, FREQ locked
+            ("sound-tools-level", ToolsLevel),                  // three sounds, after MATCH RMS
+            ("sound-tools-share", ToolsShare),
+            // a variation set: baked, baked and then changed, and one without a preset (the first two are assets made for the pictures)
+            ("variation-set",       () => VariationSet(ShotFolder + "/Footstep.asset")),
+            ("variation-set-stale", () => VariationSet(ShotFolder + "/Coin.asset")),
+            ("variation-set-none",  () => SfxVariationSetEditor.Build(new SerializedObject(EmptySet()))),
         };
 
         // Window > SFX Forge: its view, fed with a made-up state (no MIDI port is opened). 340 is the window's smallest width.
@@ -51,7 +60,98 @@ namespace Inspector.Harness
             ("window-known",    () => SfxForgeWindow.Build(SfxForgeViewTests.LinkedAndKnown())),      // the device said what it is
             ("window-off",      () => SfxForgeWindow.Build(SfxForgeViewTests.NotConnected())),
             ("window-noports",  () => SfxForgeWindow.Build(new SfxForgeModel())),
+            // Window > SFX Forge Bake: after a run with one warning and one failure, and with nothing selected
+            ("bake-window",       () => SfxBakeWindow.Build(SfxBatchBakeTests.Baked())),
+            ("bake-window-empty", () => SfxBakeWindow.Build(new SfxBakeModel())),
         };
+
+        // ---- the tools' pictures ----
+        const string ShotFolder = "Assets/ShotTemp";
+
+        // the tools' state is the session's (amount, locks) and the domain's (seeds): every picture starts from the same
+        static void PlainTools()
+        {
+            SfxPresetPanel.Locked = 0;
+            SfxPresetPanel.MutateAmount = 15;
+            SfxPresetPanel.Seeds = new SfxRandom(0x3F2A91C4u);
+        }
+
+        // a preset of the project as an object of its own: what a picture changes is not the asset
+        static SfxPreset Copy(string name)
+        {
+            var preset = UnityEngine.Object.Instantiate(Preset(name));
+            preset.name = name;
+            return preset;
+        }
+
+        static VisualElement ToolsNew()
+        {
+            PlainTools();
+            var panel = (SfxPresetPanel)Sound(Copy("Jump"), SfxUnits.PageOsc);
+            panel.ToolTab = SfxPresetPanel.ToolNew;
+            panel.Generate(SfxCategory.Zap);
+            panel.MeasureNow();
+            return panel;
+        }
+
+        static VisualElement ToolsVary()
+        {
+            PlainTools();
+            SfxPresetPanel.Locked = SfxMutate.Bit(SfxParam.BaseFreq);
+            var panel = (SfxPresetPanel)Sound("Laser", SfxUnits.PageOsc);
+            panel.ToolTab = SfxPresetPanel.ToolVary;
+            panel.MoreLikeThis();
+            panel.FinishPictures();
+            return panel;
+        }
+
+        static VisualElement ToolsLevel()
+        {
+            PlainTools();
+            var panel = (SfxPresetPanel)Sound(new UnityEngine.Object[] { Copy("Jump"), Copy("Laser"), Copy("Chime") }, SfxUnits.PageFx);
+            panel.ToolTab = SfxPresetPanel.ToolLevel;
+            panel.MatchLevels(SfxLevelMeasure.Rms);
+            return panel;
+        }
+
+        static VisualElement ToolsShare()
+        {
+            PlainTools();
+            var panel = (SfxPresetPanel)Sound("Wind", SfxUnits.PageOsc);
+            panel.ToolTab = SfxPresetPanel.ToolShare;
+            return panel;
+        }
+
+        static VisualElement VariationSet(string path)
+        {
+            var set = AssetDatabase.LoadAssetAtPath<SfxVariationSet>(path);
+            Assert.IsNotNull(set, path);
+            var panel = (SfxVariationSetPanel)SfxVariationSetEditor.Build(new SerializedObject(set));
+            panel.FinishPictures();
+            return panel;
+        }
+
+        static SfxVariationSet EmptySet()
+        {
+            var set = ScriptableObject.CreateInstance<SfxVariationSet>();
+            set.name = "New Variation Set";
+            return set;
+        }
+
+        // The sets of the pictures are assets with baked clips: made before play mode (they are files, they live through
+        // it), deleted after it.
+        static void MakeShotSets()
+        {
+            if (AssetDatabase.IsValidFolder(ShotFolder)) AssetDatabase.DeleteAsset(ShotFolder);
+            SfxVariationSet steps = SfxVariationSetTests.MakeSet("Footstep", 6, SfxPatch.Create(SfxEngine.Foley, 34, 78, 20, 0, 0, 120, 82, 30, 30, 0), ShotFolder);
+            SfxVariationSet coins = SfxVariationSetTests.MakeSet("Coin", 4, SfxGenerator.Make(SfxCategory.Chime, 4), ShotFolder);
+            if (!SfxNative.Available) return;
+            SfxVariationBaker.Bake(steps);
+            SfxVariationBaker.Bake(coins);
+            coins.amount = 25;                                  // changed after its bake: out of date
+            EditorUtility.SetDirty(coins);
+            AssetDatabase.SaveAssetIfDirty(coins);
+        }
 
         public static SfxPreset Preset(string name)
         {
@@ -107,6 +207,7 @@ namespace Inspector.Harness
         {
             var panel = (SfxPresetPanel)SfxPresetEditor.Build(new SerializedObject(presets));
             panel.Page = page;
+            panel.MeasureNow();                                 // (several sounds are measured a moment later in an Inspector: the picture does not wait)
             return panel;
         }
 
@@ -250,7 +351,9 @@ namespace Inspector.Harness
         [UnityTest]
         public IEnumerator TakeAll()
         {
+            MakeShotSets();
             yield return new EnterPlayMode();
+            PlainTools();
             foreach (var picture in Pictures)
             {
                 foreach (int width in Widths) yield return Shot.Take(picture.name, width, picture.build);
@@ -259,7 +362,187 @@ namespace Inspector.Harness
             }
             foreach (var picture in WindowPictures)
                 foreach (int width in WindowWidths) yield return Shot.Take(picture.name, width, picture.build);
+            PlainTools();
             yield return new ExitPlayMode();
+            AssetDatabase.DeleteAsset(ShotFolder);
+        }
+
+        // ---- the mouse on the tools ----
+        static SfxPreset toolsPreset;
+        static SfxBakeModel bakeModel;
+        static string bakeSaid;
+
+        /// <summary>The mouse on a sound's tools, in a real panel: a NEW key, the text field of SHARE, the tool tabs, the locks and MORE LIKE THIS, a variant's KEEP.</summary>
+        [UnityTest]
+        public IEnumerator TheMouseOnTheTools()
+        {
+            yield return new EnterPlayMode();
+            PlainTools();
+            toolsPreset = ScriptableObject.CreateInstance<SfxPreset>();
+            toolsPreset.name = "Tools";
+            // (a box that was hidden has no place before the next frame: each tab gets a panel of its own)
+            yield return Shot.Take("mouse-tools", 640, () => ToolsPanel(SfxPresetPanel.ToolNew, false), MouseOnNewAndShare);
+            yield return Shot.Take("mouse-tools", 640, () => ToolsPanel(SfxPresetPanel.ToolVary, false), MouseOnVary);
+            yield return Shot.Take("mouse-tools", 640, () => ToolsPanel(SfxPresetPanel.ToolVary, true), MouseOnTheVariants);
+            foreach (int width in new[] { 300, 340, 640 })      // the sound's text shows whole, however narrow the Inspector
+                yield return Shot.Take("mouse-tools", width, () => ToolsPanel(SfxPresetPanel.ToolShare, false), TheWholeTextShows);
+            PlainTools();
+            yield return new ExitPlayMode();
+        }
+
+        static VisualElement ToolsPanel(int tab, bool grid)
+        {
+            PlainTools();
+            toolsPreset.patch = SfxPatch.Default;
+            var panel = (SfxPresetPanel)Sound(toolsPreset, SfxUnits.PageOsc);
+            panel.ToolTab = tab;
+            if (grid) panel.MoreLikeThis();
+            return panel;
+        }
+
+        static void MouseOnNewAndShare(VisualElement element)
+        {
+            var panel = (SfxPresetPanel)element;
+            SfxPreset preset = toolsPreset;
+            SfxPatch before = preset.patch;
+            Assert.Greater(panel.Key("ZAP").worldBound.width, 40f);
+            Click(panel.Key("BLAST"));
+            Assert.IsTrue(SfxGenerator.Fits(SfxCategory.Blast, preset.patch), "a click on a NEW key");
+            Assert.AreEqual(SfxGenerator.Make(SfxCategory.Blast, panel.LastSeed), preset.patch);
+            StringAssert.StartsWith("BLAST | seed ", panel.NewText);
+            Click(panel.Key("UNDO"));
+            Assert.IsTrue(before.Equals(preset.patch), "the UNDO key takes a generated sound back");
+
+            // SHARE's field (its box is not shown: the field takes a text all the same)
+            SfxPatch other = SfxGenerator.Make(SfxCategory.Chime, 12);
+            Assert.AreEqual(panel.PatchText, panel.ShareField.value);
+            panel.ShareField.value = SfxPatchText.ToText(other);
+            Assert.IsTrue(preset.patch.Equals(other), "a text typed into the field is pasted");
+            Assert.AreEqual(SfxPatchText.ToText(other), panel.ShareField.value);
+            StringAssert.StartsWith("PASTED | ", panel.ShareText);
+            panel.ShareField.value = "the first again: (" + SfxPatchText.ToText(before) + ").";     // as it stands in a sentence
+            Assert.IsTrue(preset.patch.Equals(before), "a text in a sentence is read out of it");
+            Assert.AreEqual(SfxPatchText.ToText(before), panel.ShareField.value, "and the field shows the sound's own text");
+            panel.ShareField.value = SfxPatchText.ToText(other);
+            panel.ShareField.value = "not a sound";
+            Assert.IsTrue(preset.patch.Equals(other), "a text that is none changes nothing");
+            Assert.AreEqual(SfxPatchText.ToText(other), panel.ShareField.value, "and the field shows the sound's text again");
+            Assert.AreEqual("NOT PASTED | " + SfxPatchText.Message(SfxTextResult.NotOurs), panel.ShareText);
+
+            Click(panel.ToolTabs.Query<TextElement>(className: "sfx-tab").AtIndex(SfxPresetPanel.ToolLevel));
+            Assert.AreEqual(SfxPresetPanel.ToolLevel, panel.ToolTab, "a click on a tool tab");
+            Assert.IsTrue(panel.ToolShown(SfxPresetPanel.ToolLevel)); Assert.IsFalse(panel.ToolShown(SfxPresetPanel.ToolNew));
+        }
+
+        static void TheWholeTextShows(VisualElement element)
+        {
+            var panel = (SfxPresetPanel)element;
+            TextElement letters = panel.ShareField.Q<TextElement>();
+            Assert.AreEqual(SfxPatchText.Length, panel.ShareField.value.Length);
+            float wide = letters.MeasureTextSize(panel.ShareField.value, 0, VisualElement.MeasureMode.Undefined, 0, VisualElement.MeasureMode.Undefined).x;
+            Assert.Greater(letters.contentRect.width, 100f);
+            Assert.LessOrEqual(wide, letters.contentRect.width + 0.5f, "all 62 characters fit the field (letters of " + panel.ShareFontSize + " px in " + panel.worldBound.width + " px)");
+            Assert.GreaterOrEqual(panel.ShareFontSize, 6f);
+        }
+
+        static void MouseOnVary(VisualElement element)
+        {
+            var panel = (SfxPresetPanel)element;
+            Assert.AreEqual("LOCK FREQ", panel.LockKey(1).text);
+            Click(panel.LockKey(1));
+            Assert.AreEqual(SfxMutate.Bit(SfxParam.BaseFreq), SfxPresetPanel.Locked, "a click on a lock key");
+            Assert.IsTrue(panel.LockKey(1).Lit); Assert.IsTrue(panel.Tile(1).Locked);
+            Click(panel.LockKey(0));                            // the engine's: off, nothing
+            Assert.AreEqual(SfxMutate.Bit(SfxParam.BaseFreq), SfxPresetPanel.Locked);
+            Click(panel.Key("LOCK PAGE"));
+            Assert.AreEqual(SfxUnits.PageMask(SfxUnits.PageOsc), SfxPresetPanel.Locked);
+            Click(panel.Key("UNLOCK ALL"));
+            Assert.AreEqual(0u, SfxPresetPanel.Locked);
+
+            var tile = panel.AmountTile;                        // AMOUNT dragged 30 px up: ten steps of 3 px
+            Vector2 text = new Vector2(tile.worldBound.xMin + 70f, tile.worldBound.center.y);
+            Mouse(tile, EventType.MouseDown, text);
+            Mouse(tile, EventType.MouseDrag, text + new Vector2(0f, -30f));
+            Mouse(tile, EventType.MouseUp, text + new Vector2(0f, -30f));
+            Assert.AreEqual(25, SfxPresetPanel.MutateAmount); Assert.AreEqual("25%", tile.ValueText);
+            Mouse(tile, EventType.MouseDown, tile.Knob.worldBound.center, 2);
+            Assert.AreEqual(15, SfxPresetPanel.MutateAmount, "a double-click on its ring: 15%");
+
+            Click(panel.Key("AGAIN")); Click(panel.Key("BACK TO BASE"));         // off: nothing
+            Assert.IsFalse(panel.HasGrid);
+            Click(panel.Key("MORE LIKE THIS"));
+            Assert.IsTrue(panel.HasGrid); Assert.IsTrue(panel.GridShown);
+            uint seed = panel.GridSeed;
+            Click(panel.Key("AGAIN"));
+            Assert.AreNotEqual(seed, panel.GridSeed);
+            Assert.IsTrue(toolsPreset.patch.Equals(SfxPatch.Default), "nothing of this changed the sound");
+            SfxPatch was = toolsPreset.patch;
+            Click(panel.Key("MUTATE"));
+            Assert.IsFalse(toolsPreset.patch.Equals(was));
+        }
+
+        static void MouseOnTheVariants(VisualElement element)
+        {
+            var panel = (SfxPresetPanel)element;
+            SfxPreset preset = toolsPreset;
+            Assert.IsTrue(panel.GridShown);
+            Assert.Greater(panel.VariantTileAt(1).worldBound.width, 100f);
+            Assert.AreEqual(panel.VariantTileAt(1).worldBound.y, panel.VariantTileAt(4).worldBound.y, 0.5f, "640 px: four in a row");
+            Assert.Greater(panel.VariantTileAt(5).worldBound.y, panel.VariantTileAt(1).worldBound.y + 20f);
+            Click(panel.VariantTileAt(2).PlayKey);              // (plays, changes nothing)
+            Assert.IsTrue(preset.patch.Equals(panel.GridBase));
+            Click(panel.VariantTileAt(6).KeepKey);
+            Assert.IsTrue(preset.patch.Equals(panel.GridVariant(6)), "KEEP on a tile");
+            Assert.IsTrue(panel.VariantTileAt(6).KeepKey.Lit); Assert.IsFalse(panel.VariantTileAt(2).KeepKey.Lit);
+            Click(panel.Key("BACK TO BASE"));
+            Assert.IsTrue(preset.patch.Equals(panel.GridBase));
+            Assert.IsFalse(panel.VariantTileAt(6).KeepKey.Lit);
+        }
+
+        /// <summary>The mouse on the bake window's view, in a real panel: its keys reach the model's actions, a tile's menu and the folder field too.</summary>
+        [UnityTest]
+        public IEnumerator TheMouseOnTheBakeWindow()
+        {
+            yield return new EnterPlayMode();
+            bakeModel = SfxBatchBakeTests.Baked();
+            bakeSaid = "";
+            var m = bakeModel;
+            m.bake = () => bakeSaid += "bake "; m.bakeSets = () => bakeSaid += "sets "; m.show = () => bakeSaid += "show ";
+            m.setTo = to => { bakeModel.to = to; bakeSaid += "to:" + to + " "; };
+            m.setFolder = folder => { bakeModel.folder = folder; bakeSaid += "folder:" + folder + " "; };
+            m.optionsChanged = () => bakeSaid += "options ";
+            yield return Shot.Take("mouse-bake", 640, () => SfxBakeWindow.Build(bakeModel), MouseOnTheBakeWindow);
+            yield return new ExitPlayMode();
+        }
+
+        static void MouseOnTheBakeWindow(VisualElement element)
+        {
+            var view = (SfxBakeView)element;
+            string Said() { string s = bakeSaid.Trim(); bakeSaid = ""; return s; }
+            Click(view.Key("BAKE")); Click(view.Key("BAKE SETS")); Click(view.Key("SHOW"));
+            Assert.AreEqual("bake sets show", Said());
+            Click(view.ToKey(SfxBakeTo.NextToEachAsset));
+            Assert.AreEqual("to:NextToEachAsset", Said());
+            Click(view.ToKey(SfxBakeTo.OneFolder));
+            Assert.AreEqual("to:OneFolder", Said());
+            view.FolderField.value = "Assets/Elsewhere";
+            Assert.AreEqual("folder:Assets/Elsewhere", Said());
+
+            var tile = view.Tile(SfxBakeView.TilePitch);        // PITCH dragged 16 px up: four steps of 4 px
+            Vector2 text = new Vector2(tile.worldBound.xMin + 70f, tile.worldBound.center.y);
+            Mouse(tile, EventType.MouseDown, text);
+            Mouse(tile, EventType.MouseDrag, text + new Vector2(0f, -16f));
+            Mouse(tile, EventType.MouseUp, text + new Vector2(0f, -16f));
+            Assert.AreEqual(4f, view.Model.options.semitones); Assert.AreEqual("+4st", tile.ValueText);
+            StringAssert.Contains("options", Said());
+            Mouse(tile, EventType.MouseDown, tile.Knob.worldBound.center, 2);
+            Assert.AreEqual(0f, view.Model.options.semitones, "a double-click on the ring");
+
+            bakeModel.files = 0; bakeModel.presets = 0; bakeModel.sets = 0; bakeModel.report = null;      // nothing selected: the keys are off
+            view.Refresh();
+            Said();
+            Click(view.Key("BAKE")); Click(view.Key("BAKE SETS")); Click(view.Key("SHOW"));
+            Assert.AreEqual("", Said());
         }
 
         static SfxForgeModel mouseModel;

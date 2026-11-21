@@ -66,6 +66,12 @@ class Take:
             self.hit([name], label or name)
         self.t += gap
 
+    def hold_btn(self, name, label, seconds):
+        """A key held down: pressed now, let go after this long. Time does not move on."""
+        self.events.append((self.t, [3, BUTTON[name], 1]))
+        self.events.append((self.t + seconds, [3, BUTTON[name], 0]))
+        self.hit([name], label, max(0.7, seconds))
+
     def pad(self, n, label=None, hold=0.22, gap=0.45, vel=0.9, show=True):
         """n: 1..16, as on the device."""
         self.events.append((self.t, [1, n - 1, 1, vel]))
@@ -383,11 +389,12 @@ def tour():
     v.hit(["N52", "N55", "N59"], "KEYS  a chord", 1.8)
     v.wait(2.8)
 
-    v.say("THE SEQUENCER", "K5: the pads are the sixteen steps of the selected sound. A row is a beat.")
-    v.btn("K5", "K5  SEQ", gap=0.9)
-    for _ in range(6):
-        v.btn("F2", "F2  next pattern", gap=0.22)
-    v.wait(0.5)
+    v.say("THE SEQUENCER", "K5: the sequencer. LOOP in the top line: PLAY repeats one pattern. LEFT and RIGHT choose it - G is empty.")
+    v.btn("K5", "K5  SEQ", gap=1.4)
+    for k in range(6):
+        v.btn("RIGHT", "RIGHT  pattern " + "BCDEFG"[k], gap=0.3)
+    v.wait(0.9)
+    v.say("THE SEQUENCER", "The pads are the sixteen steps of the selected sound. A row is a beat. F3 FILL: every fourth step, then every second.")
     v.shift_pad(3, "SHIFT + PAD 3  select KICK")
     v.btn("F3", "F3  FILL", gap=0.8)
     v.shift_pad(2, "SHIFT + PAD 2  select SNARE")
@@ -401,12 +408,15 @@ def tour():
     v.shift_pad(7, "SHIFT + PAD 7  select FM BASS")
     for n, note in ((1, 40), (4, 40), (7, 43), (11, 45), (14, 47)):
         v.pad_key(n, note, gap=0.9)
-    v.wait(3.0)
+    v.wait(2.0)
+    v.say("THE SEQUENCER", "F2 UNDO takes the last edits back - here the bass line. F2 again brings them back.")
+    v.btn("F2", "F2  UNDO", gap=2.6)
+    v.btn("F2", "F2  again: REDO", gap=3.0)
     v.btn("STOP", "STOP", gap=0.6)
 
-    v.say("THE SONG", "K5 again: the song. Pads 1-8 are its patterns, the arrangement puts them in order.")
-    v.btn("K5", "K5  again: SONG", gap=0.9)
-    v.pad(1, "PAD 1  pattern A", gap=0.9)
+    v.say("THE SONG", "K5 again: the song. SONG in the top line: PLAY plays the arrangement, the patterns in order. F1 changes LOOP and SONG.")
+    v.btn("K5", "K5  again: SONG", gap=1.4)
+    v.pad(1, "PAD 1  pattern A", gap=1.4)
     v.turn("3", -50, "KNOB 3  INTENSITY", 1.2)
     v.say("LAYERS", "INTENSITY is what the game sends. At zero, only the kick plays.")
     v.btn("PLAY", "PLAY", gap=4.2)
@@ -446,34 +456,29 @@ def tour():
     return v
 
 
-# ---- video 2: the demo song, played in like on a groovebox ---------------------------------------------------------------
+# ---- video 2: a song, played in like on a groovebox - every key that is pressed is in the picture -------------------------
 STEP = 0.125                                         # a step at 120 BPM
+# (a new song has every fader at 100 and the sum saturates softly: the take is played as softly as the factory song is mixed)
 LATE = (0.030, 0.042, 0.026, 0.038, 0.034, 0.045, 0.028, 0.040)   # a hand is never on the grid: 26-45 ms behind, still its step
 
 
 def song():
-    v = Take("sfx-forge-build-a-song", "building the demo song")
-    # (not shown: empty the six patterns and the arrangement, so the song is built from nothing)
-    v.btn("K5", show=False, gap=0.15)
-    v.btn("K5", show=False, gap=0.15)
-    for n in range(1, 7):
-        v.pad(n, show=False, gap=0.12, hold=0.05)
-        v.btn("F3", show=False, gap=0.12)
-    v.events.append((v.t, [3, BUTTON["SHIFT"], 1])); v.events.append((v.t + 0.05, [1, 15, 1, 0.9])); v.events.append((v.t + 0.1, [1, 15, 0, 0])); v.events.append((v.t + 0.15, [3, BUTTON["SHIFT"], 0]))
-    v.wait(0.3)
-    v.pad(1, show=False, gap=0.15, hold=0.05)
-    v.events.append((v.t, [4, ENCODER["2"], 0, -8]))       # CHAIN to 1: pattern A, round and round
-    v.wait(0.1)
-    v.btn("K5", show=False, gap=0.15)
-    v.btn("K5", show=False, gap=0.15)
-    v.wait(1.8)
-    v.begin()
-
-    v.say("BUILD A SONG", "The demo song, played in from nothing - like on a groovebox. Everything is on the K5 pages.")
+    v = Take("sfx-forge-build-a-song", "building a song")
+    v.say("BUILD A SONG", "A song from nothing, played in like on a groovebox. Everything is on the three K5 pages: SEQ, SONG and AUTO.")
     v.wait(4.0)
 
-    v.say("REC + PLAY", "REC, then PLAY: the pattern loops to a metronome, and the pads are the drum kit. What you play is recorded.")
-    v.btn("REC", "REC", gap=1.2)
+    v.say("A NEW SONG", "K5 twice: the SONG page. F4 NEW asks first; pressed again, the song is empty. The sounds stay.")
+    v.btn("K5", "K5  SEQ", gap=1.0)
+    v.btn("K5", "K5  again: SONG", gap=1.8)
+    v.btn("F4", "F4  NEW", gap=1.3)
+    v.btn("F4", "F4  again: yes", gap=2.8)
+
+    v.say("LOOP", "K5 twice more: SEQ, pattern A. LOOP in the top line says what PLAY will do: repeat this one pattern.")
+    v.btn("K5", "K5  again: AUTO", gap=0.8)
+    v.btn("K5", "K5  again: SEQ", gap=4.0)
+
+    v.say("REC + PLAY", "REC, then PLAY: pattern A goes round to a click, and the pads are the drum kit. What you play is recorded.")
+    v.btn("REC", "REC", gap=1.8)
     t0 = v.t                                          # the bar line: PLAY is pressed here, a bar is 2 seconds
     v.btn("PLAY", "PLAY", gap=0.05)
     hits = [0]
@@ -497,88 +502,125 @@ def song():
     def until(bar):
         v.t = max(v.t, t0 + bar * 2.0 - 0.02)
 
+    def after_bar_line():                             # just after the next bar line: what is chosen now waits a whole bar
+        n = int((v.t - t0) / 2.0) + 1
+        v.t = t0 + n * 2.0 + 0.2
+        return n
+
     v.say("1  THE KICK", "The kick, on every beat - pad 3. Each hit lands on the step it is nearest.")
     for step in (0, 4, 8, 12):
-        drum(1, step, 3, "KICK")
+        drum(1, step, 3, "KICK", vel=0.6)
     until(2)
     v.say("1  THE KICK", "It loops. One more hit, softer, just before beat three: how hard you play is recorded too.")
-    drum(2, 7, 3, "KICK", vel=0.45)
+    drum(2, 7, 3, "KICK", vel=0.3)
     until(3)
 
     v.say("2  THE SNARE", "The snare on two and four - pad 2. The tiles show the sound you played last.")
     for step in (4, 12):
         drum(3, step, 2, "SNARE")
-    v.say("2  THE SNARE", "SHIFT + REC turns the metronome off and on - also while it records.")
+    v.say("2  THE SNARE", "SHIFT + REC turns the click off, and on again - also while it records.")
     until(4.0)
-    v.shift_btn("REC", "SHIFT + REC  metronome off", gap=0.3)
+    v.shift_btn("REC", "SHIFT + REC  click off", gap=0.3)
     until(4.5)
 
     v.say("3  THE HI-HAT", "The hi-hat - pad 13: every second step, leaning on the off-beat.")
     until(5)
     for k, step in enumerate(range(0, 16, 2)):
-        drum(5, step, 13, "HI-HAT", vel=0.85 if k % 2 else 0.5)
-    until(7)
+        drum(5, step, 13, "HI-HAT", vel=0.55 if k % 2 else 0.35)
+    until(6.5)
 
-    v.shift_btn("REC", "SHIFT + REC  metronome on", gap=0.3)
-    v.say("4  THE BASS", "SHIFT + a pad selects a sound without playing it in. Now the keys record: the bass line.")
+    v.say("4  A WRONG NOTE", "A slip: one hat too many, on step 6. It is recorded like every other hit.")
+    drum(7, 5, 13, "HI-HAT  (a slip)", vel=0.55)
+    v.hits[-1] = (v.hits[-1][0], v.hits[-1][0] + 0.8) + v.hits[-1][2:]
+    v.t = t0 + 7 * 2.0 + 1.3
+    v.say("4  ERASE", "While REC plays, F4 is ERASE. Tap it as the step passes and that step goes. Held, it erases for as long as it is held.")
+    v.t = t0 + 8 * 2.0 + 5 * STEP + 0.02              # step 6 of the next round, as it sounds
+    v.hold_btn("F4", "F4  ERASE", 0.07)
+    until(9.5)
+
+    v.say("5  UNDO", "F2 UNDO takes the whole take back: everything played since REC and PLAY. Pressed again, it brings it back.")
+    v.btn("F2", "F2  UNDO", gap=0.1)
+    until(10.75)
+    v.btn("F2", "F2  again: REDO", gap=0.1)
+    until(12)
+
+    v.say("6  THE BASS", "SHIFT + a pad selects a sound without playing it in. Now the keys record: the bass line.")
     v.shift_pad(7, "SHIFT + PAD 7  select FM BASS", gap=0.5)
-    until(8)
-    for step, note in ((0, 28), (3, 28), (5, 40), (7, 28), (8, 31), (10, 33), (13, 35), (14, 38)):
-        play(8, step, note, vel=1.0 if note >= 40 else 0.8)
-    until(10)
-
-    v.say("5  THE TUNE", "The melody, on FM KEYS - played over the loop, one pass.")
-    v.shift_pad(8, "SHIFT + PAD 8  select FM KEYS", gap=0.5)
-    until(11)
-    for step, note in ((2, 64), (3, 67), (6, 69), (9, 67), (11, 64), (14, 62)):
-        play(11, step, note)
     until(13)
+    for step, note in ((0, 28), (3, 28), (5, 40), (7, 28), (8, 31), (10, 33), (13, 35), (14, 38)):
+        play(13, step, note, vel=0.7 if note >= 40 else 0.45)
+    until(15)
 
-    v.say("6  THE STRINGS", "Two long notes on the strings. A held sound holds until its next note, or the bar's end.")
-    v.shift_pad(16, "SHIFT + PAD 16  select STRINGS", gap=0.5)
-    until(14)
-    play(14, 0, 52, vel=0.7, hold=0.8)
-    play(14, 8, 50, vel=0.7, hold=0.8)
+    v.say("7  THE TUNE", "The melody, on FM KEYS, played lightly over the loop - one pass. A new song has every fader up: the hands do the balance.")
+    v.shift_pad(8, "SHIFT + PAD 8  select FM KEYS", gap=0.5)
     until(16)
+    for step, note in ((2, 64), (3, 67), (6, 69), (9, 67), (11, 64), (14, 62)):
+        play(16, step, note, vel=0.25)
+    until(18)
 
-    v.say("7  BY HAND", "REC off: the pads are the sixteen steps again. Add one - the hat at the end of the bar - or fix a note.")
+    v.say("8  THE STRINGS", "Two long notes on the strings, played softly. A held sound holds until its next note, or the bar's end.")
+    v.shift_pad(16, "SHIFT + PAD 16  select STRINGS", gap=0.5)
+    until(19)
+    play(19, 0, 52, vel=0.3, hold=0.8)
+    play(19, 8, 50, vel=0.3, hold=0.8)
+    until(21)
+
+    v.say("9  BY HAND", "REC off: the pads are the sixteen steps again. Add one - the hat at the end of the bar - or fix a note.")
     v.btn("REC", "REC  off", gap=1.0)
     v.shift_pad(13, "SHIFT + PAD 13  select HI-HAT", gap=1.0)
     v.pad(16, "PAD 16  step 16", gap=1.6)
-    v.say("7  BY HAND", "Knob 4 is a step's LENGTH: the strings let go after seven steps, before the next chord.")
+    v.say("9  BY HAND", "Knob 4 is a step's LENGTH: the strings let go after seven steps, before the next chord.")
     v.shift_pad(16, "SHIFT + PAD 16  select STRINGS", gap=1.0)
     v.turn("1", -15, "KNOB 1  STEP: to step 1", 0.8)    # (the frame was on step 16, from the hat)
     v.turn("4", 7, "KNOB 4  LENGTH", 1.0)
     v.turn("1", 8, "KNOB 1  STEP: to step 9", 0.8)
     v.turn("4", 7, "KNOB 4  LENGTH", 1.0, after=2.5)
 
-    v.say("8  A SECOND PATTERN", "F5 COPY makes pattern B out of A. Hold a step and play a key to change its note: the answer.")
-    v.btn("F5", "F5  COPY to the next pattern", gap=1.4)
+    v.say("10  A SECOND PATTERN", "F5 COPY puts pattern A into the next empty one, B, and goes there. B takes over on the bar line.")
+    after_bar_line()
+    v.btn("F5", "F5  COPY: A into B", gap=2.6)
+    v.say("10  A SECOND PATTERN", "Hold a step and play a key to change its note: the bass answers in B. A stays as it was.")
     v.shift_pad(7, "SHIFT + PAD 7  select FM BASS", gap=1.0)
     v.pad_key(9, 33, gap=1.1)
     v.pad_key(12, 45, gap=1.1)
     v.pad(15, "PAD 15  step off", gap=1.0)
     v.pad_key(14, 31, gap=2.5)
 
-    v.say("9  THE OTHER PATTERNS", "Chorus, breakdown and turnaround are made the same way. DEMO brings the finished six back.")
-    v.btn("K5", "K5  again: SONG", gap=1.2)
-    v.btn("F4", "F4  DEMO", gap=3.0)
+    v.say("11  LEFT AND RIGHT", "LEFT and RIGHT choose the pattern. While it plays the change waits for the bar line: B>A in the top line.")
+    after_bar_line()
+    v.btn("LEFT", "LEFT  pattern A", gap=0.1)
+    after_bar_line()
+    v.wait(1.8)
+    v.say("11  LEFT AND RIGHT", "The loop never stops: A plays its bar out, then B goes round.")
+    after_bar_line()
+    v.btn("RIGHT", "RIGHT  pattern B", gap=0.1)
+    after_bar_line()
+    v.wait(1.6)
 
-    v.say("10  THE ARRANGEMENT", "SHIFT + a pattern's pad adds a bar. The row of letters is the song's order.")
-    v.shift_pad(16, "SHIFT + PAD 16  clear the arrangement", gap=1.4)
-    for n in (1, 2, 1, 2, 3, 4, 3, 4):
-        v.shift_pad(n, "SHIFT + PAD %d  add pattern %s" % (n, "ABCD"[n - 1]), gap=0.75)
-    v.wait(2.0)
+    v.say("12  THE ARRANGEMENT", "K5 again: SONG. SHIFT + a pattern's pad adds a bar - A, A, A, B. The row of letters is the song's order.")
+    v.btn("K5", "K5  again: SONG", gap=1.6)
+    for n in (1, 1, 1, 2):
+        v.shift_pad(n, "SHIFT + PAD %d  add pattern %s" % (n, "AB"[n - 1]), gap=1.0)
+    v.wait(1.6)
+    v.say("12  TO SONG", "F1 TO SONG: the top line says SONG now. It plays the bars in their order instead of one pattern round and round.")
+    after_bar_line()
+    v.btn("F1", "F1  TO SONG", gap=0.1)
+    after_bar_line()
+    v.wait(8.2)
 
-    v.say("11  LAYERS", "Each instrument has a LAYER mark. Knob 4 sets it for the selected sound - here the brass.")
+    v.say("13  THE FINISHED SONG", "Chorus, breakdown and turnaround are made the same way. SHIFT + F4 DEMO, pressed twice, brings the finished song.")
+    v.shift_btn("F4", "SHIFT + F4  DEMO", gap=1.4)
+    v.shift_btn("F4", "SHIFT + F4  again: yes", gap=4.5)
+
+    v.say("14  LAYERS", "Each instrument has a LAYER mark. Knob 4 sets it for the selected sound - here the brass.")
     v.turn("DATA", -1, "DATA  select BRASS", 0.4, after=0.8)
     v.turn("4", -20, "KNOB 4  LAYER", 1.2)
     v.turn("4", 20, "KNOB 4  LAYER", 1.2, after=0.8)
-    v.say("11  LAYERS", "INTENSITY at zero: only the kick. A game raises it and the band comes in.")
+    v.say("14  LAYERS", "INTENSITY at zero: only the kick. A game raises it and the band comes in.")
     v.turn("3", -50, "KNOB 3  INTENSITY", 1.2, after=3.5)
     v.turn("3", 50, "KNOB 3  INTENSITY", 9.0, after=2.0)
 
-    v.say("12  AUTOMATION", "K5 again: AUTO. Two points on the bass's filter and F3 RAMP - a sweep through the bar.")
+    v.say("15  AUTOMATION", "K5 again: AUTO. Two points on the bass's filter and F3 RAMP - a sweep through the bar.")
     v.btn("K5", "K5  again: AUTO", gap=1.0)
     v.shift_pad(7, "SHIFT + PAD 7  select FM BASS", gap=1.0)
     v.pad(1, "PAD 1  a point", gap=0.6)
@@ -587,7 +629,7 @@ def song():
     v.turn("2", 35, "KNOB 2  VALUE", 1.0)
     v.btn("F3", "F3  RAMP", gap=4.0)
 
-    v.say("13  THE MIX", "K4 twice: the mixer. DATA selects, knob 1 is the fader, knob 2 the pan.")
+    v.say("16  THE MIX", "K4 twice: the mixer. DATA selects, knob 1 is the fader, knob 2 the pan.")
     v.btn("K4", "K4  FX", gap=0.5)
     v.btn("K4", "K4  again: MIX", gap=1.2)
     v.turn("DATA", 1, "DATA  select FM KEYS", 0.4, after=0.8)
@@ -595,13 +637,13 @@ def song():
     v.turn("1", 10, "KNOB 1  VOLUME", 1.2)
     v.turn("2", 20, "KNOB 2  PAN", 1.2, after=2.0)
 
-    v.say("14  KEEP IT, SEND IT", "F6 SAVE keeps the song. On the SONG page, F5 SEND gives it and its instruments to the game.")
+    v.say("17  KEEP IT, SEND IT", "F6 SAVE keeps the song. On the SONG page, F5 SEND gives it and its instruments to the game.")
     v.btn("K5", "K5  SEQ", gap=0.5)
     v.btn("K5", "K5  again: SONG", gap=1.0)
-    v.btn("F6", "F6  SAVE", gap=1.6)
+    v.btn("F6", "F6  SAVE", gap=2.6)
     v.btn("F5", "F5  SEND", gap=3.0)
 
-    v.say("THE SONG", "That is the whole of it: played in, arranged, layered, automated, mixed.")
+    v.say("THE SONG", "That is the whole of it: played in, erased, undone, copied, arranged, layered, automated, mixed.")
     v.wait(14.0)
     v.btn("STOP", "STOP", gap=1.0)
     v.say("SFX FORGE", "Open source, MIT. The manual and a one-page cheat sheet are in the repository.")

@@ -3,9 +3,11 @@
 Sound effects, instruments and adaptive music for games, on **VIBE FM** (and, later, the M-VAVE FM-1). Two kits of 16
 synthesized sounds – SFX for the game's sound effects, MUSIC for the band its song plays – from five engines (one of
 them a wavetable synth), with envelopes, an LFO, chorus, delay and reverb; a MUTATE button for instant variations; a
-step sequencer with notes, velocity and length, an arrangement, automation for every knob, a mixer, and layers that
-follow the game's intensity; and a live MIDI/SysEx link to a game engine. What you make on the device plays in the
-game with the same engine.
+step sequencer with notes, velocity and length, a pattern that loops while you play into it, undo, an arrangement,
+automation for every knob, a mixer, and layers that follow the game's intensity; and a live MIDI/SysEx link to a game
+engine. What you make on the device plays in the game with the same engine. In Unity the package also has tools for
+designing sounds without the device: new sounds of a kind, variants, variation sets, batch baking, level matching, and
+a sound as a line of text.
 
 **[The manual](docs/MANUAL.md)** explains all of it: making sound effects, writing and mixing music, and getting both
 into a game. In a hurry: **[the cheat sheet](docs/img/cheatsheet.png)** is every page and shortcut on one picture.
@@ -19,9 +21,17 @@ instruments in that style, not recordings of an orchestra. The wavetables are co
 
 ![SFX FORGE](sfx-forge/icon.png)
 
-Built with the VIBE FM SDK. Status: v1.0. The synth, the device UI and the device side of the link are
+Built with the VIBE FM SDK. Status: v1.0, firmware 1.5.0. The synth, the device UI and the device side of the link are
 tested in the SDK's tools; the Unity package is tested in Unity 6.3 with the demo project's editor and Play mode tests.
-Not tried yet: receiving MIDI against a real port (it needs a loopback port or a device).
+Not tried yet: the hardware and the plugin. The link was run against the SDK's emulator over a virtual MIDI cable, last
+with firmware 1.4.0.
+
+**New in firmware 1.5.0: the sequencer.** PLAY plays what the top line says, LOOP (the pattern repeats) or SONG (the
+arrangement); REC switches to LOOP, so a pattern stays under your hands while you play into it; F2 is UNDO on the
+song's pages; F4 held erases during a take; the keys that throw a whole song or arrangement away ask twice. The song
+format, SEND and the messages of the link are the same as in 1.4.0. All of it is tested by scripts against the built
+firmware (below, "Build"). It was not run on the hardware, in the plugin or over MIDI against the emulator – the link
+was last tested end to end with 1.4.0 – and nobody has played or listened to it yet.
 
 ## Layout
 
@@ -32,11 +42,11 @@ Not tried yet: receiving MIDI against a real port (it needs a loopback port or a
 | `core/sfx_song.h` | the player: 16 voices, chorus / delay / reverb, and the music – a song (8 patterns, notes, chain, a layer threshold per sound) and its sequencer |
 | `sfx-forge/` | the Vibe: pads, pages, display, storage, MIDI |
 | `native/` | the same engine as a native library (Windows x64 so far), for game engines |
-| `unity/com.catsplat.sfxforge/` | the Unity package: the link, presets, a player, telemetry, and an editor UI drawn like the device's display (`Editor/UI` is its kit) |
+| `unity/com.catsplat.sfxforge/` | the Unity package: the link, presets, a player, telemetry, the tools for designing sounds (generators, variants, variation sets, batch bake, levels, a sound as text), and an editor UI drawn like the device's display (`Editor/UI` is its kit) |
 | `unity/Demo/` | a Unity 6.3 project using the package: a hovercraft whose every sound is synthesized live |
-| `tests/` | a scripted performance (`tour.json`) and its checks (`check.mjs`); `check-identity.mjs` sends SysEx into the built firmware and checks its identity and the other messages; `dotnet/` tests the Unity package's core without Unity |
+| `tests/` | a scripted performance (`tour.json`) and its checks (`check.mjs`); more scripts of key presses, each with its check (`loop`, `modes`, `take`, `edit`, `undo`, `retake` for the sequencer, `song-export` for what SEND gives: the list is under "Build"); `check-identity.mjs` sends SysEx into the built firmware and checks its identity and the other messages; `dotnet/` tests the Unity package's core without Unity |
 | `tests/mix-report.mjs` | measures the demo song's mix: every instrument soloed in turn – its level, its peak, how much of it is high |
-| `tests/unity-inspectors/` | a small Unity project that tests the package's editor UI (the sound inspector, the song inspector, the SFX Forge window; 100 EditMode tests) and writes pictures of it to `out/inspector-shots/`. The pictures are the Inspector's element tree and stylesheet rendered in a panel to a texture, not photographs of the Inspector. Its README has the command |
+| `tests/unity-inspectors/` | a small Unity project that tests the package's editor UI (the sound inspector with its tools, the song inspector, the variation set's inspector, the SFX Forge window and the bake window; 147 EditMode tests) and writes pictures of it to `out/inspector-shots/`. The pictures are the Inspector's element tree and stylesheet rendered in a panel to a texture, not photographs of the Inspector. Its README has the command |
 | `docs/` | the manual, and `figures.py`, which builds its pictures from the firmware's own screenshots |
 | `docs/UNITY.md` | the Unity manual: the package and the showcase, with its own figures (`docs/img/unity-*.png`, built by `docs/unity_figures.py` from the song file and the recorded takes in `out/unity-video/`; its pictures of the editor UI, `unity-inspector-*.png`, are copied by the same script from `out/inspector-shots/`: `SFXFORGE_FIGURES=inspectors python docs/unity_figures.py` after the inspectors' tests ran) |
 | `docs/video/make_videos.py` | makes the two videos (a feature tour, and building the demo song piece by piece) from scripts of key presses: the firmware renders its own display and sound, ffmpeg joins them. Results in `out/video/` |
@@ -55,8 +65,29 @@ sh build.sh
 ```
 
 Gives `build/sfx-forge.wasm` (drop it onto <https://play.thefirmwarehub.com/>) and `build/sfx-forge.zip` (drop it onto
-the VIBE FM VST window), then runs `vibe-check` and two test performances: `out/audio.wav`, screenshots,
-`out/midi.json`, `out/daw/` (the sequencer following a DAW) and `out/guide/` (the tour).
+the VIBE FM VST window), then runs `vibe-check` and the test performances: scripts of key presses played into the
+built firmware by the SDK's `wasmtest`, each with a check of the sound that came out or of the song the device then
+sent. Each writes into its own folder in `out/` and ends with a line `… PASSED`; the first that fails stops the build.
+
+| Performance | Check | What it checks |
+|---|---|---|
+| `tour.json` | `check.mjs` | a walk through the pages: the song's kicks in time, a pad as a step, a cue on the bar line, SEND as 16 sounds and 39 pieces. Leaves `out/audio.wav`, screenshots and `out/midi.json` |
+| `daw.json` | `check-daw.mjs` | the sequencer follows a DAW's tempo and position (`out/daw/`) |
+| `guide.json` | `check-guide.mjs` | the tour (MENU) plays what its captions say (`out/guide/`) |
+| `reset.json` | `check-reset.mjs` | the factory reset |
+| `metronome.json` | `check-metronome.mjs` | the click on the beats while REC is on, and SHIFT + REC switching it off |
+| `loop.json` | `check-loop.mjs` | REC + PLAY on SEQ: the pattern goes round and the arrangement does not walk on, a hit is recorded, F2 takes the take back and brings it again, F4 held erases it |
+| `modes.json` | `check-modes.mjs` | LOOP holds a pattern bar after bar, a cued pattern starts on the bar line and stays, F1 while it plays goes on in the arrangement, and SONG plays the arrangement as before |
+| `take.json` | `check-take.mjs` | a take over three bars lands in the pattern on the display; F4 erases only the steps that pass under it |
+| `edit.json` | `check-edit.mjs` | nothing plays: NEW and SHIFT + pad 16 ask twice (once does nothing), COPY goes into the first empty pattern and leaves the chain alone, CLEAR, and F2 after each |
+| `undo.json` | `check-undo.mjs` | what F2 takes back and what it leaves: bars added, a run of edits that ends with the page and the pattern, after a factory reset, after COPY, after a CLR PAT with nothing to clear |
+| `retake.json` | `check-retake.mjs` | a knob turned in a take does not cut it in two, a pattern chosen before STOP is the one shown, a held pad ends though REC went off in between, a take in SONG goes along the arrangement, the click stays under full scale |
+| `song-export.json` | `check-song-export.mjs` | the factory sounds and song as SEND gives them are, byte for byte, the file the Unity demo's song was built from |
+| – | `check-identity.mjs` | the identity and the other messages, sent into the firmware as SysEx; the version in the firmware and in `firmware.json` are the same |
+
+All 14 pass on firmware 1.5.0 (`vibe-check` and the 13 above). They hear the output and read the song the device sends. Only
+`check-identity.mjs` looks at the display, and only for the LINK light: what a page shows and what a toast says is not checked by them. Not checked at all: the stage's buttons,
+ERASE across a change of pattern, and undo of RAMP, FILL and a song loaded from a game.
 
 ## Playing it
 
@@ -85,41 +116,68 @@ The short version; [the manual](docs/MANUAL.md) is the long one.
   pad or key is. **K3 LFO** – RATE, and how far it moves PITCH, FILTER and TIMBRE. **K4 FX** – sends to CHORUS, DELAY
   and REVERB, and the sound's LEVEL.
 - **PLAY / STOP** – the song, with a demo to start from. It follows the DAW's song position while the DAW plays, else
-  its own tempo. **REC** + PLAY: what you play goes into the pattern, on the step nearest to each hit and as hard
-  as it was hit – on the SEQ page the pads are then the drum kit and the keys the notes, like on a groovebox. A
-  metronome clicks on every beat while REC is on (SHIFT + REC: off).
-- **K5 SEQ** – the display shows the selected sound's 16 steps, big, each with its note, and under them the whole
-  pattern: a row a sound. The pads are those 16 steps (a step switched on is heard); SHIFT + pad hears and selects that
-  pad's sound, DATA walks the rows. A step may carry a note: hold its pad and play a key, or turn NOTE (it moves along
+  its own tempo.
+- **LOOP or SONG: what PLAY plays** (firmware 1.5.0). **LOOP**: the pattern repeats, and a pattern you choose takes
+  over on the next bar line and repeats in its turn. **SONG**: the arrangement, or the chain if there is none. On the
+  song's pages a pill in the top line says which, and **F1** changes it (it reads TO SONG or TO LOOP), also while it
+  plays: to SONG, it goes on in the arrangement from the first bar that has the playing pattern. Opening SEQ or AUTO
+  while it stands sets LOOP, opening SONG sets SONG; while it plays, or with REC lit, the pages leave it alone. PLAY
+  itself never changes it. As it comes it is SONG: PLAY on a sound page plays the demo as arranged.
+- **Choosing a pattern** – LEFT / RIGHT on SEQ, SONG and AUTO: the pattern before / after (on SONG also encoder 1 and
+  pads 1–8). While it stands: at once. While it plays: on the next bar line – until then the top line reads `A>C` and
+  the title `EDIT C - PLAYS A`, and in the row of eight letters under the page the waiting one blinks. STOP before the
+  bar line: the pattern you chose is the one shown, and the one the next PLAY starts.
+- **REC** – lighting it sets LOOP. REC + PLAY: what you play goes into the pattern that plays, on the step nearest to
+  each hit and as hard as it was hit, round after round – on the SEQ page the pads are then the kit and the keys the
+  notes, like on a groovebox (REC off: the pads are the steps again). The display stays on the pattern that plays. A
+  metronome clicks on every beat while REC is on (SHIFT + REC: off); there is no count-in. **F4 held is ERASE** while a
+  take runs: the selected sound's steps go as the bar passes them, a tap takes only the step under the playhead. With
+  F1 at SONG the take goes along the arrangement, and each hit lands in the pattern of its bar. Only the MUSIC kit is
+  recorded.
+- **UNDO** – F2 on SEQ, SONG and AUTO, one step; F2 again brings it back. A step is: the edits made in a row on one
+  page and pattern (steps, notes, velocities, lengths, automation points); a whole take, from its first hit until STOP, PLAY or REC;
+  the bars added and removed in a row; or one FILL, CLEAR, RAMP, COPY, CLR PAT, cleared arrangement, NEW, DEMO or
+  song loaded from a game. It brings back notes, automation and the arrangement – after NEW, DEMO and a loaded song
+  the whole song with its tempo and mix. Not the sounds (F3 on the sound pages is their undo), and not a turn of
+  tempo, swing or a fader.
+- **K5 SEQ** – the display shows the selected sound's 16 steps, big, each with its note, and under them the eight
+  patterns as a strip of letters (every sound's steps at once: the stage). The pads are those 16 steps (a step switched on is heard); SHIFT + pad hears and selects that
+  pad's sound, DATA walks the sounds. A step may carry a note: hold its pad and play a key, or turn NOTE (it moves along
   the scale chosen with encoder B). Encoders: STEP · NOTE · VELOCITY (1–8: a step is drawn as high as it is hard) ·
-  LENGTH (AUTO, or 1–15 steps: a line shows how far it holds). A: the tempo, SHIFT + A: the swing. REC keeps how hard
-  a pad or key was hit. F1 / F2 (and LEFT / RIGHT): the pattern
-  before / after. F3 FILL: every 4th step, every 2nd, every one, none. F4 CLEAR the sound's steps. F5 COPY the pattern
-  to the next one. A sustained sound holds until it plays again or the bar ends.
+  LENGTH (AUTO, or 1–15 steps: `>3` in the step's corner says it holds 3). A: the tempo, SHIFT + A: the swing. F1 LOOP or SONG ·
+  F2 UNDO · F3 FILL: every 4th step, every 2nd, every one, none · F4 CLEAR the sound's steps (ERASE while a take
+  runs) · F5 COPY the pattern into the next empty one, and on to it: a variation to make · F6 SAVE. A sustained sound
+  holds until it plays again or the bar ends.
 - **K5 again: SONG** – what makes it game music. The display shows the eight patterns (what is in each, and the
   chain), and the layers: INTENSITY as a level that rises over each sound's mark.
   - **LAYER**: every sound has a threshold and plays only while **INTENSITY** is at or above it. Low intensity: the
     kick alone. High: bass, snare, strings, lead, effects.
-  - **PATTERN** A–H (also pads 1–8): a cued pattern takes over on the next bar line. **CHAIN**: walk patterns A…n by
-    itself. Pads 9–16 set the intensity. Encoder B: steps in a pattern. F2 COPY makes the next pattern a variation.
+  - **PATTERN** A–H (also pads 1–8): a chosen pattern takes over on the next bar line. **CHAIN**: walk patterns A…n by
+    itself (not used while there is an arrangement). Pads 9–16 set the intensity. A: the tempo, SHIFT + A: the swing.
+    Encoder B: steps in a pattern.
+  - F1 LOOP or SONG · F2 UNDO · F3 CLR PAT: the shown pattern empty · F4 NEW: an empty song (SHIFT + F4: the DEMO
+    song again) – both ask twice, leave the sounds as they are, and F2 brings the song back · F6 SAVE.
   - **SEND** (F5): the 16 sounds and the song to the game.
-- **The arrangement** (SONG page) – up to 32 bars, a pattern each, played in order and again from the top: SHIFT + pad
-  1–8 adds that pattern as a bar, SHIFT + pad 9–15 takes the last bar away, SHIFT + pad 16 all of them (then the chain
-  plays again). A cued pattern that is in the arrangement goes on from its bar; one that is not – a boss, a menu –
-  takes over and stays until the next cue.
+- **The arrangement** (SONG page) – up to 32 bars, a pattern each, played in order and again from the top (PLAY starts at the first bar
+  that has the shown pattern; if none has it, that pattern once and then from the top): SHIFT + pad
+  1–8 adds that pattern as a bar, SHIFT + pad 9–15 takes the last bar away, SHIFT + pad 16 all of them (it asks
+  twice; then the chain plays again). In SONG a cued pattern that is in the arrangement goes on from its bar; one
+  that is not – a boss, a menu – takes over and stays until the next cue. In LOOP every chosen pattern stays.
 - **K5 a third time: AUTO** – automation, for any knob. A song has 24 lanes; each moves one knob of one sound – any
   of its own 25 values, its fader, its pan – or the master's delay time, feedback, room size, damping or drive. So a
   sound has as many lanes as it has knobs that should move. AUTO opens on the knob you turned last: turn it on its own
   page, go to AUTO, and its lane is there (TARGET, encoder 3, chooses another). A pad puts a point on its step (where
-  the knob stands), VALUE (encoder 2) moves it; a point holds until the next one or the bar's end. F3 RAMP draws a
-  straight line from point to point, F4 clears the lane. Nothing is written into the sound or the mix: at every bar
+  the knob stands), VALUE (encoder 2) moves it; a point holds until the next one or the bar's end. F1 LOOP or SONG,
+  F2 UNDO, F3 RAMP draws a straight line from point to point, F4 clears the lane, F5 COPY the pattern as on SEQ.
+  Nothing is written into the sound or the mix: at every bar
   line each knob is back where you made it. In the engine it is one function (`sfx_auto` in `core/sfx_song.h`), asked
   wherever a knob's value is used – in the game as on the device.
 - **The display** is one of two kinds of page: the 16 pads as 16 tiles beside the four values (SEQ, SONG, AUTO, MIX),
   or a picture of what the knobs shape with their values in its corners (the sound pages, MASTER). The knob being
   turned is written large across the middle for a moment.
 - **K4 again: MIX** – the mixer: a fader and a pan for every sound (encoders 1 and 2, for the selected one), DRIVE
-  on the sum, the OUTPUT volume. The pads mute a sound, SHIFT + pad solos it; F1 MUTE, F2 SOLO, F3 RESET, F4 ALL ON.
+  on the sum, the OUTPUT volume. The pads mute a sound, SHIFT + pad solos it; F1 MUTE, F2 SOLO, F3 RESET, F4 ALL ON,
+  F5 PLAY.
 - **K4 a third time: MASTER** – the effects every sound sends to: the delay's TIME (1/16 to 1/2) and FEEDBACK, the reverb's ROOM
   SIZE and DAMPING, drawn as the echoes and the fading they give.
   The mix belongs to the song: it is saved with it, sent with it, and is the mix in the game.
@@ -134,13 +192,15 @@ The short version; [the manual](docs/MANUAL.md) is the long one.
     the right button: the one before), MUTATE, UNDO, RANDOM, EXPORT, SAVE.
   - right: the pattern, a row a sound, every step with its note; rows are dim while their layer is silent. Click a step
     to set it, the wheel gives it a note (SHIFT + wheel: its velocity, CTRL + wheel: its length), click a row's name to hear and select the sound (SHIFT or the right button: mute it). INTENSITY and the selected
-    sound's LAYER are sliders; the marks over INTENSITY are where each sound comes in. FILL, CLEAR, COPY, DEMO.
+    sound's LAYER are sliders; the marks over INTENSITY are where each sound comes in. FILL (RAMP on the AUTO tab),
+    CLEAR, COPY, UNDO, DEMO (it asks twice).
   - the AUTO tab turns the rows into the sounds' automation lanes: choose a TARGET for the selected sound (drag the
     cell or turn the wheel over it), then click or drag in its row to draw points – the height is the value. SHIFT or
     the right button takes a point away; RAMP joins the points with straight lines. VALUE sets one point finely.
-  - top: PLAY, REC, the tempo (click its halves, or the wheel), the patterns A–H (SHIFT or right-click: one more bar of that pattern in the arrangement) with the
-    arrangement under them (click a bar: its pattern; SHIFT or right-click: the arrangement ends before it),
-    TOUR.
+  - top: LOOP / SONG (what PLAY plays), PLAY, REC, the tempo (click its halves, or the wheel), the patterns A–H (a
+    pattern that waits for the bar line blinks; SHIFT or right-click: one more bar of that pattern in the
+    arrangement) with the arrangement under them (click a bar: its pattern; SHIFT or right-click: the arrangement
+    ends before it – UNDO brings it back), TOUR.
 - **HOME** – what every control does on the page open now.
 - **SHIFT + MENU, twice** – factory reset: both kits and the song as they came, and saved so.
 
@@ -163,7 +223,7 @@ Plain MIDI, so it works over USB, the plugin's MIDI ports and Web MIDI. SysEx us
 | game → device | `F0 7D 56 42 04 <slot> F7` | request a dump of a pad |
 | both ways | `F0 7D 56 42 05 <piece> <pieces> <≤ 200 bytes> F7` | the song with its mix, in 39 pieces (7699 bytes, `sfx_song_pack`). Only this format travels; the older, shorter songs are read from files. A receiver puts each piece where it belongs and takes the song when all 39 are there: in any order, twins ignored. It forgets a transfer that stops for two seconds; a *different* song sent sooner than that after one that broke off can be mixed with it |
 | game → device | `F0 7D 56 42 06 F7` | request the 16 sounds and the song (as SEND does) |
-| game → device | `F0 7D 56 42 07 F7` | request the identity (firmware 1.4.0). Exactly these 6 bytes; with any other length it is ignored |
+| game → device | `F0 7D 56 42 07 F7` | request the identity (firmware 1.4.0 on). Exactly these 6 bytes; with any other length it is ignored |
 | device → game | `F0 7D 56 42 08 <18 bytes> F7` | the identity: which hardware, which firmware, what it holds (below). A device that receives one ignores it |
 
 `<slot>` is 0–15, a pad of the kit the device shows. SEND and the request `06` always give the MUSIC kit: the song's
@@ -188,7 +248,7 @@ version wrote it. Nothing about the sound or the messages above changes.
 | Byte | | Today |
 |---|---|---|
 | 0 | hardware: 0 unknown, 1 VIBE FM (the SDK's host – emulator, plugin, VIBE Box; the firmware cannot tell them apart) | 1 |
-| 1 2 3 | firmware version: major, minor, patch | 1 4 0 |
+| 1 2 3 | firmware version: major, minor, patch | 1 5 0 |
 | 4 | profile: 1 = what SFX FORGE 1.x offers on VIBE FM | 1 |
 | 5 | patch format (`SFX_PATCH_VERSION`) | 2 |
 | 6 | song format (`SFX_SONG_VERSION`) | 5 |
@@ -199,7 +259,7 @@ version wrote it. Nothing about the sound or the messages above changes.
 | 16 | values in a patch (`SFX_P_COUNT`) | 25 |
 | 17 | flags: bit 0 has pads, bit 1 has encoders for the game (LINK page), bit 2 takes a song's sounds (`02` with slot 16–31), bit 3 takes telemetry (CC 10–17, ch 2) | 15 |
 
-The whole answer today, 24 bytes: `F0 7D 56 42 08 01 01 04 00 01 02 05 10 02 08 10 18 20 10 05 06 19 0F F7`.
+The whole answer today, 24 bytes: `F0 7D 56 42 08 01 01 05 00 01 02 05 10 02 08 10 18 20 10 05 06 19 0F F7`.
 
 - **Fields are only ever added at the end.** A reader takes the first 18 bytes and ignores what follows. A message
   with fewer than 18, or with a byte above 127, is not an identity.
@@ -250,12 +310,50 @@ opened yet. [The manual](docs/UNITY.md#the-inspectors-look-like-the-device) has 
 | `SfxPreset` | a patch as an asset (Create > SFX Forge > Preset). Its Inspector has the device's pages OSC TONE FILTER WAVE ENV LFO FX, each with up to four knobs and the values in the device's units, the sound's waveform, and the soft keys PLAY, MUTATE, UNDO, RANDOM, BAKE WAV (stereo, with its effects), SEND to a pad |
 | `SfxPlayer` | plays a preset in the game with the device's own engine and effects, live – its Pitch / Cutoff / Timbre / Level move the sound as telemetry does on the device. No device needed |
 | `SfxSong` | a song and its 16 sounds as an asset: SEND on the device's SONG page (or FETCH SONG in the window) creates one. Its Inspector shows the song: patterns, arrangement, step grid, mix, master, automation. TEMPO, SWING and a sound's LAYER, VOLUME and PAN can be changed there; everything else only shows and is made on the device |
-| `SfxMusicPlayer` | plays a song in the game with the device's own player: `intensity` brings its layers in and out, `CuePattern` changes pattern on the next bar line, `SetTrackVolume` / `SetTrackPan` / `SetTrackMute` and `SetMaster` move the mix. No device needed |
+| `SfxMusicPlayer` | plays a song in the game with the device's own player: `intensity` brings its layers in and out, `CuePattern` changes pattern on the next bar line, `loopPattern` makes the playing pattern repeat until the next cue (the device's LOOP; off: the arrangement or the chain), `SetTrackVolume` / `SetTrackPan` / `SetTrackMute` and `SetMaster` move the mix. No device needed |
 | `SfxTelemetrySender` | a Rigidbody's speed, an Animator float or your own value → CC 10–17 to the device, and to local `SfxPlayer`s and `SfxMusicPlayer`s |
 | `SfxForgeLink` | the link in Play mode: pad and encoder events from the device |
 | `SfxEncoderBinding` | a device encoder (LINK page) → an exposed AudioMixer parameter or an event |
 
-The link is tested end to end against the SDK's emulator over a virtual MIDI cable: patches and the song from the
+### The tools for designing sounds
+
+Six tools that need no device. Four are tabs under TOOLS in the Inspector of a preset (NEW, VARY, LEVEL, SHARE); the
+other two are an asset and a window. A change they make to a sound is one undo step in Unity.
+
+| | |
+|---|---|
+| **NEW** | a new sound of a kind from nothing, onto the selected preset: CLICK, CHIME, LEAP, RISE, ZAP, THUD, BLAST, DOOR, ALARM, HUM. Every click is another one; the note under the keys says its seed and the line of code that gives it again (`SfxGenerator.Make(SfxCategory.Zap, seed)`) |
+| **VARY** | AMOUNT (1–100 %, 15 as it comes) says how far MUTATE goes, and a LOCK key for each of the page's four values (or the whole page) keeps them as they are. MORE LIKE THIS shows eight variants of the sound, each with its picture, the value that moved most, PLAY and KEEP; AGAIN gives eight others, BACK TO BASE the sound they came from. MAKE SET saves them as a variation set next to the sound |
+| `SfxVariationSet` | an asset (Create > SFX Forge > Variation Set): one preset played as several variants, so that a footstep or a hit is not the same sound every time. COUNT (1–16), AMOUNT, the pages and values the variants keep, a random PITCH (± cents) and VOLUME (dB) for every play, NO REPEAT (not one of the last n again), a SEED. BAKE writes its clips as WAV files next to it, so it plays on every platform; not baked, it plays only where the native library is. Its Inspector says NOT BAKED, or OUT OF DATE when the preset or the set changed since. `SfxVariationPlayer` (a component beside an AudioSource) plays it: `Play()` |
+| **Window > SFX Forge Bake** | many presets and variation sets to WAV in one go (also Assets > SFX Forge > Bake to WAV..., for the selection): RATE (22050–48000 Hz: the same sound, resampled), STEREO or MONO, PITCH in semitones or a NOTE, VELOCITY, TRIM of the quiet end, NORMALISE; next to each asset or into one folder. It lists what it wrote with each file's length, peak and RMS, and says which of them clip, which were cut at 12 s and which are silent. From code: `SfxBake.Render`, `SfxBatchBake.Run` |
+| **LEVEL** | under the sound's picture stand its PEAK and RMS as PLAY and BAKE WAV render it (CLIPS in orange when it goes over full scale). With 2 to 32 presets selected, MATCH RMS and MATCH PEAK write their LEVEL (FX page) so that they read the same; nothing else changes. LEVEL has 127 steps, so matched sounds can end a fraction of a dB apart, and the note says the range when they do |
+| **SHARE** | the sound as one line of text, 62 characters beginning `SFXF1:`, to paste into a chat, a commit or a comment: COPY and PASTE. PASTE finds it inside a sentence and says what is wrong with a text it does not take. EXPORT .SYX writes the message that loads the sound into a pad, for any SysEx tool; IMPORT .SYX reads one. From code: `SfxPatchText` |
+
+![The tools of a preset in Unity, tab VARY](docs/img/unity-inspector-tools-vary.png)
+
+*VARY after MORE LIKE THIS, with FREQ locked. Like the picture above it is the panel rendered to a texture by the
+tests, not a photograph.*
+
+Tested: the core of all six without Unity (`tests/dotnet`, with the other tests there), and their panels, the
+variation set's Inspector and the bake window by the EditMode tests in `tests/unity-inspectors`, which also drew the
+pictures. As with the Inspectors above, the tests show the panels a model and press their keys by code: nobody has
+opened the real Inspector or window, and nobody has listened to a generated sound, a variant or a resampled bake.
+Only Unity 6000.3.8f1 compiled them. Baking, the variants' pictures and the levels need the native library (Windows
+x64); clips that were baked play anywhere.
+
+The loop flag behind `loopPattern` is tested in `tests/dotnet` against the native library, which the package
+contains with it: a pattern stays, bar after bar, until the next cue. Inside Unity one Play mode test of the showcase
+runs `loopPattern` itself, headless and muted: on, the demo song stays on its pattern for more than three bars; off,
+the arrangement goes on. Nobody has listened to it.
+
+The numbers, as last run: `tests/dotnet` 143 checks, all passing with the package's own `sfxforge.dll`;
+`tests/unity-inspectors` 147 of 147 EditMode tests; the demo project, headless on a copy, the showcase's 32 editor
+checks and 41 Play mode tests, of which 26 passed and 15 were skipped (the takes that need a device or the emulator
+or that record, and only run when asked for by name). The showcase's standalone build and its probe were last run
+before the tools, `loopPattern` and firmware 1.5.0, and not again.
+
+The link is tested end to end against the SDK's emulator over a virtual MIDI cable, last with firmware 1.4.0 (1.5.0
+changed none of its messages, but was not run against it): patches and the song from the
 device, a song and its sounds to the device, the game driving the device. Not tested: the hardware, the plugin,
 pads and encoders coming from the device, and the window's and the Inspectors' keys against a device (their tests
 show them a model, not a link; nobody has opened the real window or Inspector). See

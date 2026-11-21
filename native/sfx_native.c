@@ -66,6 +66,8 @@ API int  sfxn_player_set_song(void *player, const uint8_t *song, int n) { return
 API void sfxn_player_start(void *player, int pattern) { sfx_player_start((sfx_player *)player, pattern); }   /* -1: the pattern it is on */
 API void sfxn_player_stop(void *player) { sfx_player_stop((sfx_player *)player); }
 API void sfxn_player_cue(void *player, int pattern) { sfx_player_cue((sfx_player *)player, pattern); }
+/* 1: the pattern that plays repeats until a cue chooses another. 0: the arrangement or the chain (as it starts) */
+API void sfxn_player_set_loop(void *player, int on) { sfx_player_set_loop((sfx_player *)player, on); }
 
 /* the mixer, while it plays. A sound's fader (0..127, 100 = as designed), pan (0..127, 64 = the middle) and mute (0 / 1);
    -1 leaves a value as it is. The master: index SFX_M_* (0 delay time 0..5, 1 feedback, 2 reverb size, 3 damping, 4 drive). */

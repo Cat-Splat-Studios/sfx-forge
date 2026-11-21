@@ -974,6 +974,12 @@ INSPECTOR_SHOTS = [
     ("unity-inspector-song-auto", "song-auto-640"),         # page AUTO, pattern F
     ("unity-inspector-window", "window-700"),               # Window > SFX Forge, shown a filled-in model
     ("unity-inspector-window-off", "window-off-700"),       # the same window, not connected
+    ("unity-inspector-tools-new", "sound-tools-new-640"),   # the sound inspector's tools: NEW, after a click on ZAP
+    ("unity-inspector-tools-vary", "sound-tools-vary-640"), # VARY: MORE LIKE THIS with FREQ locked
+    ("unity-inspector-tools-level", "sound-tools-level-640"),   # LEVEL: three sounds after MATCH RMS
+    ("unity-inspector-tools-share", "sound-tools-share-640"),   # SHARE: the sound as text
+    ("unity-inspector-variation-set", "variation-set-640"), # the Inspector of a variation set, baked
+    ("unity-inspector-bake-window", "bake-window-700"),     # Window > SFX Forge Bake, shown a filled-in model
 ]
 SHOT_MAX_BYTES = 300 * 1024
 

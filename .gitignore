@@ -8,3 +8,6 @@ tests/unity-inspectors/Logs/
 tests/unity-inspectors/Temp/
 tests/unity-inspectors/UserSettings/
 tests/unity-inspectors/obj/
+# ... and what its tests make while they run (they delete it afterwards; a run that is stopped does not)
+tests/unity-inspectors/Assets/*Temp/
+tests/unity-inspectors/Assets/*Temp.meta

@@ -12,8 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2bf0c3554e5ac694cac4de9d3fa527de, type: 3}
   m_Name: Coin
   m_EditorClassIdentifier: CatSplat.SfxForge::CatSplat.SfxForge.SfxPreset
+  format: 1
+  savedBy: 1
   patch:
-    engine: 1
+    engine: 4
     baseFreq: 86
     pitchEnvAmount: 64
     pitchEnvDecay: 0
@@ -38,5 +40,5 @@ MonoBehaviour:
     delay: 0
     reverb: 0
     level: 100
-    table: 0
+    table: 3
   holdSeconds: 1.5

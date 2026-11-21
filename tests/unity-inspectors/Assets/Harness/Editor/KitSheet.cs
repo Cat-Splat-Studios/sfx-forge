@@ -70,6 +70,27 @@ namespace Inspector.Harness
                 root.Add(line);
             }
 
+            // variants of a sound: one that can be kept (and is), one that is only listened to; and a value that is locked
+            var variants = SfxUI.Box("sfx-patches");
+            SfxPatch bass = SfxPatch.Create(SfxEngine.SciFiFm, 34, 70, 30, 20, 60, 0, 90, 30, 66, 0);
+            for (int i = 0; i < 2; i++)
+            {
+                var tile = new VariantTile { ShowKeep = i == 0 };
+                tile.Set(i + 3, SfxEngine.SciFiFm, i == 0, i == 0 ? null : "VARIANT");
+                tile.SetPicture(SfxMutate.Variant(bass, 7, i + 3, 25), SfxUI.NativeThere);
+                var cell = SfxUI.Box("sfx-patch-cell");
+                cell.Add(tile);
+                variants.Add(cell);
+            }
+            root.Add(variants);
+            var locked = new ValueTile(2, false, ValueTile.Look.Row) { Locked = true };
+            locked.style.maxWidth = 190;
+            locked.Show("FREQ *", "448Hz", 60f / 127f, false, SfxColors.Engine(SfxEngine.SciFiFm));
+            var lockedRow = SfxUI.Box("sfx-row");               // (a tile takes its width from a row)
+            lockedRow.style.marginBottom = 4;
+            lockedRow.Add(locked);
+            root.Add(lockedRow);
+
             var footer = new SfxFooter();
             footer.Set("WAITING FOR A GAME", SfxColors.Dim, "the knobs send CC 20-23 to it");
             root.Add(footer);

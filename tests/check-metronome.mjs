@@ -1,4 +1,5 @@
-// tests/metronome.json: pattern H (empty) is cued, REC, PLAY at 0.5 s – then SHIFT + REC at 1.2 s: the metronome off.
+// tests/metronome.json: pattern H (empty) is cued, REC, PLAY at 0.5 s – then SHIFT + REC at 1.2 s: the metronome off
+// (the display says CLICK OFF; REC had said REC ON: PATTERN LOOPS). PLAY starts at once: there is no count-in.
 // The first bar is silent but for the click: on the bar line (higher) and on beat two; beats three and four have none.
 import fs from 'fs';
 const dir = process.argv[2] || 'out/metronome';

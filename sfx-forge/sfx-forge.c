@@ -12,7 +12,9 @@
  *   MASTER       the delay's time and feedback, the reverb's size and damping
  *                encoders 1-4 = the four values shown
  *   F1           PRESET: the next of 32 named sounds onto the selected pad (SHIFT: the one before)
- *   LEFT RIGHT   the sound page before / after; on SEQ and SONG the pattern
+ *   LEFT RIGHT   the sound page before / after; on SEQ, SONG and AUTO the pattern
+ *   PLAY         plays what the top line of the song's pages says: LOOP – the pattern repeats, a chosen one takes over on
+ *                the bar line – or SONG – the arrangement, else the chain. F1 there changes it; REC lit switches to LOOP
  *   SEQ          a 16-step pattern over the 16 sounds: the pads are the steps of the selected sound, a step may carry a
  *                note (hold its pad and play a key, or the NOTE encoder), a velocity and a length
  *   SONG         8 patterns, a chain, and what makes it game music: every sound has a LAYER threshold and plays only
@@ -54,7 +56,7 @@ VIBE_PARALLEL_AUDIO
 /* The identity: what this device is and what it holds, so that a game can ask before it sends. Fields are only ever
    added at the end: a reader takes the first 18 and ignores what follows. A firmware before 1.4.0 never answers. */
 #define FW_MAJOR 1                 /* the firmware's version: firmware.json says the same (tests/check-identity.mjs) */
-#define FW_MINOR 4
+#define FW_MINOR 5
 #define FW_PATCH 0
 #define ID_HARDWARE 1              /* 0 unknown, 1 VIBE FM (the SDK's host: emulator, plugin, VIBE Box - not told apart from here) */
 #define ID_PROFILE  1              /* what SFX FORGE 1.x offers on VIBE FM */
@@ -150,7 +152,7 @@ static volatile float scope_lo[SCOPE], scope_hi[SCOPE];
 static volatile uint32_t scope_w;
 static float sc_lo, sc_hi; static int sc_n;
 /* the metronome: a click on every beat while REC is on and the song runs – higher on the bar line. The firmware's own:
-   it is not part of the song, and a game never hears it. */
+   it is not part of the song, and a game never hears it. No count-in: REC loops the pattern, the first pass is one. */
 static volatile int metro = 1, rec_on;              /* (set by the controls: SHIFT + REC, REC) */
 static float click_env, click_ph, click_f; static int click_step = -1;
 
@@ -184,6 +186,17 @@ static int kit = KIT_SFX;
 #define pad_preset  pad_preset_k[kit]
 #define undo_preset undo_preset_k[kit]
 static int sel, page, help, shift, rec, running;
+static int loop_mode;                               /* what PLAY plays: 1 LOOP (the pattern repeats), 0 SONG (the arrangement, else the chain) */
+static int queued = -1;                             /* the pattern chosen while it runs that has not started yet */
+static sfx_song undo_song;                          /* F2 on SEQ, SONG, AUTO: the song as it was one step ago … */
+static int undo_has, undo_whole, undo_redo, undo_run;   /* … whole: tempo and mix too, else its notes; run: the edits (1), the take (2) or the bars (3) that are one step */
+static int undo_pat = -1;                           /* COPY went on to its copy: the pattern to go back to with it */
+static const char *undo_what = "";
+static int f4_held, erase_at, erase_pat;            /* SEQ, REC while it plays: F4 held erases the selected sound as the bar passes; the step erased last (-1: none yet), and in which pattern */
+static int from_outside;                            /* a game's or a DAW's note is being played: nothing is said about it */
+static int tour_mode0;
+static uint32_t blink;                              /* draws counted: what is queued blinks */
+#define BLINK ((blink >> 3) & 1)
 static int edit_pat, cur_step, held_step = -1;      /* the pattern and the step being edited; the step pad held */
 static int touch_i = -1; static uint64_t touch_t;    /* the encoder (1-4) turned last, and when */
 static float acc[VE_COUNT];                         /* encoder turns not yet a whole step */
@@ -191,7 +204,7 @@ static uint32_t rng = 0x5F3759DFu;
 static uint8_t telemetry[8], cc_out[6] = { 64, 64, 64, 64, 64, 64 };
 static int linked;                                  /* something came in from the other side */
 static char link_text[25];
-static const char *toast; static int toast_frames;
+static const char *toast; static uint64_t toast_t; static int toast_live;   /* what the display says for a moment, and since when */
 static uint32_t led_cache[SLOTS];
 static int stage_pad = -1;                          /* the pad the mouse holds on the stage */
 static int tour_on, tour_i;                         /* the tour (MENU): running, its next step */
@@ -208,16 +221,24 @@ static uint8_t sent_dump[SLOTS][SFX_PATCH_BYTES], song_tx[SFX_SONG_BYTES];
 static uint64_t sent_dump_t, sent_song_t; static uint32_t sent_dump_any; static int sent_song_any;
 #define ECHO_FRAMES ((uint64_t)SR / 10)              /* an echo comes back within a tenth of a second */
 static const char *const SOFT[5][6] = { { "PRESET", "MUTATE", "UNDO", "RANDOM", "EXPORT", "SAVE" },
-                                        { "< PAT", "PAT >", "FILL", "CLEAR", "COPY", "SAVE" },
-                                        { "PLAY", "COPY", "CLR PAT", "DEMO", "SEND", "SAVE" },
+                                        { "TO SONG", "UNDO", "FILL", "CLEAR", "COPY", "SAVE" },
+                                        { "TO SONG", "UNDO", "CLR PAT", "NEW", "SEND", "SAVE" },
                                         { "MUTE", "SOLO", "RESET", "ALL ON", "PLAY", "SAVE" },
-                                        { "< PAT", "PAT >", "RAMP", "CLEAR", "COPY", "SAVE" } };
+                                        { "TO SONG", "UNDO", "RAMP", "CLEAR", "COPY", "SAVE" } };
 static int mix_page(void) { return page == PG_MIX || page == PG_MASTER; }
 static int soft_set(void) { return page == PG_SEQ ? 1 : page == PG_SONG ? 2 : mix_page() ? 3 : page == PG_AUTO ? 4 : 0; }
 static int sound_page(void) { return page < PG_SEQ; }
+static int song_keys(void) { return page == PG_SEQ || page == PG_SONG || page == PG_AUTO; }
+static const char *soft_caption(int i)               /* F1-F6 as they are now: F1 says what it will do, F4 erases while a take runs */
+{
+  if (i == 0 && song_keys()) return loop_mode ? "TO SONG" : "TO LOOP";
+  if (i == 3 && page == PG_SEQ && rec && running) return "ERASE";
+  return SOFT[soft_set()][i];
+}
+static void relabel(void) { for (int i = 0; i < 6; i++) vibe_label(VB_F1 + i, soft_caption(i)); }
 
 /* ---- from the controls to the audio: one queue, one writer, one reader ---------------------------------------------- */
-enum { M_TRIGGER, M_RELEASE, M_UPDATE, M_START, M_STOP, M_CUE, M_QUIET };
+enum { M_TRIGGER, M_RELEASE, M_UPDATE, M_START, M_STOP, M_CUE, M_QUIET, M_LOOP };
 typedef struct { uint8_t type, slot, note, kit; int16_t key; float vel; sfx_patch patch; } msg;
 #define QN 64
 static msg q[QN];
@@ -248,6 +269,7 @@ void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames)
     case M_START:   sfx_player_start(&P, m->slot); break;
     case M_STOP:    sfx_player_stop(&P); break;
     case M_CUE:     sfx_player_cue(&P, m->slot); break;
+    case M_LOOP:    sfx_player_set_loop(&P, m->slot); break;                        /* (the controls never write P.loop) */
     case M_QUIET:   for (int i = 0; i < SFX_PLAYER_VOICES; i++) sfx_voice_release(&P.voice[i]); break;   /* every key let go */
     }
   }
@@ -270,7 +292,7 @@ void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames)
   for (int i = 0; i < SFX_PLAYER_VOICES; i++) if (P.voice[i].active) { if (P.voice[i].slot < SLOTS) music |= 1u << P.voice[i].slot; else effects |= 1u << (P.voice[i].slot - SLOTS); }
   play_k[0] = music; play_k[1] = effects;
   seq_step = P.running && P.step >= 0 ? (uint32_t)P.step : NO_STEP; seq_frac = P.frac; seq_pattern = (uint32_t)P.pattern;
-  seq_arr = P.running && !P.hold && P.arr_pos >= 0 ? (uint32_t)P.arr_pos : NO_STEP;
+  seq_arr = P.running && !P.loop && !P.hold && P.arr_pos >= 0 ? (uint32_t)P.arr_pos : NO_STEP;
 
   int at = P.running ? P.step : -1;
   if (at != click_step) {                            /* a new step: on a beat, the click starts */
@@ -285,7 +307,7 @@ void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames)
       float c = vd_sin(click_ph) * click_env;
       click_ph += click_f; if (click_ph >= 1.0f) click_ph -= 1.0f;
       click_env *= cc;
-      l += c; r += c;
+      l = vd_clamp(l + c, -1.0f, 1.0f); r = vd_clamp(r + c, -1.0f, 1.0f);   /* (the click on top of a full mix stays under full scale) */
     }
     out_l[n] = l; out_r[n] = r;
     if (o < sc_lo) sc_lo = o;
@@ -295,7 +317,9 @@ void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames)
 }
 
 /* ---- sounds and the song: edit, keep, send ---------------------------------------------------------------------------- */
-static void say(const char *t) { toast = t; toast_frames = 70; }
+/* a toast stays 2.25 s of the audio's clock, whatever draws it and how often (the device, the stage, both) */
+static void say(const char *t) { toast = t; toast_t = vibe_frames(); toast_live = 1; }
+static int toast_on(void) { return toast_live && vibe_frames() - toast_t < (uint64_t)(2.25f * SR); }
 static void view_sync(void);                         /* (a song came: the AUTO pages follow – below) */
 static void changed(int slot) { send(M_UPDATE, slot, 0, 0, 0); }
 static void keep_undo(int slot) { undo[slot] = patches[slot]; undo_preset[slot] = pad_preset[slot]; has_undo[slot] = 1; }
@@ -303,6 +327,47 @@ static sfx_pattern *pat(void) { return &SONG.pat[edit_pat]; }
 static const char *name_of(int k, int slot) { int n = pad_preset_k[k][slot]; return n >= 0 && n < PRESET_COUNT ? PRESETS[n].name : ENGINE_NAME[kits[k][slot].engine]; }
 static const char *pad_name(int slot) { return name_of(kit, slot); }
 static void kit_set(int k) { if (k == kit) return; kit = k; for (int i = 0; i < SLOTS; i++) led_cache[i] = 0xFFFFFFFFu; }
+
+/* one step back for the song (F2). A run of edits, or a take, is one step however many writes follow. */
+/* While a take runs (REC lit, playing) whatever changes the notes belongs to the take: a knob turned or a key pressed in
+   between does not cut it in two. A run of edits ends with the page or the pattern (set_page, pattern_pick). */
+static void undo_snap(const char *what, int whole) { undo_song = SONG; undo_has = 1; undo_redo = 0; undo_run = 0; undo_what = what; undo_whole = whole; undo_pat = -1; }
+static void undo_open(int run)                       /* 1 = edits, 2 = a take, 3 = bars of the arrangement */
+{
+  static const char *const WHAT[4] = { "", "EDITS", "TAKE", "BARS" };
+  if (rec && running) run = 2;
+  if (undo_run != run) { undo_snap(WHAT[run], 0); undo_run = run; }
+}
+static void undo_mark(const char *what, int whole) { if (!whole && rec && running) undo_open(2); else undo_snap(what, whole); }
+static void undo_close(void) { if (undo_run != 2) undo_run = 0; }   /* the next edit is a new step (a take ends with PLAY, STOP or REC) */
+static void pattern_pick(int p);
+static void swap_bytes(void *a, void *b, int n) { uint8_t *x = (uint8_t *)a, *y = (uint8_t *)b; for (int i = 0; i < n; i++) { uint8_t t = x[i]; x[i] = y[i]; y[i] = t; } }
+static void song_undo(void)                          /* back – and, pressed again, forth. The notes only (patterns, lanes, arrangement), unless a whole song was replaced */
+{
+  static char t[24];
+  if (!undo_has) { say("NOTHING TO UNDO"); return; }
+  if (undo_whole) swap_bytes(&SONG, &undo_song, (int)sizeof SONG);
+  else {
+    swap_bytes(SONG.pat, undo_song.pat, (int)sizeof SONG.pat); swap_bytes(SONG.lane, undo_song.lane, (int)sizeof SONG.lane);
+    swap_bytes(&SONG.arr_len, &undo_song.arr_len, 1); swap_bytes(SONG.arr, undo_song.arr, (int)sizeof SONG.arr);
+  }
+  view_sync(); undo_run = 0; undo_redo = !undo_redo;
+  if (undo_pat >= 0) { int was = queued >= 0 ? queued : edit_pat; pattern_pick(undo_pat); undo_run = 0; undo_pat = was; }   /* COPY: back on the pattern it was made from (and forth) */
+  strcpy(t, undo_redo ? "UNDO: " : "REDO: "); strcpy(t + 6, undo_what); say(t);
+}
+
+static int confirm(const char *prompt)               /* a key that asks twice: the second press counts while its question is on the display */
+{
+  if (toast == prompt && toast_on()) { toast_live = 0; return 1; }
+  say(prompt); return 0;
+}
+
+static int pattern_holds(int k)                      /* a step or an automation point anywhere in it */
+{
+  const sfx_pattern *p = &SONG.pat[k];
+  for (int i = 0; i < STEPS; i++) { if (p->on[i]) return 1; for (int l = 0; l < SFX_LANES; l++) if (p->aut[l][i]) return 1; }
+  return 0;
+}
 
 static void preset_load(int slot, int k)
 {
@@ -513,7 +578,7 @@ static void sysex_in(const uint8_t *b, int n)
     if (song_rx_seen & piece) { if (same(in, at, len)) return; song_rx_seen = 0; }
     for (int i = 0; i < len; i++) at[i] = in[i];
     song_rx_seen |= piece;
-    if (song_rx_seen == ((uint64_t)1 << SONG_CHUNKS) - 1) { say(sfx_song_unpack(&SONG, song_rx, SFX_SONG_BYTES) ? "BAD SONG" : "SONG LOADED"); view_sync(); }
+    if (song_rx_seen == ((uint64_t)1 << SONG_CHUNKS) - 1) { undo_mark("LOAD", 1); say(sfx_song_unpack(&SONG, song_rx, SFX_SONG_BYTES) ? "BAD SONG" : "SONG LOADED"); view_sync(); }
   }
 }
 
@@ -521,7 +586,9 @@ static void sysex_in(const uint8_t *b, int n)
 static void record(int slot, int note, float vel)    /* REC while it runs: onto the nearest step of the pattern that plays, as hard as it was hit */
 {
   uint32_t st = seq_step;
-  if (!rec || st == NO_STEP || kit != KIT_MUSIC) return;      /* (the song plays the MUSIC kit) */
+  if (rec && running && kit != KIT_MUSIC) { if (!from_outside) say("MUSIC KIT ONLY: K5 SEQ"); return; }   /* (the song plays the MUSIC kit: the SEQ page has it) */
+  if (!rec || st == NO_STEP) return;
+  undo_open(2);
   if (seq_frac > 0.5f) st = (st + 1) % SONG.len;
   sfx_pattern *p = &SONG.pat[seq_pattern % SFX_PATTERNS];
   step_set(p, (int)(st % STEPS), slot, note);
@@ -536,18 +603,72 @@ static void pad(int slot, int down, float vel)
   record(slot, 0, vel);
 }
 
-static void seq_play(int on)
+/* LOOP or SONG: what PLAY plays. Only this tells the player. 1 = it changed */
+static int mode_set(int loop)
 {
-  running = on;
+  loop = loop != 0;
+  if (loop == loop_mode) return 0;
+  loop_mode = loop; send(M_LOOP, loop, 0, 0, 0); relabel();
+  return 1;
+}
+static void mode_toggle(void) { mode_set(!loop_mode); say(loop_mode ? "LOOP: PATTERN REPEATS" : "SONG: PLAYS IN ORDER"); }
+
+static void seq_play(int on)                         /* (it never changes the mode: the top line said what it will play) */
+{
+  running = on; undo_run = 0;
+  if (!on) { if (queued >= 0) edit_pat = queued; f4_held = 0; queued = -1; }   /* (a pattern chosen during a take, not yet begun: it is the one shown now) */
+  if (on) send(M_LOOP, loop_mode, 0, 0, 0);          /* again, should the queue have been full when the mode was set */
   send(on ? M_START : M_STOP, edit_pat, 0, 0, 0);
   vibe_led_button(VB_PLAY, 0x6EE7A8, on ? 1.0f : 0.0f);
+  relabel();
 }
 
-static void seq_rec(int on) { rec = on; rec_on = on; vibe_led_button(VB_REC, 0xFF4040, on ? 1.0f : 0.0f); }
-static void pattern_pick(int p) { edit_pat = (p % SFX_PATTERNS + SFX_PATTERNS) % SFX_PATTERNS; send(M_CUE, edit_pat, 0, 0, 0); }
+static void seq_rec(int on)                          /* REC lit: PLAY loops the pattern (F1 may still say SONG: then the take goes along the song), and what is played is laid on top */
+{
+  rec = on; rec_on = on; undo_run = 0; held_step = -1;
+  if (!on) f4_held = 0;
+  vibe_led_button(VB_REC, 0xFF4040, on ? 1.0f : 0.0f);
+  if (on && !tour_on && mode_set(1)) say("REC ON: PATTERN LOOPS");
+  relabel();
+}
+
+/* a pattern is chosen: at once while it stands, on the next bar line while it runs. While a take runs the display stays
+   on the pattern that plays, and follows on the bar line (seq_poll) – so what is played lands in what is shown. */
+static void pattern_pick(int p)
+{
+  p = (p % SFX_PATTERNS + SFX_PATTERNS) % SFX_PATTERNS;
+  send(M_CUE, p, 0, 0, 0);
+  queued = running && p != (int)seq_pattern ? p : -1;
+  if (!(rec && running)) edit_pat = p;
+  undo_close();
+}
+static void pattern_step(int d) { pattern_pick((rec && running && queued >= 0 ? queued : edit_pat) + d); }   /* the one before / after */
+static void pattern_home(void) { edit_pat = 0; send(M_CUE, 0, 0, 0, 0); queued = running && seq_pattern != 0 ? 0 : -1; }   /* a new song: its pattern A */
+
+/* from every draw and every event: what the audio did since. The queued pattern has started; the view follows a take;
+   F4 held erases the selected sound on every step the bar has passed, in the pattern that plays. */
+static void seq_poll(void)
+{
+  uint32_t st = seq_step, now = seq_pattern % SFX_PATTERNS;
+  if (!running || (queued >= 0 && now == (uint32_t)queued)) queued = -1;
+  if (rec && running && st != NO_STEP) edit_pat = (int)now;
+  if (f4_held && rec && running && st != NO_STEP) {
+    sfx_pattern *p = &SONG.pat[now];
+    int len = SONG.len >= 1 && SONG.len <= STEPS ? SONG.len : STEPS, at = (int)st % len;
+    if (erase_pat != (int)now) { erase_pat = (int)now; erase_at = -1; }   /* another pattern began: only what passes in it */
+    for (int n = 0; n < len && erase_at != at; n++) {
+      int i = erase_at < 0 ? at : (erase_at + 1) % len;
+      undo_open(2);
+      p->on[i] &= (uint16_t)~(1u << sel); p->note[sel][i] = 0; p->acc[sel][i] = SFX_VEL_DEFAULT;
+      erase_at = i;
+    }
+  }
+}
+
 static void intensity_set(float v) { vibe_param_set(P_INTENSITY, vd_clamp(v, 0.0f, 1.0f)); }
 static void step_toggle(int step, int slot)
 {
+  undo_open(1);
   pat()->on[step] ^= (uint16_t)(1u << slot); cur_step = step;
   if (!running && (pat()->on[step] >> slot) & 1) {   /* switched on: hear it, at its note (while the song stands still) */
     send(M_TRIGGER, slot, slot, SFX_VEL[SFX_ACC_VEL(pat()->acc[slot][step])], pat()->note[slot][step]); send(M_RELEASE, slot, slot, 0, 0);
@@ -557,6 +678,7 @@ static void step_toggle(int step, int slot)
 static void note_turn(int d)                         /* the cursor step's note, along the scale; it switches the step on */
 {
   int n = pat()->note[sel][cur_step];
+  undo_open(1);
   for (int i = 0; i < (d < 0 ? -d : d); i++) n = sfx_scale_step(n, d, SONG.scale);
   step_set(pat(), cur_step, sel, n);
 }
@@ -567,11 +689,13 @@ static int clampi(int v, int a, int b) { return v < a ? a : v > b ? b : v; }
 static void vel_turn(int d)                          /* the cursor step: how hard (1..8), how long (AUTO, 1..15 steps) */
 {
   uint8_t *a = &pat()->acc[sel][cur_step];
+  undo_open(1);
   *a = SFX_ACC(clampi(SFX_ACC_VEL(*a) + d, 0, 7), SFX_ACC_LEN(*a));
 }
 static void len_turn(int d)
 {
   uint8_t *a = &pat()->acc[sel][cur_step];
+  undo_open(1);
   *a = SFX_ACC(SFX_ACC_VEL(*a), clampi(SFX_ACC_LEN(*a) + d, 0, 15));
 }
 
@@ -623,6 +747,7 @@ static void auto_turn(int d)                         /* the point on the cursor 
 {
   int to = view_to[sel], a = aut_at(sel, cur_step);
   if (!to) { say("TURN TARGET FIRST"); return; }
+  undo_open(1);
   aut_put(sel, cur_step, clampi((a ? a - 1 : clampi(auto_own(to, sel), 0, auto_hi(to))) + (a ? d : 0), 0, auto_hi(to)) + 1);
 }
 
@@ -631,26 +756,34 @@ static void auto_toggle(int step)
   int to = view_to[sel];
   cur_step = step;
   if (!to) { say("TURN TARGET FIRST"); return; }
+  undo_open(1);
   aut_put(sel, step, aut_at(sel, step) ? 0 : clampi(auto_own(to, sel), 0, auto_hi(to)) + 1);
 }
 
 static void auto_ramp(void)                          /* a straight line from each point to the next */
 {
   int last = -1, n = 0, l = lane_of(sel, view_to[sel]);
-  for (int i = 0; l >= 0 && i < STEPS; i++) {
+  for (int i = 0; l >= 0 && i < STEPS; i++) n += pat()->aut[l][i] != 0;
+  if (n < 2) { say("SET TWO POINTS FIRST"); return; }
+  undo_mark("RAMP", 0);
+  for (int i = 0; i < STEPS; i++) {
     if (!pat()->aut[l][i]) continue;
     if (last >= 0) for (int k = last + 1; k < i; k++) pat()->aut[l][k] = (uint8_t)(pat()->aut[l][last] + (pat()->aut[l][i] - pat()->aut[l][last]) * (k - last) / (i - last));
-    last = i; n++;
+    last = i;
   }
-  say(n < 2 ? "SET TWO POINTS FIRST" : "RAMP");
+  say("RAMP");
 }
 
 static void set_page(int p)
 {
   if (p == PG_AUTO && page != PG_AUTO && last_to && last_sel == sel) view_to[sel] = last_to;   /* AUTO opens on the knob turned last */
-  page = p; held_step = -1;
+  page = p; held_step = -1; f4_held = 0; undo_close();
   if (p >= PG_SEQ && p <= PG_MASTER) kit_set(KIT_MUSIC);      /* the song's pages: its own sounds */
-  for (int i = 0; i < 6; i++) vibe_label(VB_F1 + i, SOFT[soft_set()][i]);
+  if (!running && !rec && !tour_on) {                 /* where patterns are made PLAY loops one; on SONG it plays the song */
+    if (p == PG_SEQ || p == PG_AUTO) mode_set(1);
+    else if (p == PG_SONG) mode_set(0);
+  }
+  relabel();
   vibe_label(VB_K1 + TAB_SEQ, p == PG_SONG ? "SONG" : p == PG_AUTO ? "AUTO" : "SEQ");
   vibe_label(VB_K1 + TAB_FX, p == PG_MASTER ? "MASTER" : p == PG_MIX ? "MIX" : "FX");
   for (int i = 0; i < SLOTS; i++) led_cache[i] = 0xFFFFFFFFu;
@@ -666,10 +799,10 @@ static void tab_key(int tab)
 }
 
 
-/* LEFT / RIGHT: the sound page before or after (WAVE only for a wavetable) – on SEQ and SONG the pattern */
+/* LEFT / RIGHT: the sound page before or after (WAVE only for a wavetable) – on SEQ, SONG and AUTO the pattern */
 static void arrow(int d)
 {
-  if (page == PG_SEQ || page == PG_SONG || page == PG_AUTO) { pattern_pick(edit_pat + d); return; }
+  if (song_keys()) { pattern_step(d); return; }
   if (page >= PG_SEQ) return;
   int to = page;
   do to = wrap(to, d, PG_SEQ); while (to == PG_WAVE && patches[sel].engine != SFX_ENGINE_WAVETABLE);
@@ -717,7 +850,7 @@ static void param_put(int pg, int i, float u)
   if (pg == PG_AUTO) {
     int to = view_to[sel];
     if (i == 0) cur_step = clampi((int)(u * (float)STEPS), 0, STEPS - 1);
-    if (i == 1 && to) aut_put(sel, cur_step, clampi((int)(u * (float)auto_hi(to) + 0.5f), 0, auto_hi(to)) + 1);
+    if (i == 1 && to) { undo_open(1); aut_put(sel, cur_step, clampi((int)(u * (float)auto_hi(to) + 0.5f), 0, auto_hi(to)) + 1); }
     if (i == 2) view_to[sel] = (uint8_t)clampi((int)(u * (float)SFX_AT_COUNT), 0, SFX_AT_COUNT - 1);
     return;
   }
@@ -743,7 +876,7 @@ static void encoder(int id, float turn)
   acc[id] -= (float)d;
   if (id <= VE_4) { touch_i = id; touch_t = vibe_frames(); }
   if (id == VE_DATA) { sel = wrap(sel, d, SLOTS); return; }
-  if (id == VE_A && (page == PG_SEQ || page == PG_AUTO)) {                /* SEQ: A is the tempo, with SHIFT the swing */
+  if (id == VE_A && song_keys()) {                   /* SEQ, SONG, AUTO: A is the tempo (the top line shows it), with SHIFT the swing */
     if (shift) { static char t[12] = "SWING "; SONG.swing = (uint8_t)clampi(SONG.swing + (d > 0 ? 2 : -2), 0, 100); vg_itoa(SONG.swing, t + 6); strcpy(t + strlen(t), "%"); say(t); }
     else SONG.bpm = (uint16_t)clampi(SONG.bpm + d, 40, 240);
     return;
@@ -771,11 +904,11 @@ static void encoder(int id, float turn)
     return;
   }
   if (page == PG_SONG) {
-    if (id == VE_1) pattern_pick(edit_pat + d);
-    if (id == VE_2) SONG.chain = (uint8_t)clampi(SONG.chain + d, 1, SFX_PATTERNS);
+    if (id == VE_1) pattern_step(d);
+    if (id == VE_2) { if (SONG.arr_len) say("ARRANGEMENT IN USE"); else SONG.chain = (uint8_t)clampi(SONG.chain + d, 1, SFX_PATTERNS); }
     if (id == VE_3) intensity_set(vibe_param_get(P_INTENSITY) + (float)d * 0.02f);
     if (id == VE_4) SONG.level[sel] = (uint8_t)clampi(SONG.level[sel] + d * 2, 0, 127);
-    if (id == VE_B) SONG.len = (uint8_t)clampi(SONG.len + d, 1, STEPS);
+    if (id == VE_B) { static char t[16]; SONG.len = (uint8_t)clampi(SONG.len + d, 1, STEPS); strcpy(t, "BAR: "); vg_itoa(SONG.len, t + 5); strcpy(t + strlen(t), SONG.len == 1 ? " STEP" : " STEPS"); say(t); }
     return;
   }
   if (id <= VE_4) param_nudge(page, id, d);
@@ -807,15 +940,41 @@ static void soft_sound(int f)                        /* F1-F6 on the sound pages
   audition();
 }
 
-static void pattern_clear(void) { for (int i = 0; i < STEPS; i++) { pat()->on[i] = 0; for (int t = 0; t < SLOTS; t++) { pat()->note[t][i] = 0; pat()->acc[t][i] = SFX_VEL_DEFAULT; } for (int l = 0; l < SFX_LANES; l++) pat()->aut[l][i] = 0; } lanes_tidy(); say("PATTERN CLEARED"); }
-static void demo(void) { demo_song(); view_sync(); edit_pat = 0; send(M_CUE, 0, 0, 0, 0); say("DEMO SONG"); }
-
-static void pattern_copy(void)                       /* this pattern into the next one, and on to it: a variation to make */
+static void pattern_clear(void)                      /* (one press: F2 brings it back) */
 {
-  int to = (edit_pat + 1) % SFX_PATTERNS;
+  if (!pattern_holds(edit_pat)) { say("NOTHING TO CLEAR"); return; }   /* (and what F2 holds is kept) */
+  undo_mark("CLR PAT", 0);
+  for (int i = 0; i < STEPS; i++) { pat()->on[i] = 0; for (int t = 0; t < SLOTS; t++) { pat()->note[t][i] = 0; pat()->acc[t][i] = SFX_VEL_DEFAULT; } for (int l = 0; l < SFX_LANES; l++) pat()->aut[l][i] = 0; }
+  lanes_tidy(); say("PAT CLEARED - F2: UNDO");
+}
+
+/* a whole song goes: these ask twice, and F2 brings it back – tempo, mix and all. The sounds are not touched; it plays on */
+static void song_new(void)
+{
+  if (!confirm("PRESS AGAIN: NEW SONG")) return;
+  undo_mark("NEW", 1);
+  sfx_song_init(&SONG); view_sync(); cur_step = 0; pattern_home();
+  say("NEW SONG - F2: UNDO");
+}
+static void song_demo(void)
+{
+  if (!confirm("PRESS AGAIN: DEMO")) return;
+  undo_mark("DEMO", 1);
+  demo_song(); view_sync(); pattern_home();
+  say("DEMO SONG - F2: UNDO");
+}
+
+static void pattern_copy(void)                       /* this pattern into the next empty one, and on to it: a variation to make */
+{
+  static char said[16] = "COPIED A > B";
+  int to = -1;
+  for (int i = 1; i < SFX_PATTERNS && to < 0; i++) if (!pattern_holds((edit_pat + i) % SFX_PATTERNS)) to = (edit_pat + i) % SFX_PATTERNS;
+  if (to < 0) { say("NO EMPTY PATTERN"); return; }
+  undo_mark("COPY", 0);
+  if (!(rec && running)) undo_pat = edit_pat;
   for (int i = 0; i < STEPS; i++) { SONG.pat[to].on[i] = pat()->on[i]; for (int t = 0; t < SLOTS; t++) { SONG.pat[to].note[t][i] = pat()->note[t][i]; SONG.pat[to].acc[t][i] = pat()->acc[t][i]; } for (int l = 0; l < SFX_LANES; l++) SONG.pat[to].aut[l][i] = pat()->aut[l][i]; }
-  if (SONG.chain < to + 1) SONG.chain = (uint8_t)(to + 1);
-  pattern_pick(to); say("COPIED TO NEXT");
+  said[7] = (char)('A' + edit_pat); said[11] = (char)('A' + to);
+  pattern_pick(to); say(said);                       /* (the chain is left alone) */
 }
 
 static void fill(void)                               /* the selected sound on every 4th step, then every 2nd, every one, none */
@@ -823,6 +982,7 @@ static void fill(void)                               /* the selected sound on ev
   static const uint8_t EVERY[3] = { 4, 2, 1 };
   static const char *const SAID[4] = { "EVERY 4TH STEP", "EVERY 2ND STEP", "EVERY STEP", "SOUND CLEARED" };
   int next = 0;
+  undo_mark("FILL", 0);
   for (int k = 0; k < 3; k++) {
     int same = 1;
     for (int i = 0; i < STEPS; i++) if (((pat()->on[i] >> sel) & 1) != (i % EVERY[k] == 0 && i < SONG.len)) same = 0;
@@ -838,10 +998,14 @@ static void fill(void)                               /* the selected sound on ev
 static void soft_seq(int f)                          /* F1-F6 on the SEQ page */
 {
   switch (f) {
-  case 0: pattern_pick(edit_pat - 1); break;
-  case 1: pattern_pick(edit_pat + 1); break;
+  case 0: mode_toggle(); break;
+  case 1: song_undo(); break;
   case 2: fill(); break;
-  case 3: for (int i = 0; i < STEPS; i++) { pat()->on[i] &= (uint16_t)~(1u << sel); pat()->note[sel][i] = 0; pat()->acc[sel][i] = SFX_VEL_DEFAULT; } say("SOUND CLEARED"); break;
+  case 3: { int any = 0;                             /* (while a take runs F4 is ERASE, held: vibe_on_event) */
+          for (int i = 0; i < STEPS; i++) any |= ((pat()->on[i] >> sel) & 1) || pat()->note[sel][i] || pat()->acc[sel][i] != SFX_VEL_DEFAULT;
+          if (!any) { say("NOTHING TO CLEAR"); break; } }
+          undo_mark("CLEAR", 0);
+          for (int i = 0; i < STEPS; i++) { pat()->on[i] &= (uint16_t)~(1u << sel); pat()->note[sel][i] = 0; pat()->acc[sel][i] = SFX_VEL_DEFAULT; } say("CLEARED - F2: UNDO"); break;
   case 4: pattern_copy(); break;
   case 5: bank_save(); say("SAVED"); break;
   }
@@ -850,31 +1014,37 @@ static void soft_seq(int f)                          /* F1-F6 on the SEQ page */
 static void soft_auto(int f)                         /* F1-F6 on the AUTO page */
 {
   switch (f) {
-  case 0: pattern_pick(edit_pat - 1); break;
-  case 1: pattern_pick(edit_pat + 1); break;
+  case 0: mode_toggle(); break;
+  case 1: song_undo(); break;
   case 2: auto_ramp(); break;
-  case 3: for (int i = 0; i < STEPS; i++) aut_put(sel, i, 0); say("LANE CLEARED"); break;
+  case 3: { int any = 0; for (int i = 0; i < STEPS; i++) any |= aut_at(sel, i); if (!any) { say("NOTHING TO CLEAR"); break; } }
+          undo_mark("CLEAR", 0); for (int i = 0; i < STEPS; i++) aut_put(sel, i, 0); say("LANE CLEARED"); break;
   case 4: pattern_copy(); break;
   case 5: bank_save(); say("SAVED"); break;
   }
 }
 
-/* the arrangement: a pattern a bar. SONG page, SHIFT + pad 1-8 adds one, SHIFT + pad 9-15 takes the last away, 16 all */
+/* the arrangement: a pattern a bar. SONG page, SHIFT + pad 1-8 adds one, SHIFT + pad 9-15 takes the last away, 16 all
+   of them: that asks twice. F2 takes back the bars added and removed in a row (one step), or brings all of them back */
 static void arr_edit(int pad_id)
 {
-  if (pad_id < 8) { if (SONG.arr_len >= SFX_ARR_MAX) { say("32 BARS: FULL"); return; } SONG.arr[SONG.arr_len] = (uint8_t)pad_id; SONG.arr_len++; say("BAR ADDED"); }
-  else if (pad_id == 15) { SONG.arr_len = 0; say("ARRANGEMENT CLEARED"); }
-  else if (SONG.arr_len) { SONG.arr_len--; say("BAR REMOVED"); }
+  if (pad_id < 8) { if (SONG.arr_len >= SFX_ARR_MAX) { say("32 BARS: FULL"); return; } undo_open(3); SONG.arr[SONG.arr_len] = (uint8_t)pad_id; SONG.arr_len++; say("BAR ADDED"); }
+  else if (pad_id == 15) {
+    if (!SONG.arr_len) { say("NO ARRANGEMENT"); return; }
+    if (!confirm("PRESS AGAIN: CLEAR ARR")) return;
+    undo_mark("ARR", 0); SONG.arr_len = 0; say("ARR CLEARED - F2: UNDO");
+  }
+  else if (SONG.arr_len) { undo_open(3); SONG.arr_len--; say("BAR REMOVED"); }
 }
 
 static void soft_song(int f)                         /* F1-F6 on the SONG page */
 {
   switch (f) {
-  case 0: seq_play(!running); break;
-  case 1: pattern_copy(); break;
+  case 0: mode_toggle(); break;
+  case 1: song_undo(); break;
   case 2: pattern_clear(); break;
-  case 3: demo(); break;
-  case 4: export_at = 0; say("SENDING"); out_pump(); break;
+  case 3: if (shift) song_demo(); else song_new(); break;
+  case 4: export_at = 0; say(linked ? "SENDING" : "SENDING - NO GAME SEEN"); out_pump(); break;
   case 5: bank_save(); say("SAVED"); break;
   }
 }
@@ -960,12 +1130,13 @@ static void tour_end(void)
   sel = tour_sel0;
   set_page(tour_page0);
   kit_set(tour_kit0);
+  mode_set(tour_mode0);
 }
 
 static void tour_start(void)
 {
   if (tour_on) { tour_end(); return; }
-  tour_heat0 = vibe_param_get(P_INTENSITY); tour_page0 = page; tour_sel0 = sel; tour_kit0 = kit;
+  tour_heat0 = vibe_param_get(P_INTENSITY); tour_page0 = page; tour_sel0 = sel; tour_kit0 = kit; tour_mode0 = loop_mode;
   if (running) seq_play(0);
   seq_rec(0); help = 0;
   tour_on = 1; tour_i = 0; tour_t0 = vibe_frames(); tour_ramp_len = 0.0f; tour_title = tour_line = "";
@@ -994,7 +1165,7 @@ static void tour_pump(void)                          /* from the display: the to
     case T_NOTE:    send(M_TRIGGER, sel, 100 + st->a, 0.9f, st->a); send(M_RELEASE, sel, 100 + st->a, 0, 0); break;
     case T_ON:      send(M_TRIGGER, sel, 100 + st->a, 0.8f, st->a); break;
     case T_OFF:     send(M_RELEASE, sel, 100 + st->a, 0, 0); break;
-    case T_PLAY:    edit_pat = 0; seq_play(1); break;
+    case T_PLAY:    edit_pat = 0; mode_set(0); seq_play(1); break;                  /* (the tour plays the song, in its order) */
     case T_STOP:    seq_play(0); break;
     case T_HEAT:    tour_ramp_len = 0.0f; intensity_set((float)st->a / 8.0f); break;
     case T_RAMP:    tour_ramp_from = vibe_param_get(P_INTENSITY); tour_ramp_to = (float)st->a / 8.0f; tour_ramp_t0 = t; tour_ramp_len = (float)st->b / 4.0f; break;
@@ -1033,10 +1204,12 @@ static const uint8_t ST_PAGE[ST_N] = { PG_OSC, PG_TIMBRE, PG_FILTER, PG_WAVE, PG
 #define SG_W (STEPS * SG_PX)
 #define SI_Y 426                                    /* INTENSITY, and under it the selected sound's LAYER */
 #define SL_Y 450
-#define SF_X 712                                    /* FILL CLEAR COPY DEMO */
+#define SF_X 712                                    /* FILL CLEAR COPY UNDO DEMO */
 #define SF_Y 476
-#define SF_PX 57
-#define TB_Y 14                                     /* the top row: PLAY REC, tempo, the patterns, TOUR */
+#define SF_PX 46
+#define SF_N 5
+#define TB_Y 14                                     /* the top row: LOOP / SONG, PLAY REC, tempo, the patterns, TOUR */
+#define TM_X 126                                    /* what PLAY plays: a click changes it */
 #define TP_X 462
 #define TP_PX 40
 enum { SD_NONE, SD_HEAT, SD_LAYER, SD_PARAM, SD_AUTO };
@@ -1055,6 +1228,7 @@ static void stage_auto(int x, int y)
   int to = view_to[sel], step = clampi((x - SG_X) / SG_PX, 0, STEPS - 1);
   cur_step = step;
   if (!to) { say("CHOOSE A TARGET FIRST"); return; }
+  undo_open(1);
   aut_put(sel, step, clampi((SG_Y + sel * SG_PY + 19 - y) * auto_hi(to) / 19, 0, auto_hi(to)) + 1);
 }
 
@@ -1094,7 +1268,7 @@ static void stage_event(const vibe_event *e)
   else if (gx >= 0 && gy >= 0 && gx < SG_W && gy < SLOTS * SG_PY && spage == PG_AUTO) {
     kit_set(KIT_MUSIC);    /* a lane: a point – SHIFT or the right button takes it away */
     sel = gy / SG_PY; cur_step = gx / SG_PX;
-    if (e->midi[1] & (VIBE_STAGE_MOD_SHIFT | VIBE_STAGE_MOD_RIGHT)) aut_put(sel, cur_step, 0);
+    if (e->midi[1] & (VIBE_STAGE_MOD_SHIFT | VIBE_STAGE_MOD_RIGHT)) { undo_open(1); aut_put(sel, cur_step, 0); }
     else { stage_drag = SD_AUTO; stage_auto(x, y); }
   } else if (gx >= 0 && gy >= 0 && gx < SG_W && gy < SLOTS * SG_PY) { kit_set(KIT_MUSIC); sel = gy / SG_PY; step_toggle(gx / SG_PX, sel); }
   else if (inside(x, y, SN_X, SG_Y, SG_X - SN_X, SLOTS * SG_PY)) {                         /* a row's name: that sound – SHIFT or the right button: mute */
@@ -1113,7 +1287,8 @@ static void stage_event(const vibe_event *e)
     shift = (e->midi[1] & (VIBE_STAGE_MOD_SHIFT | VIBE_STAGE_MOD_RIGHT)) != 0;
     soft_sound((x - SP_X) / SA_PX);
     shift = was;
-  } else if (inside(x, y, 190, TB_Y, 76, 36)) seq_play(!running);
+  } else if (inside(x, y, TM_X, TB_Y, 58, 36)) mode_toggle();
+  else if (inside(x, y, 190, TB_Y, 76, 36)) seq_play(!running);
   else if (inside(x, y, 272, TB_Y, 64, 36)) seq_rec(!rec);
   else if (inside(x, y, 342, TB_Y, 104, 36)) SONG.bpm = (uint16_t)clampi(SONG.bpm + (x < 394 ? -1 : 1), 40, 240);
   else if (inside(x, y, TP_X, TB_Y, 8 * TP_PX, 21)) {                                    /* a pattern – SHIFT or the right button: one more bar of it */
@@ -1122,13 +1297,13 @@ static void stage_event(const vibe_event *e)
   } else if (inside(x, y, TP_X, TA_Y, SFX_ARR_MAX * TA_PX, 15)) {                          /* a bar: its pattern – SHIFT or right: the arrangement ends before it */
     int k = (x - TP_X) / TA_PX;
     if (k >= SONG.arr_len) return;
-    if (e->midi[1] & (VIBE_STAGE_MOD_SHIFT | VIBE_STAGE_MOD_RIGHT)) { SONG.arr_len = (uint8_t)k; say(k ? "BARS REMOVED" : "ARRANGEMENT CLEARED"); } else pattern_pick(SONG.arr[k]);
+    if (e->midi[1] & (VIBE_STAGE_MOD_SHIFT | VIBE_STAGE_MOD_RIGHT)) { undo_mark("ARR", 0); SONG.arr_len = (uint8_t)k; say(k ? "BARS REMOVED" : "ARR CLEARED - F2: UNDO"); } else pattern_pick(SONG.arr[k]);
   } else if (inside(x, y, 856, TB_Y, 80, 36)) tour_start();
-  else if (inside(x, y, SF_X, SF_Y, 4 * SF_PX, 30)) {
+  else if (inside(x, y, SF_X, SF_Y, SF_N * SF_PX, 30)) {
     int k = (x - SF_X) / SF_PX;
     if (k == 0) { if (spage == PG_AUTO) auto_ramp(); else fill(); }
     else if (k == 1) { if (spage == PG_AUTO) soft_auto(3); else soft_seq(3); }
-    else if (k == 2) pattern_copy(); else demo();
+    else if (k == 2) pattern_copy(); else if (k == 3) song_undo(); else song_demo();      /* (DEMO asks twice, as on the device) */
   }
 }
 
@@ -1163,30 +1338,30 @@ static const char *const HELP_SOUND[] = {
   "MENU", "the tour (SHIFT + MENU twice: factory reset)",
 };
 static const char *const HELP_SEQ[] = {
-  "PADS", "the 16 steps (REC + PLAY: play them in)",
+  "PADS", "the 16 steps. REC lit: they play the kit",
   "SHIFT + PAD", "hear and select that pad's sound",
   "PAD + KEY", "hold a step: it plays the key's note",
   "DATA", "select a sound (a row)",
   "ENCODER 1 2", "the step in the frame, and its NOTE",
   "ENCODER 3 4", "its VELOCITY (1-8) · its LENGTH in steps",
   "A   B", "TEMPO (SHIFT: SWING) · the scale of NOTE",
-  "F1 F2", "pattern before / after (LEFT RIGHT too)",
-  "F3 FILL", "every 4th step, 2nd, every one, none",
-  "F4 F5", "CLEAR the sound · COPY to next pattern",
-  "REC + PLAY", "play it in, to a click (SHIFT + REC: off)",
+  "LEFT RIGHT", "pattern before / after, on the bar line",
+  "F1  F2", "LOOP or SONG plays · UNDO (again: redo)",
+  "F3 F4 F5", "FILL · CLEAR · COPY to an empty pattern",
+  "REC + PLAY", "play it in. F4 held: ERASE. SHIFT+REC: click",
 };
 static const char *const HELP_SONG[] = {
   "PADS 1-8", "pattern A-H, from the next bar line",
   "PADS 9-16", "INTENSITY, low to high",
   "SHIFT+PAD 1-8", "ARRANGEMENT: add that pattern as a bar",
-  "SHIFT+PAD 9 16", "take the last bar away · all of them",
-  "ENCODER 1", "PATTERN (LEFT RIGHT too)",
-  "ENCODER 2", "CHAIN: A to here play in a row",
-  "ENCODER 3", "INTENSITY (a game sends it: CC 14)",
-  "ENCODER 4", "LAYER: the sound plays from here on",
-  "B", "steps in a pattern (1-16)",
-  "F1 F2 F3", "PLAY · COPY to next · CLEAR pattern",
-  "F4 F5 F6", "DEMO song · SEND to a game · SAVE",
+  "SHIFT+PAD 9 16", "take the last bar away · all (press twice)",
+  "ENCODER 1 2", "PATTERN · CHAIN: A to here play in a row",
+  "ENCODER 3 4", "INTENSITY (CC 14) · LAYER of the sound",
+  "A   B", "TEMPO (SHIFT: SWING) · steps in a pattern",
+  "F1", "what PLAY plays: LOOP a pattern, or the SONG",
+  "F2 F3", "UNDO (again: redo) · CLEAR the pattern",
+  "F4", "NEW empty song (SHIFT: DEMO) - press twice",
+  "F5 F6", "SEND to a game · SAVE",
 };
 static const char *const HELP_AUTO[] = {
   "K5 AUTO", "automation: a lane for every sound",
@@ -1196,9 +1371,9 @@ static const char *const HELP_AUTO[] = {
   "A POINT", "holds to the next one, or the bar's end",
   "DATA", "select a sound: its own lane",
   "SHIFT + PAD", "hear and select that pad's sound",
-  "F1 F2", "pattern before / after (LEFT RIGHT too)",
-  "F3 RAMP", "a straight line from point to point",
-  "F4 F5", "CLEAR the lane · COPY to next pattern",
+  "LEFT RIGHT", "pattern before / after, on the bar line",
+  "F1  F2", "LOOP or SONG plays · UNDO (again: redo)",
+  "F3 F4 F5", "RAMP · CLEAR the lane · COPY the pattern",
   "A", "TEMPO (SHIFT: SWING)",
 };
 static const char *const HELP_LINK[] = {
@@ -1224,10 +1399,11 @@ static void factory_reset(void)
   if (running) seq_play(0);
   factory(); view_sync();
   for (int k = 0; k < 2; k++) for (int i = 0; i < SLOTS; i++) has_undo_k[k][i] = 0;
+  undo_has = 0; undo_run = 0; undo_redo = 0; undo_pat = -1;
   kit = KIT_MUSIC;
   for (int i = 0; i < SLOTS; i++) changed(i);          /* the song's sounds, to the player */
   kit = was;
-  edit_pat = 0; cur_step = 0; send(M_CUE, 0, 0, 0, 0);
+  cur_step = 0; pattern_home();
   bank_save();
   say("FACTORY RESET");
 }
@@ -1256,20 +1432,21 @@ static void pick(int slot, int down)                 /* hear a pad's sound and s
 void vibe_on_event(const vibe_event *e)
 {
   int id, r = vf_event(e, &id);
-  out_pump();
+  out_pump(); seq_poll();
   if (r != VF_NO) return;
   if (tour_on && e->down && (e->type == VIBE_EV_PAD || e->type == VIBE_EV_NOTE || (e->type == VIBE_EV_BUTTON && e->id != VB_SHIFT))) { tour_end(); return; }   /* any touch ends the tour */
   switch (e->type) {
   case VIBE_EV_PAD:
     if (e->id >= SLOTS) break;
     if (page == PG_SEQ) {                            /* the pads are the steps; held, a key gives the step its note */
+      if (!e->down) { send(M_RELEASE, e->id, e->id, 0, 0); if (held_step == e->id) held_step = -1; break; }   /* (let go: whatever it began – REC or SHIFT may have gone since) */
       if (shift) { pick(e->id, e->down); break; }                             /* SHIFT: the pad's sound – hear it, select it */
-      if (rec && running) { pad(e->id, e->down, e->value); break; }           /* REC while it plays: the pads are the kit – played in, as hard as they are hit */
-      if (e->down) { step_toggle(e->id, sel); held_step = e->id; } else if (held_step == e->id) held_step = -1;
+      if (rec) { pad(e->id, e->down, e->value); break; }                      /* REC lit: the pads are the kit – while it plays they are played in, as hard as they are hit */
+      step_toggle(e->id, sel); held_step = e->id;
       break;
     }
     if (page == PG_SONG) { if (e->down) { if (shift) arr_edit(e->id); else if (e->id < 8) pattern_pick(e->id); else intensity_set((float)(e->id - 7) / 8.0f); } break; }
-    if (page == PG_AUTO) { if (shift) pick(e->id, e->down); else if (e->down) auto_toggle(e->id); break; }     /* the pads: a point on / off */
+    if (page == PG_AUTO) { if (!e->down) send(M_RELEASE, e->id, e->id, 0, 0); else if (shift) pick(e->id, 1); else auto_toggle(e->id); break; }     /* the pads: a point on / off */
     if (page == PG_MIX) { if (e->down) { sel = e->id; if (shift) SONG.solo ^= (uint16_t)(1u << sel); else SONG.mute ^= (uint16_t)(1u << sel); } break; }   /* the pads: mute, SHIFT: solo */
     pad(e->id, e->down, e->value);
     if (e->down && page == PG_WAVE && patches[sel].engine != SFX_ENGINE_WAVETABLE) set_page(PG_OSC);
@@ -1277,9 +1454,9 @@ void vibe_on_event(const vibe_event *e)
     break;
   case VIBE_EV_NOTE: {
     int outside = e->midi[1] == VIBE_NOTE_MIDI || e->midi[1] == VIBE_NOTE_HOST;
-    if (outside && e->id >= NOTE_PADS && e->id < NOTE_PADS + SLOTS) { pad(e->id - NOTE_PADS, e->down, e->value); break; }   /* a game or a DAW plays the kit */
+    if (outside && e->id >= NOTE_PADS && e->id < NOTE_PADS + SLOTS) { from_outside = 1; pad(e->id - NOTE_PADS, e->down, e->value); from_outside = 0; break; }   /* a game or a DAW plays the kit */
     if (!e->down) { send(M_RELEASE, sel, 100 + (e->id % 96), 0, 0); break; }
-    if (page == PG_SEQ && held_step >= 0) step_set(pat(), held_step, sel, e->id);
+    if (page == PG_SEQ && held_step >= 0) { undo_open(1); step_set(pat(), held_step, sel, e->id); }
     else record(sel, e->id, e->value);
     send(M_TRIGGER, sel, 100 + (e->id % 96), e->value > 0.0f ? e->value : 0.8f, e->id);  /* the sound at this pitch */
     break; }
@@ -1292,7 +1469,7 @@ void vibe_on_event(const vibe_event *e)
       if (k == 2) vibe_param_set(P_MOD_FM, v);
       if (k == 3) vibe_param_set(P_MOD_LEVEL, v);
       if (k == 4) vibe_param_set(P_INTENSITY, v);
-      if (k == 5 && (e->midi[2] >> 4) != edit_pat) pattern_pick(e->midi[2] >> 4);        /* 0..127 = pattern A..H */
+      if (k == 5 && (e->midi[2] >> 4) != (queued >= 0 ? queued : edit_pat)) pattern_pick(e->midi[2] >> 4);   /* 0..127 = pattern A..H (a value that repeats is one cue) */
     }
     break;
   case VIBE_EV_SYSEX: sysex_in(vibe_sysex_in(), (int)e->value); break;
@@ -1301,12 +1478,16 @@ void vibe_on_event(const vibe_event *e)
   case VIBE_EV_ENCODER: if (e->id < VE_COUNT) encoder(e->id, e->value); break;
   case VIBE_EV_BUTTON:
     if (e->id == VB_SHIFT) { shift = e->down; break; }
+    if (e->id == VB_F4) {                              /* SEQ, REC while it plays: F4 is ERASE for as long as it is held */
+      if (!e->down) f4_held = 0;
+      else if (page == PG_SEQ && rec && running) { f4_held = 1; erase_at = -1; erase_pat = -1; say("ERASE: HOLD F4"); seq_poll(); break; }
+    }
     if (!e->down) break;
     if (e->id == VB_HOME) help = !help;
     else if (e->id == VB_RETURN) { if (help) help = 0; else set_page(PG_OSC); }
     else if (e->id == VB_PLAY) seq_play(!running);
     else if (e->id == VB_STOP) seq_play(0);
-    else if (e->id == VB_REC) { if (shift) { metro = !metro; say(metro ? "METRONOME ON" : "METRONOME OFF"); } else seq_rec(!rec); }
+    else if (e->id == VB_REC) { if (shift) { metro = !metro; say(metro ? "CLICK ON" : "CLICK OFF"); } else seq_rec(!rec); }
     else if (e->id == VB_MENU) { if (shift) factory_reset(); else tour_start(); }
     else if (e->id == VB_LEFT || e->id == VB_RIGHT) arrow(e->id == VB_LEFT ? -1 : 1);
     else if (e->id >= VB_F1 && e->id <= VB_F6) { int f = e->id - VB_F1; if (page == PG_SEQ) soft_seq(f); else if (page == PG_SONG) soft_song(f); else if (page == PG_AUTO) soft_auto(f); else if (mix_page()) soft_mix(f); else soft_sound(f); }
@@ -1639,17 +1820,27 @@ static char *sound_title(char *t)                    /* "PAD 5  COIN" (the stage
 static void header(uint32_t rgb, uint32_t step, uint32_t now)
 {
   char buf[16], t[16];
+  int pill = page >= PG_SEQ && page <= PG_MASTER, k = 0;     /* the song's pages (their kit is MUSIC): what PLAY plays, where the kit is said elsewhere */
   vg_round(8, 5, 30, 24, 5, rgb);
   vg_text(vg_itoa(sel + 1, buf), 23, 10, VG_BOLD, BG, VG_CENTER);
   if (tour_on) vg_text(tour_title, 46, 6, VG_BIG, 0x36C5FF, VG_LEFT);
-  else if (toast_frames > 0) { toast_frames--; vg_text(toast, 46, 6, VG_BIG, TEXT, VG_LEFT); }
+  else if (toast_on()) vg_text(toast, 46, 6, VG_BIG, TEXT, VG_LEFT);
   else {
     int w = vg_text(pad_name(sel), 46, 6, VG_BIG, TEXT, VG_LEFT);
     if (pad_preset[sel] >= 0 && 54 + w < 230) vg_text(ENGINE_NAME[patches[sel].engine], 54 + w, 12, VG_SMALL, rgb, VG_LEFT);
-    vg_round(318, 8, 50, 18, 4, kit == KIT_SFX ? 0x3A2A22 : 0x4A3222);                  /* the kit (SHIFT + K1) */
-    vg_text(KIT_NAME[kit], 343, 9, VG_SMALL, kit == KIT_SFX ? 0xFF8A5C : 0x7FC4FF, VG_CENTER);
+    if (!pill) {
+      vg_round(318, 8, 50, 18, 4, kit == KIT_SFX ? 0x3A2A22 : 0x4A3222);                /* the kit (SHIFT + K1) */
+      vg_text(KIT_NAME[kit], 343, 9, VG_SMALL, kit == KIT_SFX ? 0xFF8A5C : 0x7FC4FF, VG_CENTER);
+    }
   }
-  t[0] = (char)('A' + (step != NO_STEP ? (int)now : edit_pat)); t[1] = t[2] = ' '; vg_itoa(SONG.bpm, t + 3);
+  if (pill) {                                         /* (also over a toast and the tour's title) */
+    vg_rect(314, 4, 58, 26, BG);
+    vg_round(318, 8, 50, 18, 4, loop_mode ? 0x36C5FF : 0x3A2A22);
+    vg_text(loop_mode ? "LOOP" : "SONG", 343, 9, VG_SMALL, loop_mode ? BG : TEXT, VG_CENTER);
+  }
+  t[k++] = (char)('A' + (step != NO_STEP ? (int)now : edit_pat));                      /* "A  120" – "A>C 120" while C waits for the bar line */
+  if (queued >= 0) { t[k++] = '>'; t[k++] = (char)('A' + queued); t[k++] = ' '; } else { t[k++] = ' '; t[k++] = ' '; }
+  vg_itoa(SONG.bpm, t + k);
   vg_circle(467, 17, 4, linked ? 0x6EE7A8 : 0x48332A);
   int ix = 454 - vg_text(t, 454, 10, VG_BOLD, step != NO_STEP ? TEXT : DIM, VG_RIGHT) - 17;
   if (rec) vg_circle((float)ix + 5.0f, 17.0f, step != NO_STEP && step % 4 == 0 && seq_frac < 0.6f ? 7.5f : 5.0f, 0xFF4040);   /* (it beats with the metronome) */
@@ -1684,8 +1875,8 @@ static void draw_song(uint32_t step, uint32_t now, int heat)
     int x, y;
     tile_at(s, &x, &y);
     if (s < SFX_PATTERNS) {
-      int playing_it = (uint32_t)s == now && step != NO_STEP, mine = s == edit_pat;
-      uint32_t bg = playing_it ? 0xFFFFFF : mine ? 0x36C5FF : s < SONG.chain || SONG.arr_len ? 0x3A2A22 : 0x1A120E, fg = playing_it || mine ? BG : TEXT;
+      int playing_it = (uint32_t)s == now && step != NO_STEP, mine = s == edit_pat, next = s == queued && BLINK;   /* (what waits for the bar line blinks) */
+      uint32_t bg = next ? 0xFFD23F : playing_it ? 0xFFFFFF : mine ? 0x36C5FF : s < SONG.chain || SONG.arr_len ? 0x3A2A22 : 0x1A120E, fg = next || playing_it || mine ? BG : TEXT;
       char letter[2] = { (char)('A' + s), 0 };
       vg_round(x, y, 55, 54, 7, bg);
       vg_text(letter, x + 7, y + 3, VG_BIG, fg, VG_LEFT);
@@ -1707,6 +1898,19 @@ static void draw_song(uint32_t step, uint32_t now, int heat)
     vg_round(x, y, 12, 17, 3, at ? 0xFFFFFF : SONG.arr[i] == edit_pat ? 0x36C5FF : 0x3A2A22);
     vg_text(letter, x + 6, y + 1, VG_SMALL, at || SONG.arr[i] == edit_pat ? BG : TEXT, VG_CENTER);
   }
+}
+
+/* SEQ and AUTO, under the column: the eight patterns – which plays, which is shown, which waits for the bar line, which
+   hold something – and a word beside them */
+static void strip(uint32_t step, uint32_t now, const char *hint)
+{
+  for (int k = 0; k < SFX_PATTERNS; k++) {
+    char letter[2] = { (char)('A' + k), 0 };
+    int x = 262 + k * 13, y = CY + 209, next = k == queued && BLINK, plays = step != NO_STEP && now == (uint32_t)k, mine = k == edit_pat, holds = pattern_holds(k);
+    vg_round(x, y, 12, 17, 3, next ? 0xFFD23F : plays ? 0xFFFFFF : mine ? 0x36C5FF : holds ? 0x3A2A22 : 0x1A120E);
+    vg_text(letter, x + 6, y + 1, VG_SMALL, next || plays || mine ? BG : holds ? TEXT : 0x6A5248, VG_CENTER);
+  }
+  vg_text(hint, 376, CY + 209, VG_SMALL, DIM, VG_LEFT);
 }
 
 /* ---- LINK: what the game sends ----------------------------------------------------------------------------------- */
@@ -1837,6 +2041,7 @@ void vibe_on_draw(uint16_t *fb)
   (void)fb;
   out_pump();
   tour_pump();
+  seq_poll(); blink++;
   vg_clear(BG);
   if (help) {
     if (page == PG_SEQ) vg_controls("SFX FORGE: SEQ", HELP_SEQ, sizeof HELP_SEQ / sizeof HELP_SEQ[0] / 2);
@@ -1861,9 +2066,11 @@ void vibe_on_draw(uint16_t *fb)
     int at = tab == TAB_FX ? (page == PG_FX ? 0 : page == PG_MIX ? 1 : 2) : page - FIRST[page];
     int tw = vg_text(TITLE[page], 12, 36, VG_BOLD, rgb, VG_LEFT);
     if (seq || song || aut) {                         /* … and the pattern; on AUTO the knob the lane moves */
-      char t[40] = "PATTERN  "; t[8] = (char)('A' + edit_pat);
-      tw += vg_text(t, 26 + tw, 36, VG_BOLD, TEXT, VG_LEFT);
-      if (aut) vg_text(auto_name(view_to[sel], sel), 40 + tw, 36, VG_BOLD, view_to[sel] ? TEXT : DIM, VG_LEFT);
+      char t[40] = "PATTERN  ";
+      int other = step != NO_STEP && now != (uint32_t)edit_pat;               /* what is shown is not what plays: say both */
+      if (other) { strcpy(t, "EDIT B - PLAYS A"); t[5] = (char)('A' + edit_pat); t[15] = (char)('A' + now % SFX_PATTERNS); } else t[8] = (char)('A' + edit_pat);
+      tw += vg_text(t, 26 + tw, 36, VG_BOLD, other ? 0xFF8A3C : TEXT, VG_LEFT);
+      if (aut) { const char *n = auto_name(view_to[sel], sel); if (40 + tw + vg_text_width(n, VG_BOLD) < LOC_X - 8) vg_text(n, 40 + tw, 36, VG_BOLD, view_to[sel] ? TEXT : DIM, VG_LEFT); }
       else if (seq && !layer_on(sel)) vg_text("layer off", 40 + tw, 36, VG_SMALL, DIM, VG_LEFT);
     }
     for (int i = 0; i < TAB_COUNT; i++) vg_round(LOC_X + i * 18, 37, 12, 9, 2, i == tab ? rgb : LINE);
@@ -1874,11 +2081,11 @@ void vibe_on_draw(uint16_t *fb)
   for (int s = 0; s < SLOTS; s++) {
     int state, frame = 0;
     uint32_t base;                                   /* state: 0 off, 1 dim, 2 set, 3 bright */
-    if (seq) {
+    if (seq && !rec) {                               /* (REC lit: the pads are the kit, and look it – below) */
       int set = (pat()->on[s] >> sel) & 1, head = step == (uint32_t)s && now == (uint32_t)edit_pat;
       base = rgb; state = head ? 3 : set ? 2 : s >= SONG.len ? 0 : 1;
     } else if (song) {
-      if (s < 8) { base = 0x36C5FF; state = (uint32_t)s == now && step != NO_STEP ? 3 : s == edit_pat ? 2 : s < SONG.chain ? 1 : 0; }
+      if (s < 8) { base = 0x36C5FF; state = (uint32_t)s == now && step != NO_STEP ? 3 : s == queued ? (BLINK ? 2 : 1) : s == edit_pat ? 2 : s < SONG.chain ? 1 : 0; }
       else { base = 0xFF5A36; state = heat >= (s - 7) * 127 / 8 ? 2 : 1; }
     } else if (aut) {
       base = rgb; state = step == (uint32_t)s && now == (uint32_t)edit_pat ? 3 : aut_at(sel, s) ? 2 : s >= SONG.len ? 0 : 1;
@@ -1888,7 +2095,7 @@ void vibe_on_draw(uint16_t *fb)
       base = ENGINE_RGB[patches[s].engine]; state = (on >> s) & 1 ? 3 : s == sel ? 2 : 1; frame = s == sel;
     }
     (void)frame;                                     /* (the pads themselves show it: their lights) */
-    uint32_t led = (base & 0xFFFFFF) | (uint32_t)(state + 4 * (seq + 2 * song + 3 * mix + 4 * aut)) << 24;
+    uint32_t led = (base & 0xFFFFFF) | (uint32_t)(state + 4 * (seq + 2 * song + 3 * mix + 4 * aut + 20 * (seq && rec))) << 24;
     if (led != led_cache[s]) { led_cache[s] = led; vibe_led_pad(s, state == 3 ? 0xFFFFFF : base, state == 3 ? 1.0f : state == 2 ? 0.75f : state == 1 ? 0.12f : 0.0f); }
   }
 
@@ -1902,10 +2109,9 @@ void vibe_on_draw(uint16_t *fb)
     row(1, "VALUE", a && to ? auto_text(to, sel, a - 1, buf) : "--", a && to ? (float)(a - 1) / (float)auto_hi(to) : 0.0f, 0, rgb);
     row(2, "TARGET", auto_name(to, sel), (float)to / (float)(SFX_AT_COUNT - 1), 0, to ? TEXT : DIM);
     if (to && lane_of(sel, to) >= 0) vg_circle(456.0f, (float)(CY + 2 * 47 + 12), 4.0f, 0xFF8A3C);             /* this knob has a lane */
-    { static char t[40]; int own = 0;
-      for (int l = 0; l < SFX_LANES; l++) own += SONG.lane[l].track == sel + 1;
-      vg_itoa(own, t); strcpy(t + strlen(t), own == 1 ? " lane here, " : " lanes here, "); vg_itoa(lanes_used(), t + strlen(t)); strcpy(t + strlen(t), " of 24 used");
-      footer(to ? "PADS: A POINT ON / OFF" : "TURN TARGET FIRST", to ? TEXT : 0xFF8A3C, t); }
+    vg_itoa(lanes_used(), buf); strcpy(buf + strlen(buf), "/24 lanes");
+    footer(to ? "PADS: A POINT ON / OFF" : "TURN TARGET FIRST", to ? TEXT : 0xFF8A3C, "");
+    strip(step, now, buf);
   } else if (mix) {
     draw_mix();
     for (int i = 0; i < 4; i++) {
@@ -1929,16 +2135,15 @@ void vibe_on_draw(uint16_t *fb)
       row(i, n, vg_itoa(cc_out[i], buf), (float)cc_out[i] / 127.0f, 0, 0x6EE7A8);
     }
   } else if (seq) {
-    char t[48];
     int note = pat()->note[sel][cur_step], acc = pat()->acc[sel][cur_step];
     draw_seq(rgb, step, now);
     row(0, "STEP", vg_itoa(cur_step + 1, buf), (float)(cur_step + 1) / (float)STEPS, 0, rgb);
     row(1, "NOTE", note_text(note, buf), note ? (float)(note - 24) / 84.0f : 0.0f, 0, rgb);
     row(2, "VELOCITY", vg_itoa(SFX_ACC_VEL(acc) + 1, buf), (float)(SFX_ACC_VEL(acc) + 1) / 8.0f, 0, rgb);
     row(3, "LENGTH", SFX_ACC_LEN(acc) ? vg_itoa(SFX_ACC_LEN(acc), buf) : "AUTO", (float)SFX_ACC_LEN(acc) / 15.0f, 0, rgb);
-    strcpy(t, "swing "); strcpy(t + 6, percent(SONG.swing * 127 / 100, buf)); strcpy(t + strlen(t), "   scale "); strcpy(t + strlen(t), SCALE_NAME[SONG.scale % SFX_SCALE_COUNT]);
-    if (rec && running) footer(metro ? "REC: PLAY IT IN - CLICK ON" : "REC: PLAY IT IN - CLICK OFF", 0xFF4040, t);   /* (SHIFT + REC: the click, also while it records) */     /* played in live: each hit lands on the step it is nearest */
-    else footer(layer_on(sel) ? "PADS: THE 16 STEPS" : "ITS LAYER IS OFF NOW", layer_on(sel) ? TEXT : 0xFF8A3C, t);
+    if (rec) footer(running ? "REC: PLAY IT IN - F4 ERASE" : "REC READY: PRESS PLAY", 0xFF4040, "");   /* played in live: each hit lands on the step it is nearest */
+    else footer(layer_on(sel) ? "PADS: THE 16 STEPS" : "ITS LAYER IS OFF NOW", layer_on(sel) ? TEXT : 0xFF8A3C, "");
+    strip(step, now, rec ? "REC off: steps" : SCALE_NAME[SONG.scale % SFX_SCALE_COUNT]);
   } else if (song) {
     char chain[4] = "A-A";
     draw_song(step, now, heat);
@@ -1964,9 +2169,10 @@ void vibe_on_draw(uint16_t *fb)
   /* F1-F6 */
   if (tour_on) tour_caption();
   else for (int i = 0; i < 6; i++) {
-    int lit = ((song && i == 0) || (mix_page() && i == 4)) && running, dim = sound_page() && i == 2 && !has_undo[sel];
-    vg_round(4 + i * 79, 292, 73, 24, 12, lit ? 0x6EE7A8 : 0x36241C);
-    vg_text(SOFT[soft_set()][i], 40 + i * 79, 297, VG_BOLD, lit ? BG : dim ? 0x6A5248 : TEXT, VG_CENTER);
+    int lit = mix_page() && i == 4 && running, held = seq && i == 3 && f4_held;      /* (ERASE, while it erases) */
+    int dim = (sound_page() && i == 2 && !has_undo[sel]) || (song_keys() && i == 1 && !undo_has);   /* an UNDO with nothing to take back */
+    vg_round(4 + i * 79, 292, 73, 24, 12, held ? 0xFF4040 : lit ? 0x6EE7A8 : 0x36241C);
+    vg_text(soft_caption(i), 40 + i * 79, 297, VG_BOLD, held || lit ? BG : dim ? 0x6A5248 : TEXT, VG_CENTER);
   }
 
   /* FOCUS: everything above with DATA + ENTER (and the mouse) */
@@ -2000,7 +2206,7 @@ static void stage_value(int i, const char *name, const char *value, float bar, i
 void vibe_on_stage(uint16_t *fb, int w, int h)
 {
   static const char *const TAB[ST_N] = { "OSC", "TONE", "FILTER", "WAVE", "ENV", "LFO", "FX", "MIX", "MAST", "AUTO" };
-  static const char *const FILLS[2][4] = { { "FILL", "CLEAR", "COPY", "DEMO" }, { "RAMP", "CLEAR", "COPY", "DEMO" } };
+  static const char *const FILLS[2][SF_N] = { { "FILL", "CLEAR", "COPY", "UNDO", "DEMO" }, { "RAMP", "CLEAR", "COPY", "UNDO", "DEMO" } };
   char buf[24], t[64];
   (void)fb; (void)w; (void)h;
   const sfx_patch *p = &patches[sel];
@@ -2015,7 +2221,9 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
   vg_clear(BG);
 
   /* the top row */
-  vg_text(toast_frames > 0 && !tour_on ? toast : "SFX FORGE", 24, 21, VG_BIG, TEXT, VG_LEFT);
+  { int small = vg_text_width("SFX FORGE", VG_BIG) > TM_X - 28;          /* (what is said now: over the scope, below) */
+    vg_text("SFX FORGE", 24, small ? 24 : 21, small ? VG_MED : VG_BIG, TEXT, VG_LEFT); }
+  stage_button(TM_X, TB_Y, 58, 36, loop_mode ? "LOOP" : "SONG", VG_BOLD, loop_mode ? 0x36C5FF : 0x36241C, loop_mode ? BG : TEXT);   /* what PLAY plays */
   stage_button(190, TB_Y, 76, 36, running ? "STOP" : "PLAY", VG_BIG, running ? 0x6EE7A8 : 0x36241C, running ? BG : TEXT);
   stage_button(272, TB_Y, 64, 36, "REC", VG_BIG, rec ? 0xFF4040 : 0x36241C, rec ? BG : TEXT);
   vg_round(342, TB_Y, 104, 36, 6, PANEL);             /* the tempo: click its left or right half, or the wheel */
@@ -2023,9 +2231,9 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
   vg_text(vg_itoa(SONG.bpm, buf), 395, TB_Y + 7, VG_BIG, TEXT, VG_RIGHT);
   vg_text("BPM", 399, TB_Y + 13, VG_SMALL, DIM, VG_LEFT);
   for (int k = 0; k < SFX_PATTERNS; k++) {
-    int playing_it = (uint32_t)k == now && step != NO_STEP, mine = k == edit_pat;
+    int playing_it = (uint32_t)k == now && step != NO_STEP, mine = k == edit_pat, next = k == queued && BLINK;
     char letter[2] = { (char)('A' + k), 0 };
-    stage_button(TP_X + k * TP_PX, TB_Y, 36, 20, letter, VG_BOLD, playing_it ? 0xFFFFFF : mine ? 0x36C5FF : k < SONG.chain ? 0x523A1F : PANEL, playing_it || mine ? BG : k < SONG.chain ? TEXT : DIM);
+    stage_button(TP_X + k * TP_PX, TB_Y, 36, 20, letter, VG_BOLD, next ? 0xFFD23F : playing_it ? 0xFFFFFF : mine ? 0x36C5FF : k < SONG.chain ? 0x523A1F : PANEL, next || playing_it || mine ? BG : k < SONG.chain ? TEXT : DIM);
   }
   if (!SONG.arr_len) vg_text("right-click a pattern: a bar of the arrangement", TP_X, TA_Y, VG_SMALL, 0x6A5248, VG_LEFT);
   else for (int i = 0; i < SONG.arr_len && i < SFX_ARR_MAX; i++) {     /* the arrangement: a pattern a bar */
@@ -2140,11 +2348,15 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
     vg_rect(SN_X, SF_Y + 50, (int)(470.0f * vd_clamp(tour_progress, 0.0f, 1.0f)), 2, 0x36C5FF);
   } else {
     scope(SN_X, SF_Y, 238, 52, rgb);
-    for (int k = 0; k < 4; k++) stage_button(SF_X + k * SF_PX, SF_Y, 53, 30, FILLS[lanes][k], VG_BOLD, 0x36241C, TEXT);
-    if (lanes) vg_text("drag in a lane: points   right-click: none", SF_X + 4 * SF_PX - 4, SF_Y + 35, VG_SMALL, 0x7A6055, VG_RIGHT);
+    if (toast_on()) {                                 /* what was just done, or asked: beside the keys that did it */
+      vg_rect_a(SN_X + 2, SF_Y + 14, 234, 24, BG, 0.82f);
+      vg_text(toast, SN_X + 119, SF_Y + 18, VG_MED, TEXT, VG_CENTER);
+    }
+    for (int k = 0; k < SF_N; k++) stage_button(SF_X + k * SF_PX, SF_Y, SF_PX - 4, 30, FILLS[lanes][k], VG_BOLD, 0x36241C, k == 3 && !undo_has ? 0x6A5248 : TEXT);
+    if (lanes) vg_text("drag in a lane: points   right-click: none", SF_X + SF_N * SF_PX - 4, SF_Y + 35, VG_SMALL, 0x7A6055, VG_RIGHT);
     else {
     strcpy(t, "wheel: note "); strcpy(t + strlen(t), note_text(pat()->note[sel][cur_step], buf)); strcpy(t + strlen(t), "  SHIFT: vel  CTRL: len");
-    vg_text(t, SF_X + 4 * SF_PX - 4, SF_Y + 35, VG_SMALL, 0x7A6055, VG_RIGHT);
+    vg_text(t, SF_X + SF_N * SF_PX - 4, SF_Y + 35, VG_SMALL, 0x7A6055, VG_RIGHT);
     }
   }
 }

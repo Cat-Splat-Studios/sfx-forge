@@ -1,6 +1,7 @@
 """Builds the manual's pictures (docs/img/) from screenshots of the firmware.
 
-    python docs/figures.py <folder with the screenshots>
+    node docs/shots.mjs                    takes the screenshots, into out/doc (after sh build.sh)
+    python docs/figures.py [folder]        the folder with the screenshots; out/doc unless another is named
 
 The screenshots are 480 x 320 (the device's display) and 960 x 540 (the stage), as the SDK's wasmtest renders them.
 Needs Pillow. Each annotated picture gets numbered marks; the manual's tables explain the numbers.
@@ -55,18 +56,24 @@ def annotated(src, dst, marks, scale=2, r=15):
 # ---- the device's pages, with marks -----------------------------------------------------------------------------------
 # (the marks sit in the gaps and margins beside what they name, so nothing is hidden)
 annotated("sfx-sound", "page-sound", [(200, 17), (308, 17), (384, 17), (130, 44), (354, 44), (240, 104), (178, 87), (238, 304)])
-annotated("seq-playing", "page-seq", [(190, 44), (128, 114), (250, 150), (250, 258), (238, 304)])
-annotated("song", "page-song", [(128, 114), (128, 230), (250, 150), (250, 252), (238, 304)])
-annotated("lanes-auto", "page-auto", [(262, 44), (128, 172), (250, 125), (250, 258), (159, 304)])
+annotated("seq-playing", "page-seq", [(306, 17), (384, 17), (190, 44), (128, 114), (250, 150), (250, 256), (440, 276), (238, 304)])
+annotated("song", "page-song", [(306, 17), (128, 114), (128, 230), (250, 150), (250, 256), (238, 304)])
+annotated("lanes-auto", "page-auto", [(262, 44), (128, 172), (250, 125), (250, 276), (238, 304)])
 annotated("mix", "page-mix", [(128, 172), (250, 125), (250, 258), (80, 304)])
 annotated("master", "page-master", [(90, 125), (318, 125), (178, 87), (302, 87)])
 annotated("link", "page-link", [(180, 75), (250, 150), (250, 258)])
-annotated("seq-playing-stage", "stage", [(150, 34), (190, 14), (342, 14), (462, 14), (454, 45), (14, 180), (328, 316), (200, 345), (14, 414), (14, 458), (14, 510),
-                                         (458, 240), (946, 240), (946, 434), (946, 458), (458, 502), (946, 491)], scale=1, r=11)
-annotated("auto-stage", "stage-auto", [(459, 414), (14, 458), (946, 240), (946, 491)], scale=1, r=11)
+annotated("seq-playing-stage", "stage", [(128, 11), (192, 11), (344, 11), (454, 14), (449, 46), (14, 180), (328, 316), (200, 345), (14, 414), (14, 458), (14, 510),
+                                         (458, 240), (947, 240), (947, 434), (947, 458), (458, 502), (947, 491)], scale=1, r=11)
+annotated("auto-stage", "stage-auto", [(459, 414), (14, 458), (947, 206), (947, 491)], scale=1, r=11)
+
+# ---- loop a pattern and play into it: four moments ----------------------------------------------------------------------
+annotated("loop-1", "loop-1", [(306, 17), (80, 304), (250, 276)])                      # LOOP in the top line, F1, the pattern strip
+annotated("loop-2", "loop-2", [(380, 17), (248, 44), (250, 276)])                      # A>G, EDIT G - PLAYS A, G blinks
+annotated("loop-3", "loop-3", [(384, 17), (128, 114), (250, 256), (238, 304)])         # the REC dot, the hits, the footer, F4 ERASE
+annotated("loop-4", "loop-4", [(176, 17), (92, 304)])                                  # UNDO: TAKE, F2
 
 # ---- the tutorials: a picture a step ---------------------------------------------------------------------------------
-for n in ("t-sfx-1", "t-sfx-2", "t-sfx-3", "t-sfx-4", "t-beat-1", "t-beat-2", "t-beat-3", "t-beat-4", "env", "lfo", "fx", "music-wave", "touch", "lanes-sound"):
+for n in ("t-sfx-1", "t-sfx-2", "t-sfx-3", "t-sfx-4", "t-beat-1", "t-beat-2", "t-beat-3", "t-beat-4", "t-beat-5", "env", "lfo", "fx", "music-wave", "touch", "lanes-sound"):
     plain(n)
 
 
@@ -167,7 +174,7 @@ layers()
 
 # ---- the cheat sheet: every function and how to reach it, on one picture ------------------------------------------------
 def cheat():
-    W, H = 1640, 1530
+    W, H = 1640, 1702
     bg, panel, line, text, dim, ember = "#0E0B09", "#1B1613", "#3A2E26", "#F4EBDD", "#A08E7E", "#FF8A3C"
     key = {"K1": "#C48BFF", "K2": "#FFD23F", "K3": "#7BE07B", "K4": "#36C5FF", "K5": "#FF5A36", "K6": "#6EE7A8"}
     im = Image.new("RGB", (W, H), bg)
@@ -185,7 +192,7 @@ def cheat():
         ("K4", "FX", [("EFFECT SENDS", "CHORUS · DELAY · REVERB · LEVEL", "of the selected sound"),
                       ("MIXER", "VOLUME · PAN · DRIVE · OUTPUT", "pads: mute    SHIFT + pad: solo"),
                       ("MASTER EFFECTS", "TIME · FEEDBACK · ROOM SIZE · DAMPING", "of the delay and the reverb")]),
-        ("K5", "SEQ", [("SEQUENCER", "STEP · NOTE · VELOCITY · LENGTH", "pads: the 16 steps    pad + key: its note"),
+        ("K5", "SEQ", [("SEQUENCER", "STEP · NOTE · VELOCITY · LENGTH", "pads: the 16 steps    REC lit: the kit"),
                        ("SONG", "PATTERN · CHAIN · INTENSITY · LAYER", "pads 1-8: pattern    9-16: intensity"),
                        ("AUTOMATION", "STEP · VALUE · TARGET", "pads: points    opens on the knob turned last")]),
         ("K6", "LINK", [("GAME LINK", "send CC 20 · 21 · 22 · 23", "A B: CC 24 25")]),
@@ -248,22 +255,26 @@ def cheat():
     y0 = y + 16
     block(30, y0, "EVERYWHERE", [
         ("PADS", "play the kit's sounds"), ("KEYS", "the selected sound, in tune"), ("DATA", "select a sound"),
-        ("PLAY  STOP  REC", "the song.  REC + PLAY on SEQ: play parts in live"), ("LEFT  RIGHT", "page before / after - on K5 pages: pattern"),
-        ("A", "output volume - on SEQ and AUTO: tempo"), ("B", "SEQ: the scale - SONG: steps in a bar"),
+        ("PLAY  STOP", "what the K5 pages' top line says: LOOP or SONG"), ("LEFT  RIGHT", "page before / after - on K5 pages: pattern"),
+        ("A", "output volume - K5 pages: tempo - LINK: CC 24"), ("B", "SEQ: the scale - SONG: steps in a bar"),
         ("HOME", "this page's controls"), ("MENU", "the tour"), ("RETURN", "back to the first page")])
+    block(30, y0 + 366, "LOOP, SONG, REC  -  the K5 pages", [
+        ("F1", "LOOP: the pattern repeats.  SONG: the arrangement"), ("LEFT  RIGHT", "another pattern: it starts on the bar line"),
+        ("REC + PLAY", "play it in: pads the kit, keys the notes. It loops"), ("F4 held  (REC)", "ERASE the selected sound as the bar passes"),
+        ("F2", "UNDO one step: edits, a take, a key. Again: redo")])
     block(560, y0, "WITH SHIFT", [
-        ("K1", "the other kit: SFX / MUSIC"), ("REC", "the metronome off / on"), ("MENU  MENU", "factory reset"), ("F1", "the preset before"),
-        ("an encoder", "turn fast"), ("A  (SEQ, AUTO)", "the swing"), ("a pad  (SEQ, AUTO)", "hear and select that sound"),
+        ("K1", "the other kit: SFX / MUSIC"), ("REC", "the metronome off / on"), ("MENU  MENU", "factory reset"), ("F1  (sound pages)", "the preset before"),
+        ("an encoder", "turn fast"), ("A  (K5 pages)", "the swing"), ("a pad  (SEQ, AUTO)", "hear and select that sound"),
         ("a pad  (MIX)", "solo"), ("pad 1-8  (SONG)", "add that pattern as a bar"), ("pad 9-15  (SONG)", "take the last bar away"),
-        ("pad 16  (SONG)", "no arrangement: the chain plays")], kw=170)
+        ("pad 16  (SONG)  x2", "no arrangement: the chain plays"), ("F4  (SONG)  x2", "the demo song")], kw=170)
     y1 = block(1110, y0, "F1 - F6", [
-        ("sound pages", "PRESET · MUTATE · UNDO · RANDOM · EXPORT · SAVE"), ("SEQUENCER", "< PAT · PAT > · FILL · CLEAR · COPY · SAVE"),
-        ("SONG", "PLAY · COPY · CLR PAT · DEMO · SEND · SAVE"), ("AUTOMATION", "< PAT · PAT > · RAMP · CLEAR · COPY · SAVE"),
+        ("sound pages", "PRESET · MUTATE · UNDO · RANDOM · EXPORT · SAVE"), ("SEQUENCER", "LOOP/SONG · UNDO · FILL · CLEAR · COPY · SAVE"),
+        ("SONG", "LOOP/SONG · UNDO · CLR PAT · NEW x2 · SEND · SAVE"), ("AUTOMATION", "LOOP/SONG · UNDO · RAMP · CLEAR · COPY · SAVE"),
         ("MIXER, MASTER", "MUTE · SOLO · RESET · ALL ON · PLAY · SAVE")], kw=130)
     block(1110, y1 + 16, "A STEP", [
-        ("pad", "on / off"), ("pad held + key", "its note"), ("REC + PLAY", "pads: the kit, keys: the notes - played in"), ("encoder 3", "velocity 1 - 8"), ("encoder 4", "length: AUTO, 1 - 15 steps")], kw=130)
+        ("pad", "on / off  (REC not lit)"), ("pad held + key", "its note"), ("encoder 2", "its note, along the scale"), ("encoder 3", "velocity 1 - 8"), ("encoder 4", "length: AUTO, 1 - 15 steps")], kw=130)
 
-    y2 = y0 + 408
+    y2 = y0 + 580
     y3 = block(30, y2, "THE FIVE ENGINES  -  what A and B are", [
         ("IMPACT", "FM RATIO · FM DEPTH      hits, kicks, explosions"), ("UI BLIP", "ARP STEP · ARP SPEED     coins, menus, chiptune"),
         ("SCI-FI FM", "FM RATIO · FM DEPTH      lasers, FM bass and keys"), ("FOLEY", "GRAIN RATE · GRAIN AMT   steps, wind, hi-hats"),
@@ -273,7 +284,7 @@ def cheat():
         ("3", "pads: a point on a step.  Encoder 2: its value"), ("4", "F3 RAMP: straight lines from point to point"),
         ("5", "TARGET to another knob: a second lane. 24 a song")], kw=30)
     block(560, y2, "THE STAGE  -  with the mouse", [
-        ("click a pad", "play and select"), ("drag a value", "or the wheel over it (SHIFT: bigger steps)"), ("click a step", "on / off"),
+        ("LOOP / SONG", "what PLAY plays: click to change"), ("click a pad", "play and select"), ("drag a value", "or the wheel over it (SHIFT: bigger steps)"), ("click a step", "on / off"),
         ("wheel on a step", "its note.  SHIFT: velocity.  CTRL: length"), ("click a row's name", "hear and select that sound"),
         ("right-click it", "mute"), ("right-click a pattern", "add a bar of it to the arrangement"), ("right-click a bar", "the arrangement ends before it"),
         ("AUTO tab", "the rows become lanes: drag in one to draw"), ("SFX / MUSIC", "the kit the pads show")], kw=170)
