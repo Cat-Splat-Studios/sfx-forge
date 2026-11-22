@@ -24,7 +24,7 @@ VIDEOS = os.path.join(ROOT, "videos")                # the finished videos, comm
 FPS = 30
 W, H = 1920, 1080
 BG, PANEL, LINE, TEXT, DIM, EMBER = "#0E0B09", "#1B1613", "#3A2E26", "#F4EBDD", "#A08E7E", "#FF8A3C"
-BUTTON = {"F1": 0, "F2": 1, "F3": 2, "F4": 3, "F5": 4, "F6": 5, "SHIFT": 6, "K1": 10, "K2": 11, "K3": 12, "K4": 13, "K5": 14, "K6": 15,
+BUTTON = {"F1": 0, "F2": 1, "F3": 2, "F4": 3, "F5": 4, "F6": 5, "SHIFT": 6, "ENTER": 9, "K1": 10, "K2": 11, "K3": 12, "K4": 13, "K5": 14, "K6": 15,
           "RETURN": 16, "HOME": 17, "LEFT": 18, "MENU": 19, "RIGHT": 20, "REC": 21, "STOP": 22, "PLAY": 23}
 ENCODER = {"1": 0, "2": 1, "3": 2, "4": 3, "A": 4, "B": 5, "DATA": 6}
 NOTE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -164,6 +164,7 @@ def device(d, ox, oy, lit):
     for i, n in enumerate(["REC", "STOP", "PLAY"]):
         key(160 + i * 70, 346, 64, 28, n)
     key(400, 310, 64, 28, "HOME")
+    key(400, 346, 64, 28, "ENTER")
     played = {int(c[1:]) % 24 for c in lit if c[0] == "N"}
     whites = [0, 2, 4, 5, 7, 9, 11]
     for i in range(15):
@@ -187,7 +188,7 @@ BLACK = {1: 548, 3: 619, 6: 759, 8: 829, 10: 900, 13: 1040, 15: 1110, 18: 1251, 
 def control_box(name):
     """The place of a control on the device: (x, y, w, h, kind)."""
     fixed = {"EDATA": (1002, 52, 136, 136, "knob"), "EA": (120, 442, 96, 96, "knob"), "EB": (290, 442, 96, 96, "knob"),
-             "SHIFT": (40, 360, 84, 44, "key"), "RETURN": (40, 178, 50, 40, "key"), "HOME": (40, 230, 50, 40, "key"),
+             "SHIFT": (40, 360, 84, 44, "key"), "ENTER": (340, 360, 84, 44, "key"), "RETURN": (40, 178, 50, 40, "key"), "HOME": (40, 230, 50, 40, "key"),
              "LEFT": (59, 598, 120, 52, "key"), "MENU": (193, 598, 120, 52, "key"), "RIGHT": (327, 598, 120, 52, "key"),
              "REC": (59, 668, 120, 70, "key"), "STOP": (193, 668, 120, 70, "key"), "PLAY": (327, 668, 120, 70, "key")}
     if name in fixed:
@@ -377,8 +378,8 @@ def tour():
         v.pad(9, gap=0.9)
     v.turn("1", 1, "KNOB 1  ENGINE", 0.25, after=0.4)
 
-    v.say("INSTRUMENTS", "SHIFT + K1 changes kit. The MUSIC kit is a band: drums, FM bass, FM keys, brass, strings.")
-    v.shift_btn("K1", "SHIFT + K1  the MUSIC kit", gap=1.2)
+    v.say("INSTRUMENTS", "SHIFT + ENTER changes kit. The MUSIC kit is a band: drums, FM bass, FM keys, brass, strings.")
+    v.shift_btn("ENTER", "SHIFT + ENTER  the MUSIC kit", gap=1.2)
     for n in (3, 2, 13, 7):
         v.pad(n, gap=0.7)
     v.say("INSTRUMENTS", "The keys play the selected sound in tune - any sound is an instrument.")

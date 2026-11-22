@@ -28,7 +28,7 @@ instruments in that style, not recordings of an orchestra. The wavetables are co
 Built with the VIBE FM SDK. Status: v1.0, firmware 1.6.0. The synth, the device UI and the device side of the link are
 tested in the SDK's tools; the Unity package is tested in Unity 6.3 with the demo project's editor and Play mode tests.
 Not tried yet: the hardware and the plugin. The link was run against the SDK's emulator over a virtual MIDI cable, last
-with firmware 1.4.0.
+with firmware 1.6.0 on 22 Nov 2026.
 
 **New in firmware 1.6.0: a finer grid.** Each pattern has its own grid: 1/16, 1/32 or 1/64, which is 16, 32 or 64
 steps for a full bar. SHIFT + F5 and SHIFT + F6 on SEQ and AUTO make it coarser or finer; finer changes nothing you
@@ -44,9 +44,9 @@ What that means for older versions: a firmware up to 1.5.0 drops the new song me
 package refuses in words before it sends a format-6 song to one; and a Unity package from before firmware 1.6.0 does not read
 a format-6 song. Update both together.
 
-All of it is tested by scripts against the built firmware (below, "Build"). It was not run on the hardware, in the
-plugin or over MIDI against the emulator – the link was last tested end to end with 1.4.0 – and nobody has played
-or listened to it yet.
+All of it is tested by scripts against the built firmware (below, "Build"). Over MIDI against the emulator the six
+link tests passed with 1.6.0, with songs of sixteenths only: a pattern at 1/32 or 1/64 has not crossed a MIDI port.
+It was not run on the hardware or in the plugin, and nobody has played or listened to it yet.
 
 **New in firmware 1.5.0: the sequencer.** PLAY plays what the top line says, LOOP (the pattern repeats) or SONG (the
 arrangement); REC switches to LOOP, so a pattern stays under your hands while you play into it; F2 is UNDO on the
@@ -122,7 +122,7 @@ pattern, a DAW's song position at a finer grid, and undo of RAMP, FILL and a son
 The short version; [the manual](docs/MANUAL.md) is the long one.
 
 - **Two kits** – SFX (the game's sound effects, beside the song) and MUSIC (the instruments the song plays, through the
-  mixer), 16 sounds each. SHIFT + K1 changes kit; the song pages choose MUSIC by themselves. The top line says which.
+  mixer), 16 sounds each. SHIFT + ENTER changes kit; the song pages choose MUSIC by themselves. The top line says which.
 
 - **MENU** – the tour: SFX FORGE plays and names what it can do, a caption at a time (about 40 s: the sounds, shaping
   one, MUTATE, notes, instruments, wavetables, the song, its layers, cued patterns, the link). Any touch ends it;
@@ -402,17 +402,18 @@ device. Tested in `tests/dotnet` (a format-5 song renders bit for bit as before;
 same samples; both shapes of the song message) and by eight EditMode tests of the song's Inspector. Nobody has
 listened to a finer pattern in Unity, and the demo song and the showcase use sixteenths only.
 
-The numbers, as last run: `sh build.sh` 20 suites, all passing; `tests/dotnet` 204 checks, all passing with the
+The numbers, as last run: `sh build.sh` 22 suites, all passing; `tests/dotnet` 204 checks, all passing with the
 package's own `sfxforge.dll`; `tests/unity-inspectors` 169 of 169 EditMode tests; the demo project, headless on a
 copy, the showcase's 32 editor checks and 41 Play mode tests, of which 26 passed and 15 were skipped (the takes that
 need a device or the emulator or that record, and only run when asked for by name). The showcase's standalone build
 and its probe were last run before the tools, `loopPattern` and the firmwares 1.5 and 1.6, and not again.
 
-The link is tested end to end against the SDK's emulator over a virtual MIDI cable, last with firmware 1.4.0.
-Firmware 1.6.0 changed the song message and the identity, and was not run against it: its messages were handed to
-the built firmware and to the package's receiver by tests, not sent through a MIDI port. What was run with 1.4.0:
-patches and the song from the
-device, a song and its sounds to the device, the game driving the device. Not tested: the hardware, the plugin,
+The link is tested end to end against the SDK's emulator over a virtual MIDI cable, last with firmware 1.6.0 on
+22 Nov 2026: the six link tests passed. What was run: a patch and the song from the device, the identity, a song
+and its sounds to the device, the game's messages leaving for the device. Every pattern in those songs has 16 steps: a song with
+a pattern at 1/32 or 1/64 was only handed to the built firmware and to the package's receiver by tests, not sent
+through a MIDI port. The recorded session, with SEND and EXPORT pressed on the device, was last run with 1.4.0.
+Not tested: the hardware, the plugin,
 pads and encoders coming from the device, and the window's and the Inspectors' keys against a device (their tests
 show them a model, not a link; nobody has opened the real window or Inspector). See
 [section 6 of the Unity manual](docs/UNITY.md#6-from-the-device-to-the-game). The demo's song came in as a file.

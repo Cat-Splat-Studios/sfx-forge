@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: MIT
  * SFX FORGE – sound effects, instruments and adaptive music for games, on VIBE FM.
  *
- *   two kits     SFX (the game's sound effects) and MUSIC (the instruments the song plays): 16 sounds each, SHIFT + K1
+ *   two kits     SFX (the game's sound effects) and MUSIC (the instruments the song plays): 16 sounds each. SHIFT +
+ *                ENTER (a short press) changes kit
  *   16 pads      the kit's 16 sounds, each a 28-byte patch (core/sfx_core.h). Five engines: IMPACT, UI BLIP, SCI-FI FM, FOLEY,
  *                WAVETABLE – with envelopes, an LFO, and sends to a chorus, a delay and a reverb
  *   keys         the selected sound as an instrument, in tune, 16 voices
@@ -1534,7 +1535,7 @@ void vibe_on_init(float sample_rate)
 static const char *const HELP_SOUND[] = {
   "PADS  DATA", "play a sound and select it · select one",
   "KEYS", "the selected sound as an instrument",
-  "SHIFT + K1", "the other kit: SFX (effects) / MUSIC",
+  "SHIFT + ENTER", "the other kit: SFX (effects) / MUSIC",
   "ENCODER 1-4", "the four values shown (SHIFT: fast)",
   "K1 SOUND", "again: OSC, TONE, FILTER (WAVE)",
   "K2 - K6", "ENV · LFO · FX · SEQ · LINK",
@@ -1591,6 +1592,7 @@ static const char *const HELP_LINK[] = {
   "IN: NOTES", "36-51 play the pads",
   "F5 EXPORT", "the selected sound as SysEx",
   "SONG: F5", "SEND: all sounds and the song",
+  "SHIFT + ENTER", "the other kit: SFX (effects) / MUSIC",
   "MENU", "the tour",
 };
 
@@ -1636,9 +1638,17 @@ static void pick(int slot, int down)                 /* hear a pad's sound and s
   send(M_TRIGGER, slot, slot, 0.8f, 0);
 }
 
+#define FOCUS_KEY 0x40001000                         /* what vf_focus() says for a vf_key stand-in: this + the button (the SDK's
+                                                        own number, not in its headers: tests/check-grid-keys.mjs watches it) */
 static void on_event(const vibe_event *e)
 {
-  int id, r = vf_event(e, &id);
+  /* SHIFT + ENTER (or DATA pressed), a short press: the other kit. It is ours before FOCUS looks at it, so it does the
+     same whether a frame is on a value or a page or on nothing. One case stays FOCUS': the frame on F1-F6. There ENTER
+     presses that key, and with SHIFT held it is SHIFT + that key (the preset before, DEMO, the grid) - the only way to
+     them for a controller without F keys. (ENTER held is FOCUS' too: the SDK keeps that press and we never see it.) */
+  int on_soft = vf_active() && vf_focus() >= FOCUS_KEY + VB_F1 && vf_focus() <= FOCUS_KEY + VB_F6;
+  int kit_key = e->type == VIBE_EV_BUTTON && (e->id == VB_ENTER || e->id == VB_DATA_PUSH) && shift && !on_soft;
+  int id, r = kit_key ? VF_NO : vf_event(e, &id);
   out_pump(); seq_poll();
   if (r != VF_NO) return;
   if (tour_on && e->down && (e->type == VIBE_EV_PAD || e->type == VIBE_EV_NOTE || (e->type == VIBE_EV_BUTTON && e->id != VB_SHIFT))) { tour_end(); return; }   /* any touch ends the tour */
@@ -1699,7 +1709,9 @@ static void on_event(const vibe_event *e)
     else if (e->id == VB_MENU) { if (shift) factory_reset(); else tour_start(); }
     else if (e->id == VB_LEFT || e->id == VB_RIGHT) arrow(e->id == VB_LEFT ? -1 : 1);
     else if (e->id >= VB_F1 && e->id <= VB_F6) { int f = e->id - VB_F1; if (page == PG_SEQ) soft_seq(f); else if (page == PG_SONG) soft_song(f); else if (page == PG_AUTO) soft_auto(f); else if (mix_page()) soft_mix(f); else soft_sound(f); }
-    else if (e->id == VB_K1 && shift) { kit_set(!kit); if (!sound_page()) set_page(PG_OSC); say(kit == KIT_SFX ? "SFX KIT" : "MUSIC KIT"); }   /* SHIFT + SOUND: the other kit */
+    else if (kit_key) { kit_set(!kit); if (!sound_page()) set_page(PG_OSC); say(kit == KIT_SFX ? "SFX KIT" : "MUSIC KIT"); }
+    /* (K1-K6 are the pages with SHIFT held too. On the VIBE itself SHIFT + K1-K6 never get here: there the VIBE plays
+       notes with them, SDK 28, and SHIFT + RETURN locks that. Nothing of ours is on either.) */
     else if (e->id >= VB_K1 && e->id < VB_K1 + TAB_COUNT) tab_key(e->id - VB_K1);
     break;
   default: break;
@@ -2039,7 +2051,7 @@ static void header(uint32_t rgb, uint32_t pos, uint32_t now)
     int w = vg_text(pad_name(sel), 46, 6, VG_BIG, TEXT, VG_LEFT);
     if (pad_preset[sel] >= 0 && 54 + w < 230) vg_text(ENGINE_NAME[patches[sel].engine], 54 + w, 12, VG_SMALL, rgb, VG_LEFT);
     if (!pill) {
-      vg_round(318, 8, 50, 18, 4, kit == KIT_SFX ? 0x3A2A22 : 0x4A3222);                /* the kit (SHIFT + K1) */
+      vg_round(318, 8, 50, 18, 4, kit == KIT_SFX ? 0x3A2A22 : 0x4A3222);                /* the kit (SHIFT + ENTER) */
       vg_text(KIT_NAME[kit], 343, 9, VG_SMALL, kit == KIT_SFX ? 0xFF8A5C : 0x7FC4FF, VG_CENTER);
     }
   }

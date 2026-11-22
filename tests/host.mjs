@@ -12,8 +12,8 @@ import fs from 'fs';
 
 export const HEAD = [0xF0, 0x7D, 0x56, 0x42];
 export const SECOND = 375;   // blocks of 128 at 48 kHz
-export const BUTTON = { F1: 0, F2: 1, F3: 2, F4: 3, F5: 4, F6: 5, SHIFT: 6, K1: 10, K2: 11, K3: 12, K4: 13, K5: 14, K6: 15,
-                        RETURN: 16, HOME: 17, LEFT: 18, MENU: 19, RIGHT: 20, REC: 21, STOP: 22, PLAY: 23 };
+export const BUTTON = { F1: 0, F2: 1, F3: 2, F4: 3, F5: 4, F6: 5, SHIFT: 6, ENTER: 9, K1: 10, K2: 11, K3: 12, K4: 13, K5: 14, K6: 15,
+                        RETURN: 16, HOME: 17, LEFT: 18, MENU: 19, RIGHT: 20, REC: 21, STOP: 22, PLAY: 23, DATA_PUSH: 24 };
 
 export function load(wasmFile) {
   const mod = new WebAssembly.Module(fs.readFileSync(wasmFile));

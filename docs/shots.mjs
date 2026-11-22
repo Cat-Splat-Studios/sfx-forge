@@ -18,7 +18,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SDK = process.env.VIBE_SDK || path.join(ROOT, '.tools', 'vibe-fm-sdk');
 const WASM = path.join(ROOT, 'build', 'sfx-forge.wasm');
 const OUT = path.resolve(process.argv[2] || path.join(ROOT, 'out', 'doc'));
-const BUTTON = { F1: 0, F2: 1, F3: 2, F4: 3, F5: 4, F6: 5, SHIFT: 6, K1: 10, K2: 11, K3: 12, K4: 13, K5: 14, K6: 15,
+const BUTTON = { F1: 0, F2: 1, F3: 2, F4: 3, F5: 4, F6: 5, SHIFT: 6, ENTER: 9, K1: 10, K2: 11, K3: 12, K4: 13, K5: 14, K6: 15,
                  RETURN: 16, HOME: 17, LEFT: 18, MENU: 19, RIGHT: 20, REC: 21, STOP: 22, PLAY: 23 };
 const ENCODER = { 1: 0, 2: 1, 3: 2, 4: 3, A: 4, B: 5, DATA: 6 };
 const BAR = 2.0, STEP = BAR / 16;                    // the factory song: 120 BPM, 16 sixteenths a bar
@@ -63,10 +63,10 @@ scene('sfx').pad(9).wait(1.2).shot('t-sfx-1')
   .btn('K2').turn(2, 30).wait(1.6).shot('t-sfx-4');
 
 // ---- a wavetable sound's fourth page ---------------------------------------------------------------------------------------
-scene('wave').shift('K1').turn('DATA', 15).btn('K1').btn('K1').btn('K1').wait(2.5).shot('music-wave');
+scene('wave').shift('ENTER').turn('DATA', 15).btn('K1').btn('K1').btn('K1').wait(2.5).shot('music-wave');
 
 // ---- automation: the knob turned last, two points, RAMP - on the device, on the stage, and the mark on the sound's page --------
-scene('auto').shift('K1').turn('DATA', 6).btn('K1').turn(2, 2)
+scene('auto').shift('ENTER').turn('DATA', 6).btn('K1').turn(2, 2)
   .btn('K5').btn('K5').btn('K5')
   .pad(1).turn(2, -40).pad(16).turn(2, 45).btn('F3')
   .wait(2.6).shot('lanes-auto').stage('auto-stage')

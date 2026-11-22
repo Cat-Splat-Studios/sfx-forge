@@ -191,8 +191,8 @@ def cheat():
     big, f, b, sm = font(34), font(17, False), font(17), font(14, False)
     d.text((30, 22), "SFX FORGE", font=big, fill=text)
     d.text((250, 36), "cheat sheet  -  every page, every shortcut", font=f, fill=dim)
-    d.text((W - 30 - d.textlength("two kits of 16 sounds: SFX and MUSIC  ·  SHIFT + K1 changes kit", font=sm), 38),
-           "two kits of 16 sounds: SFX and MUSIC  ·  SHIFT + K1 changes kit", font=sm, fill=dim)
+    d.text((W - 30 - d.textlength("two kits of 16 sounds: SFX and MUSIC  ·  SHIFT + ENTER changes kit", font=sm), 38),
+           "two kits of 16 sounds: SFX and MUSIC  ·  SHIFT + ENTER changes kit", font=sm, fill=dim)
     rows = [
         ("K1", "SOUND", [("OSC", "ENGINE · FREQ · PITCH ENV · ENV TIME", "picture: the whole sound"), ("TONE", "A · B · NOISE · CRUSH", "A B: the engine's own two (below)"),
                          ("FILTER", "CUTOFF · RESO · FILTER ENV · F.ENV TIME", "picture: the filter's curve"), ("WAVE", "TABLE · SPREAD", "wavetable sounds only")]),
@@ -272,7 +272,7 @@ def cheat():
         ("REC + PLAY", "play it in: pads the kit, keys the notes. It loops"), ("F4 held  (REC)", "ERASE the selected sound as the bar passes"),
         ("F2", "UNDO one step: edits, a take, a key. Again: redo")])
     block(560, y0, "WITH SHIFT", [
-        ("K1", "the other kit: SFX / MUSIC"), ("REC", "the metronome off / on"), ("MENU  MENU", "factory reset"), ("F1  (sound pages)", "the preset before"),
+        ("ENTER", "the other kit: SFX / MUSIC"), ("REC", "the metronome off / on"), ("MENU  MENU", "factory reset"), ("F1  (sound pages)", "the preset before"),
         ("an encoder", "turn fast"), ("A  (K5 pages)", "the swing"),
         ("F5  F6  (SEQ, AUTO)", "the pattern's grid: 1/16, 1/32, 1/64"), ("LEFT  RIGHT", "SEQ, AUTO: the 16 steps before / after"), ("a pad  (SEQ, AUTO)", "hear and select that sound"),
         ("a pad  (MIX)", "solo"), ("pad 1-8  (SONG)", "add that pattern as a bar"), ("pad 9-15  (SONG)", "take the last bar away"),

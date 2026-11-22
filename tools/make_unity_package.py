@@ -566,9 +566,9 @@ def make_firmware(target):
                "SysEx and stored files, in a small host of the source repository's own: its checks hand the built `.wasm`\n"
                "events and SysEx and read its sound, its MIDI and what it stores, and all 20 of them pass. A few of them also\n"
                "compare the display, to tell that it changed or that the LINK light is on: what a page shows and what a toast\n"
-               "says is not read. It was not run against\n"
-               "Unity: the link tests of the Unity manual were last run with firmware 1.4.0, in the SDK's local emulator, and\n"
-               "were not repeated with this build. It was not run in the plugin or on hardware, and nobody has listened to\n"
+               "says is not read. Against\n"
+               "Unity, the six link tests of the Unity manual passed with firmware 1.6.0 in the SDK's local emulator on\n"
+               "22 Nov 2026, with songs of sixteenths only. It was not run in the plugin or on hardware, and nobody has listened to\n"
                "what is new in it. Its source is not in this package.\n\n"
                "New in 1.6.0: each pattern has its own grid of 1/16, 1/32 or 1/64, which is 16, 32 or 64 steps a bar (SHIFT+F5\n"
                "and SHIFT+F6 on the SEQ and AUTO pages: coarser and finer; SHIFT+LEFT and SHIFT+RIGHT: the 16 steps before and\n"
@@ -908,10 +908,10 @@ Tested, on one machine (Windows 11, Unity {unity_tested}), in the repository thi
   second `SfxMusicPlayer` with the demo song. With `loopPattern` on it stays on its pattern for more than three
   bars; with it off the arrangement goes on. The run was headless and muted: nobody heard it.
 - The link, end to end against the VIBE FM SDK's emulator over a virtual MIDI cable (loopMIDI): patches and the song
-  from the device to Unity, a song and its sounds from Unity to the device, the game's intensity driving the device,
-  SEND and EXPORT pressed on the device arriving in a running game, and the device saying what it is. That was done
-  with firmware 1.4.0. The firmware in this package is 1.6.0, which changed the song message and the identity, and
-  the link was not run again with it (below).
+  from the device to Unity, a song and its sounds from Unity to the device, the game's messages leaving for the
+  device, and the device saying what it is. That was done with firmware 1.6.0, the one in this package, on
+  22 Nov 2026: six tests, all passed, with songs of sixteenths only. SEND and EXPORT pressed on the device arriving
+  in a running game, and the device's INTENSITY following the game, were last seen with firmware 1.4.0 (below).
 - The firmware in this package (1.6.0): all 20 of its own checks pass. They run the built `.wasm` in the SDK's
   command-line tools and in a small host of the source repository's own (for SysEx and stored files), without the
   emulator's page and without Unity, and read its sound, its MIDI, what it stores
@@ -992,9 +992,10 @@ Not tested:
   does not clip. They do not say that it sounds good or is balanced.
 - A device that speaks another format. Refusing to send to one was only tried with identities made up by the
   tests, also for the one case that exists now: a firmware up to 1.5.0, which speaks song format 5.
-- **Firmware 1.6.0 against Unity.** The link tests were last run with 1.4.0. 1.6.0 and 1.5.0 were run by their own
-  checks only: not over MIDI against the emulator, not in the plugin, not on hardware. So the new song message has
-  not travelled through a MIDI port: the firmware's checks and the package's checks each read the other's bytes.
+- **Firmware 1.6.0 against Unity, beyond the six link tests.** They passed with 1.6.0 in the emulator, but every
+  pattern of the songs that crossed has 16 steps: a song with a pattern at 1/32 or 1/64 has not travelled through a
+  MIDI port, only through the firmware's checks and the package's checks, which each read the other's bytes. SEND
+  and EXPORT pressed on the device were last tried with 1.4.0. Not in the plugin, not on hardware.
 - **An older firmware or an older package with this one.** That a firmware up to 1.5.0 drops the new song message
   without a word, and what a package from before firmware 1.6.0 does with a format-6 song asset (the banner of a newer
   asset, then NO SONG YET and silence), is read from their code. Neither was run.
@@ -1156,7 +1157,7 @@ version are new; namespaces, assembly names and asset GUIDs are unchanged.
   one profile id; nothing can be targeted at another, and nothing converts a newer patch, song or asset.
 - `loopPattern` is tested in the engine through the native library, and inside Unity by one Play mode test of the
   sample, headless and muted; nobody has listened to it. Firmware {firmware} passes its own checks; the link was
-  last run against 1.4.0.
+  last run against it in the emulator (six tests, songs of sixteenths only).
 - The tools for designing sounds are measured, not heard: nobody has listened to a generated sound, a variant or
   a baked file. A variation set that is not baked plays only where the native library is, and nothing checks at
   build time that a set is baked or up to date.
