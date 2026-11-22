@@ -8,30 +8,30 @@ using UnityEngine;
 namespace Inspector.Harness
 {
     /// <summary>
-    /// SfxUnits against the firmware. The table: values read off the device's own pictures (out/*.png, docs/img/stage.png)
-    /// with the raw values of the factory sounds they show (PRESETS in sfx-forge.c), and the ends of each range as
-    /// docs/MANUAL.md "Every value" states them.
+    /// SfxUnits against the firmware. The table: values read off the device's own pictures (out/*.png,
+    /// docs/img/stage.png) with the raw values of the factory sounds they show (PRESETS in sfx-forge/fw_sounds.h), and
+    /// the ends of each range as docs/MANUAL.md "Every value" states them.
     /// </summary>
     public class SfxUnitsTests
     {
         static readonly object[] Table =
         {
             // the pictures
-            new object[] { SfxParam.BaseFreq, 30, "94Hz" },            // sound.png: CRACKLE
-            new object[] { SfxParam.PitchEnvDecay, 0, "5ms" },         // sound.png
-            new object[] { SfxParam.PitchEnvAmount, 64, "0" },         // sound.png
-            new object[] { SfxParam.AmpDecay, 60, "167ms" },           // env.png: ENGINE HUM
-            new object[] { SfxParam.Release, 34, "30ms" },             // env.png
-            new object[] { SfxParam.Attack, 0, "2ms" },                // env.png
-            new object[] { SfxParam.Sustain, 127, "100%" },            // env.png
-            new object[] { SfxParam.LfoRate, 87, "4.9Hz" },            // lfo.png: STRINGS
-            new object[] { SfxParam.LfoPitch, 12, "9%" },              // lfo.png
-            new object[] { SfxParam.LfoFilter, 0, "0%" },              // lfo.png
-            new object[] { SfxParam.FilterCutoff, 96, "3.6kHz" },      // stage.png: FM BASS
-            new object[] { SfxParam.FilterRes, 10, "8%" },             // stage.png
-            new object[] { SfxParam.FilterEnv, 64, "0" },              // stage.png
-            new object[] { SfxParam.FilterEnvDecay, 40, "36ms" },      // stage.png
-            new object[] { SfxParam.Table, 0, "SAW-SQ" },              // wave.png
+            new object[] { SfxParam.BaseFreq, 30, "94Hz" }, // sound.png: CRACKLE
+            new object[] { SfxParam.PitchEnvDecay, 0, "5ms" }, // sound.png
+            new object[] { SfxParam.PitchEnvAmount, 64, "0" }, // sound.png
+            new object[] { SfxParam.AmpDecay, 60, "167ms" }, // env.png: ENGINE HUM
+            new object[] { SfxParam.Release, 34, "30ms" }, // env.png
+            new object[] { SfxParam.Attack, 0, "2ms" }, // env.png
+            new object[] { SfxParam.Sustain, 127, "100%" }, // env.png
+            new object[] { SfxParam.LfoRate, 87, "4.9Hz" }, // lfo.png: STRINGS
+            new object[] { SfxParam.LfoPitch, 12, "9%" }, // lfo.png
+            new object[] { SfxParam.LfoFilter, 0, "0%" }, // lfo.png
+            new object[] { SfxParam.FilterCutoff, 96, "3.6kHz" }, // stage.png: FM BASS
+            new object[] { SfxParam.FilterRes, 10, "8%" }, // stage.png
+            new object[] { SfxParam.FilterEnv, 64, "0" }, // stage.png
+            new object[] { SfxParam.FilterEnvDecay, 40, "36ms" }, // stage.png
+            new object[] { SfxParam.Table, 0, "SAW-SQ" }, // wave.png
             // the manual: the ends of each range
             new object[] { SfxParam.BaseFreq, 0, "20Hz" },
             new object[] { SfxParam.BaseFreq, 127, "14.5kHz" },
@@ -44,7 +44,8 @@ namespace Inspector.Harness
             new object[] { SfxParam.AmpDecay, 127, "3.9s" },
             new object[] { SfxParam.Release, 0, "5ms" },
             new object[] { SfxParam.Release, 127, "3.9s" },
-            new object[] { SfxParam.Attack, 127, "4.1s" },             // (the manual rounds it to 4 s: 0.0015 * 2^11.4 = 4.05)
+            // (the manual rounds it to 4 s: 0.0015 * 2^11.4 = 4.05)
+            new object[] { SfxParam.Attack, 127, "4.1s" },
             new object[] { SfxParam.LfoRate, 0, "0.1Hz" },
             new object[] { SfxParam.LfoRate, 127, "29Hz" },
             new object[] { SfxParam.Sustain, 0, "OFF" },
@@ -68,38 +69,57 @@ namespace Inspector.Harness
             new object[] { SfxParam.Attack, 100, "755ms" },
         };
 
-        // Every value of the parameters that go through vd_exp2, against param_text computed in IEEE float32 step by step
-        // as the C code does (units_table.py in the test project writes Assets/Data/units-float32.txt).
+        // Every value of the parameters that go through vd_exp2, against param_text computed in IEEE float32 step by
+        // step as the C code does (units_table.py in the test project writes Assets/Data/units-float32.txt).
         [Test]
         public void EveryCurvedValueIsTheFirmwaresFloatArithmetic()
         {
             string[] lines = File.ReadAllLines(Path.Combine(Application.dataPath, "Data", "units-float32.txt"));
-            int rows = 0, differ = 0;
+            int rows = 0;
+            int differ = 0;
             string first = "";
             foreach (string line in lines)
             {
                 string[] w = line.Split(' ');
-                if (w.Length != 3) continue;
+                if (w.Length != 3)
+                {
+                    continue;
+                }
+
                 var k = (SfxParam)System.Enum.Parse(typeof(SfxParam), w[0]);
                 string here = SfxUnits.ParamText(k, int.Parse(w[1]));
                 rows++;
-                if (here == w[2]) continue;
+                if (here == w[2])
+                {
+                    continue;
+                }
+
                 differ++;
-                if (first.Length == 0) first = line + " but here " + here;
+                if (first.Length == 0)
+                {
+                    first = line + " but here " + here;
+                }
             }
+
             Assert.AreEqual(8 * 128, rows);
             Assert.AreEqual(0, differ, first);
             Debug.Log($"UNITS {rows} texts of 8 curved parameters equal the firmware's float32 arithmetic");
         }
 
         [TestCaseSource(nameof(Table))]
-        public void ValueAsTheDisplayWritesIt(SfxParam k, int v, string text) => Assert.AreEqual(text, SfxUnits.ParamText(k, v));
+        public void ValueAsTheDisplayWritesIt(SfxParam k, int v, string text) =>
+            Assert.AreEqual(text, SfxUnits.ParamText(k, v));
 
         [Test]
         public void EveryValueOfEveryParameterHasAText()
         {
             for (int k = 0; k < SfxPatch.ParamCount; k++)
-                for (int v = 0; v <= 127; v++) Assert.IsNotEmpty(SfxUnits.ParamText((SfxParam)k, v));
+            {
+                for (int v = 0; v <= 127; v++)
+                {
+                    Assert.IsNotEmpty(SfxUnits.ParamText((SfxParam)k, v));
+                }
+            }
         }
 
         [Test]
@@ -132,10 +152,17 @@ namespace Inspector.Harness
                 Assert.AreEqual(4, page.Length);
                 foreach (int k in page)
                 {
-                    if (k == SfxUnits.EngineKnob) engines++;
-                    else if (k != SfxUnits.NoKnob) Assert.IsTrue(seen.Add(k), "twice: " + (SfxParam)k);
+                    if (k == SfxUnits.EngineKnob)
+                    {
+                        engines++;
+                    }
+                    else if (k != SfxUnits.NoKnob)
+                    {
+                        Assert.IsTrue(seen.Add(k), "twice: " + (SfxParam)k);
+                    }
                 }
             }
+
             Assert.AreEqual(1, engines);
             Assert.AreEqual(SfxPatch.ParamCount, seen.Count);
         }
@@ -155,30 +182,50 @@ namespace Inspector.Harness
             Assert.AreEqual("120ms", SfxUnits.TimeText(0.12f));
             Assert.AreEqual("1.4s", SfxUnits.TimeText(1.4f));
             Assert.AreEqual("1.50s", SfxUnits.HoldText(1.5f));
-            Assert.IsTrue(SfxUnits.TryParseSeconds("2sec", out float s)); Assert.AreEqual(2f, s);
-            Assert.IsTrue(SfxUnits.TryParseSeconds("250 ms", out s)); Assert.AreEqual(0.25f, s);
+            Assert.IsTrue(SfxUnits.TryParseSeconds("2sec", out float s));
+            Assert.AreEqual(2f, s);
+            Assert.IsTrue(SfxUnits.TryParseSeconds("250 ms", out s));
+            Assert.AreEqual(0.25f, s);
             Assert.IsFalse(SfxUnits.TryParseSeconds("1k", out s));
-            Assert.IsTrue(SfxUnits.Magnitude("3.6 kHz", out double m, out string unit)); Assert.AreEqual(3600.0, m); Assert.AreEqual("khz", unit);
+            Assert.IsTrue(SfxUnits.Magnitude("3.6 kHz", out double m, out string unit));
+            Assert.AreEqual(3600.0, m);
+            Assert.AreEqual("khz", unit);
         }
 
         [Test]
         public void TypedValues()
         {
             int v;
-            Assert.IsTrue(SfxUnits.TryParse(SfxParam.FilterCutoff, "3.6kHz", out v)); Assert.AreEqual("3.6kHz", SfxUnits.ParamText(SfxParam.FilterCutoff, v));
-            Assert.IsTrue(SfxUnits.TryParse(SfxParam.FilterCutoff, "3.6 khz", out v)); Assert.AreEqual("3.6kHz", SfxUnits.ParamText(SfxParam.FilterCutoff, v));
-            Assert.IsTrue(SfxUnits.TryParse(SfxParam.FilterCutoff, "200", out v)); Assert.AreEqual("197Hz", SfxUnits.ParamText(SfxParam.FilterCutoff, v));   // the nearest there is
-            Assert.IsTrue(SfxUnits.TryParse(SfxParam.AmpDecay, "1.2s", out v)); Assert.AreEqual("1.2s", SfxUnits.ParamText(SfxParam.AmpDecay, v));
-            Assert.IsTrue(SfxUnits.TryParse(SfxParam.AmpDecay, "167", out v)); Assert.AreEqual(60, v);
-            Assert.IsTrue(SfxUnits.TryParse(SfxParam.Sustain, "off", out v)); Assert.AreEqual(0, v);
-            Assert.IsTrue(SfxUnits.TryParse(SfxParam.Sustain, "100", out v)); Assert.AreEqual(127, v);
-            Assert.IsTrue(SfxUnits.TryParse(SfxParam.PitchEnvAmount, "+32", out v)); Assert.AreEqual(96, v);
-            Assert.IsTrue(SfxUnits.TryParse(SfxParam.PitchEnvAmount, "-20", out v)); Assert.AreEqual(44, v);
-            Assert.IsTrue(SfxUnits.TryParse(SfxParam.PitchEnvAmount, "0", out v)); Assert.AreEqual(64, v);
-            Assert.IsTrue(SfxUnits.TryParse(SfxParam.Reverb, "50%", out v)); Assert.AreEqual("50%", SfxUnits.ParamText(SfxParam.Reverb, v));
-            Assert.IsTrue(SfxUnits.TryParse(SfxParam.Level, "100", out v)); Assert.AreEqual(100, v);
-            Assert.IsTrue(SfxUnits.TryParse(SfxParam.Level, "999", out v)); Assert.AreEqual(127, v);
-            Assert.IsTrue(SfxUnits.TryParse(SfxParam.Table, "glass", out v)); Assert.AreEqual(5, v);
+            Assert.IsTrue(SfxUnits.TryParse(SfxParam.FilterCutoff, "3.6kHz", out v));
+            Assert.AreEqual("3.6kHz", SfxUnits.ParamText(SfxParam.FilterCutoff, v));
+            Assert.IsTrue(SfxUnits.TryParse(SfxParam.FilterCutoff, "3.6 khz", out v));
+            Assert.AreEqual("3.6kHz", SfxUnits.ParamText(SfxParam.FilterCutoff, v));
+
+            // the nearest there is
+            Assert.IsTrue(SfxUnits.TryParse(SfxParam.FilterCutoff, "200", out v));
+            Assert.AreEqual("197Hz", SfxUnits.ParamText(SfxParam.FilterCutoff, v));
+            Assert.IsTrue(SfxUnits.TryParse(SfxParam.AmpDecay, "1.2s", out v));
+            Assert.AreEqual("1.2s", SfxUnits.ParamText(SfxParam.AmpDecay, v));
+            Assert.IsTrue(SfxUnits.TryParse(SfxParam.AmpDecay, "167", out v));
+            Assert.AreEqual(60, v);
+            Assert.IsTrue(SfxUnits.TryParse(SfxParam.Sustain, "off", out v));
+            Assert.AreEqual(0, v);
+            Assert.IsTrue(SfxUnits.TryParse(SfxParam.Sustain, "100", out v));
+            Assert.AreEqual(127, v);
+            Assert.IsTrue(SfxUnits.TryParse(SfxParam.PitchEnvAmount, "+32", out v));
+            Assert.AreEqual(96, v);
+            Assert.IsTrue(SfxUnits.TryParse(SfxParam.PitchEnvAmount, "-20", out v));
+            Assert.AreEqual(44, v);
+            Assert.IsTrue(SfxUnits.TryParse(SfxParam.PitchEnvAmount, "0", out v));
+            Assert.AreEqual(64, v);
+            Assert.IsTrue(SfxUnits.TryParse(SfxParam.Reverb, "50%", out v));
+            Assert.AreEqual("50%", SfxUnits.ParamText(SfxParam.Reverb, v));
+            Assert.IsTrue(SfxUnits.TryParse(SfxParam.Level, "100", out v));
+            Assert.AreEqual(100, v);
+            Assert.IsTrue(SfxUnits.TryParse(SfxParam.Level, "999", out v));
+            Assert.AreEqual(127, v);
+            Assert.IsTrue(SfxUnits.TryParse(SfxParam.Table, "glass", out v));
+            Assert.AreEqual(5, v);
             Assert.IsFalse(SfxUnits.TryParse(SfxParam.Level, "abc", out v));
             Assert.IsFalse(SfxUnits.TryParse(SfxParam.Level, "", out v));
         }

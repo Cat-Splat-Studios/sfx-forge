@@ -7,7 +7,11 @@ namespace SfxDemo
     {
         void Update() => transform.Rotate(0f, 120f * Time.deltaTime, 0f, Space.World);
 
-        public void Respawn(float range)
-            => transform.position = new Vector3(Random.Range(-range, range), transform.position.y, Random.Range(-range, range));
+        public void Respawn(float range) =>
+            transform.position = new Vector3(
+                Random.Range(-range, range),
+                transform.position.y,
+                Random.Range(-range, range)
+            );
     }
 }

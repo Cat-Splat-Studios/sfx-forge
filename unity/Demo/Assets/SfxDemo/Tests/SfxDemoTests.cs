@@ -23,8 +23,12 @@ namespace SfxDemo.Tests
 
         static IEnumerator Until(System.Func<bool> condition, float seconds)
         {
-            float end = Time.realtimeSinceStartup + seconds;                // (real time: a frame after loading can be long)
-            while (Time.realtimeSinceStartup < end && !condition()) yield return null;
+            // (real time: a frame after loading can be long)
+            float end = Time.realtimeSinceStartup + seconds;
+            while (Time.realtimeSinceStartup < end && !condition())
+            {
+                yield return null;
+            }
         }
 
         [UnityTest]
@@ -47,7 +51,11 @@ namespace SfxDemo.Tests
             yield return new WaitForFixedUpdate();
             yield return null;
             Assert.Greater(senders[0].Normalized, 0.3f, "the sender reads the Rigidbody's speed");
-            Assert.Greater(craft.engineSound.pitchSemitones, 6f, "and the local player's pitch follows, as the device's would");
+            Assert.Greater(
+                craft.engineSound.pitchSemitones,
+                6f,
+                "and the local player's pitch follows, as the device's would"
+            );
             Assert.Greater(craft.engineSound.fm, 0.2f);
         }
 
@@ -88,7 +96,7 @@ namespace SfxDemo.Tests
         {
             var binding = Object.FindFirstObjectByType<SfxEncoderBinding>();
             Assert.IsNotNull(binding);
-            binding.onValue.Invoke(42f);                               // what a turn of encoder 1 on the device ends in
+            binding.onValue.Invoke(42f); // what a turn of encoder 1 on the device ends in
             yield return null;
             Assert.AreEqual(42f, craft.thrust, 0.001f);
         }

@@ -1,0 +1,47 @@
+# How every editor should write the files of this repository (https://editorconfig.org).
+# The formatters follow the same rules: .clang-format for C, .prettierrc for the .mjs / .js files, .csharpierrc
+# for C#.
+root = true
+
+[*.{c,h,cs,mjs,js,json,py,sh,md,txt,uss}]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+max_line_length = 120
+
+[*.{c,h,mjs,js,json,sh}]
+indent_size = 2
+trim_trailing_whitespace = true
+
+[*.{cs,py,uss}]
+indent_size = 4
+trim_trailing_whitespace = true
+
+# C#: CSharpier (.csharpierrc) lays the code out - where a line breaks, where a brace stands. These rules tell an IDE
+# the same, and what CSharpier does not do: one statement a line, braces round every body.
+#   dotnet tool install csharpier --version 1.4.1 --tool-path out/fmt/csharpier
+#   git ls-files -co --exclude-standard '*.cs' | tr '\n' '\0' | xargs -0 out/fmt/csharpier/csharpier format
+# (a table of data keeps its rows under "// csharpier-ignore")
+[*.cs]
+csharp_prefer_braces = true:suggestion
+csharp_preserve_single_line_statements = false
+csharp_preserve_single_line_blocks = true
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_space_after_cast = false
+dotnet_sort_system_directives_first = true
+
+# Markdown: two spaces at a line's end are a line break
+[*.md]
+trim_trailing_whitespace = false
+
+# Unity writes its own files (.meta, .asset, .unity, .mat, .asmdef): leave them as Unity made them
+
+# two files have Windows line ends in the repository: keep them so
+[{tests/guide.json,unity/Demo/Packages/manifest.json}]
+end_of_line = crlf

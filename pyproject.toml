@@ -1,0 +1,17 @@
+# The formatter of the Python scripts (docs/, docs/video/, tools/): black, as .clang-format is for C and .prettierrc
+# for the .mjs files.
+#   python -m pip install black==24.10.0
+#   python -m black docs tools
+# Tables of data that should stay aligned are kept from it with "# fmt: off" / "# fmt: on".
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+skip-string-normalization = true
+extend-exclude = '''
+(
+  ^/\.tools/
+  | ^/out/
+  | ^/unity/
+  | ^/tests/unity-inspectors/
+)
+'''

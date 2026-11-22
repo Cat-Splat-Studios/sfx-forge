@@ -21,6 +21,15 @@ the Vibe must be built (build/sfx-forge.zip, made by build.sh, which also strips
 and the SDK and Zig must be in .tools: the licence texts of what is compiled into the firmware and
 the native library are read from there (Documentation~/licenses).
 """
+# How this file reads, from top to bottom:
+#   the constants        VIDEOS is the one you edit when a video was made again
+#   small helpers        fail, src, need, read_text, write_text, replace_once, the .meta files, copying, run
+#   the target           prepare_target, install
+#   one make_* function for each part of the package, in the order build() calls them:
+#                        make_package_json, make_code, make_sample, make_manuals, make_videos, make_firmware,
+#                        make_licences, make_readme, make_companions
+#   the three checks     check_metas, check_privacy, check_links; report_sizes
+#   build, main          build() is the table of contents: read it first
 import hashlib
 import json
 import os
@@ -34,7 +43,8 @@ import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import strip_wasm_debug  # noqa: E402  (tools/strip_wasm_debug.py: what a .wasm must not hold)
+# tools/strip_wasm_debug.py: what a .wasm must not hold
+import strip_wasm_debug  # noqa: E402
 
 PACKAGE_ID = "com.catsplatstudios.sfxforge"
 OLD_PACKAGE_ID = "com.catsplat.sfxforge"
@@ -56,41 +66,70 @@ SRC_OLD_SONG = "unity/Demo/Assets/SfxDemo/DemoSong.bytes"
 
 # What this script owns at the target's root. A run removes exactly these and writes them again.
 # Anything else there (except .git) stops the run: it is not ours to delete or to leave in a package.
+# fmt: off
 OWNED = [
-    "package.json", "package.json.meta",
-    "README.md", "README.md.meta",
-    "CHANGELOG.md", "CHANGELOG.md.meta",
-    "LICENSE.md", "LICENSE.md.meta",
-    "Third Party Notices.md", "Third Party Notices.md.meta",
-    "Runtime", "Runtime.meta",
-    "Editor", "Editor.meta",
-    "Samples~", "Documentation~", "Firmware~",
-    ".gitignore", ".gitattributes",
+    "package.json", "package.json.meta", "README.md", "README.md.meta", "CHANGELOG.md", "CHANGELOG.md.meta",
+    "LICENSE.md", "LICENSE.md.meta", "Third Party Notices.md", "Third Party Notices.md.meta", "Runtime",
+    "Runtime.meta", "Editor", "Editor.meta", "Samples~", "Documentation~", "Firmware~", ".gitignore",
+    ".gitattributes",
 ]
+# fmt: on
 
 # The five videos: file, title, what it shows (one line), where the preview is cut (start, seconds),
 # where the poster frame is taken, and how long the whole video is expected to be (checked, +-2 s).
 VIDEOS = [
-    dict(file="sfx-forge-unity-link.mp4", title="The link: device and game, joined over MIDI", seconds=31,
-         shows="SFX FORGE in the emulator beside the game in Unity. SEND is pressed on the device and the song arrives in "
-               "the running game; a sound is mutated, EXPORT is pressed, and the game plays the patch.",
-         clip=(12.0, 13.5), poster=13.5),
-    dict(file="sfx-forge-unity-showcase.mp4", title="The showcase game, start to goal", seconds=115,
-         shows="*Brio: First Harmonic* played through, with a panel naming what SFX FORGE is doing at each moment: "
-               "the song's bar, the intensity, the layers, every sound and its route.",
-         clip=(28.0, 10.0), poster=33.0),
-    dict(file="sfx-forge-unity-how-it-works.mp4", title="How it works in Unity", seconds=246,
-         shows="The three ways to play a sound and the adaptive music, one at a time: a page of the showcase's code, "
-               "then the game doing it.",
-         clip=(143.0, 10.0), poster=150.0),
-    dict(file="sfx-forge-tour.mp4", title="The device: a tour", seconds=143,
-         shows="The instrument itself: sound effects, MUTATE, the five engines, the sequencer and its finer grid, layers that follow "
-               "INTENSITY, automation, the mixer, the link page.",
-         clip=(88.0, 10.0), poster=94.0),
-    dict(file="sfx-forge-build-a-song.mp4", title="The device: building the song", seconds=201,
-         shows="A song played in from nothing with pads and keys over a looping pattern, with ERASE and UNDO, a second pattern with a hi-hat roll "
-               "on a grid of 1/32, then arranged, layered, automated, mixed and sent to the game.",
-         clip=(24.0, 10.0), poster=32.5),
+    dict(
+        file="sfx-forge-unity-link.mp4",
+        title="The link: device and game, joined over MIDI",
+        seconds=31,
+        shows=(
+            "SFX FORGE in the emulator beside the game in Unity. SEND is pressed on the device and the song arrives "
+            "in the running game; a sound is mutated, EXPORT is pressed, and the game plays the patch."
+        ),
+        clip=(12.0, 13.5),
+        poster=13.5,
+    ),
+    dict(
+        file="sfx-forge-unity-showcase.mp4",
+        title="The showcase game, start to goal",
+        seconds=115,
+        shows="*Brio: First Harmonic* played through, with a panel naming what SFX FORGE is doing at each moment: "
+        "the song's bar, the intensity, the layers, every sound and its route.",
+        clip=(28.0, 10.0),
+        poster=33.0,
+    ),
+    dict(
+        file="sfx-forge-unity-how-it-works.mp4",
+        title="How it works in Unity",
+        seconds=246,
+        shows="The three ways to play a sound and the adaptive music, one at a time: a page of the showcase's code, "
+        "then the game doing it.",
+        clip=(143.0, 10.0),
+        poster=150.0,
+    ),
+    dict(
+        file="sfx-forge-tour.mp4",
+        title="The device: a tour",
+        seconds=143,
+        shows=(
+            "The instrument itself: sound effects, MUTATE, the five engines, the sequencer and its finer grid, "
+            "layers that follow INTENSITY, automation, the mixer, the link page."
+        ),
+        clip=(88.0, 10.0),
+        poster=94.0,
+    ),
+    dict(
+        file="sfx-forge-build-a-song.mp4",
+        title="The device: building the song",
+        seconds=201,
+        shows=(
+            "A song played in from nothing with pads and keys over a looping pattern, with ERASE and UNDO, a second "
+            "pattern with a hi-hat roll on a grid of 1/32, then arranged, layered, automated, mixed and sent to the "
+            "game."
+        ),
+        clip=(24.0, 10.0),
+        poster=32.5,
+    ),
 ]
 # The pictures of the editor UI the front page shows (docs/img, copied there by docs/unity_figures.py from what the
 # inspectors' tests rendered). The manual uses them too; they are named here so a missing one stops the run by name.
@@ -99,7 +138,11 @@ PREVIEW_WIDTH = 640
 PREVIEW_FPS = 10
 POSTER_WIDTH = 960
 
-TEXT_EXTENSIONS = {".md", ".cs", ".json", ".asmdef", ".meta", ".unity", ".asset", ".txt", ".gitignore", ".gitattributes", ""}
+# fmt: off
+TEXT_EXTENSIONS = {
+    ".md", ".cs", ".json", ".asmdef", ".meta", ".unity", ".asset", ".txt", ".gitignore", ".gitattributes", "",
+}
+# fmt: on
 ALLOWED_DRIVE_PATHS = ["C:/Program Files/Unity/Hub/Editor/", "C:\\\\somewhere\\\\", "C:\\somewhere\\"]
 
 
@@ -129,11 +172,14 @@ def write_text(path, text):
 
 
 def replace_once(text, old, new, where):
-    """A replacement that must find its text exactly once: if the source changed, say so instead of shipping a stale line."""
+    """A replacement that must find its text exactly once: if the source changed, say so instead of shipping a stale
+    line."""
     count = text.count(old)
     if count != 1:
-        fail("%s: expected exactly one occurrence of %r, found %d. The source changed: update tools/make_unity_package.py."
-             % (where, old[:90], count))
+        fail(
+            "%s: expected exactly one occurrence of %r, found %d. The source changed: update "
+            "tools/make_unity_package.py." % (where, old[:90], count)
+        )
     return text.replace(old, new)
 
 
@@ -157,7 +203,8 @@ def copy_file(source, destination):
 
 
 def copy_tree_with_metas(source, destination, what):
-    """Copies a Unity folder byte for byte and insists that every file and folder in it has its .meta (the GUIDs are the source's)."""
+    """Copies a Unity folder byte for byte and insists that every file and folder in it has its .meta (the GUIDs are
+    the source's)."""
     need(source, what)
     count = 0
     for folder, folders, files in os.walk(source):
@@ -190,6 +237,7 @@ def run(arguments, what):
 
 # ---------------------------------------------------------------- the target
 
+
 def prepare_target(target):
     target = os.path.abspath(target)
     root = os.path.abspath(ROOT)
@@ -200,8 +248,11 @@ def prepare_target(target):
             fail("the target exists and is not a folder")
         strangers = sorted(name for name in os.listdir(target) if name != ".git" and name not in OWNED)
         if strangers:
-            fail("the target holds things this script does not write, so it will not touch the folder: " + ", ".join(strangers))
-    return target                                # nothing is deleted or written here: see install()
+            fail(
+                "the target holds things this script does not write, so it will not touch the folder: "
+                + ", ".join(strangers)
+            )
+    return target  # nothing is deleted or written here: see install()
 
 
 def install(staging, target):
@@ -210,7 +261,7 @@ def install(staging, target):
     if strangers:
         fail("this script wrote something it does not own (add it to OWNED): " + ", ".join(strangers))
     os.makedirs(target, exist_ok=True)
-    for name in OWNED:                           # exactly these, by name
+    for name in OWNED:  # exactly these, by name
         path = os.path.join(target, name)
         if os.path.isdir(path) and not os.path.islink(path):
             shutil.rmtree(path)
@@ -222,20 +273,27 @@ def install(staging, target):
 
 # ---------------------------------------------------------------- package, sample
 
+
 def make_package_json(target):
     old = json.loads(read_text(need(src(SRC_PACKAGE, "package.json"), "the source package's manifest")))
     if old.get("name") != OLD_PACKAGE_ID:
         fail("the source package is no longer named " + OLD_PACKAGE_ID)
+    # fmt: off
     manifest = {
         "name": PACKAGE_ID,
         "version": VERSION,
         "displayName": DISPLAY_NAME,
-        "description": "Plays the sounds and songs of SFX FORGE, a game-audio synthesizer for VIBE FM, in a Unity game with the "
-                       "device's own engine: patches written in code or exported from the device become assets, sound effects are "
-                       "synthesized live or baked to clips, and a song's layers follow the game. Includes a MIDI link to the device "
-                       "for tuning while the game runs, the manuals, and a showcase game as a sample. Windows x64 only.",
+        "description": (
+            "Plays the sounds and songs of SFX FORGE, a game-audio synthesizer for VIBE FM, in a Unity game with "
+            "the device's own engine: patches written in code or exported from the device become assets, sound "
+            "effects are synthesized live or baked to clips, and a song's layers follow the game. Includes a MIDI "
+            "link to the device for tuning while the game runs, the manuals, and a showcase game as a sample. "
+            "Windows x64 only."
+        ),
         "unity": UNITY,
-        "keywords": ["audio", "synthesizer", "sound effects", "procedural audio", "adaptive music", "midi", "sysex", "vibe fm"],
+        "keywords": [
+            "audio", "synthesizer", "sound effects", "procedural audio", "adaptive music", "midi", "sysex", "vibe fm",
+        ],
         "author": AUTHOR,
         "license": "MIT",
         # The built-in modules the code uses: AudioSource and AudioMixer, the telemetry sender's Rigidbody,
@@ -252,34 +310,57 @@ def make_package_json(target):
             "com.unity.modules.screencapture": "1.0.0",
             "com.unity.modules.uielements": "1.0.0",
         },
-        "samples": [{
-            "displayName": SAMPLE_NAME,
-            "description": "Brio: First Harmonic, a one-level 2D platformer in which every sound is SFX FORGE at runtime: 19 sound effects written as "
-                           "patches in code and a song whose layers follow the player's speed. Needs the built-in render pipeline "
-                           "and the legacy Input Manager (or Both); its tests need the Test Framework package.",
-            "path": "Samples~/Showcase",
-        }],
+        "samples": [
+            {
+                "displayName": SAMPLE_NAME,
+                "description": (
+                    "Brio: First Harmonic, a one-level 2D platformer in which every sound is SFX FORGE at runtime: "
+                    "19 sound effects written as patches in code and a song whose layers follow the player's speed. "
+                    "Needs the built-in render pipeline and the legacy Input Manager (or Both); its tests need the "
+                    "Test Framework package."
+                ),
+                "path": "Samples~/Showcase",
+            }
+        ],
     }
+    # fmt: on
     write_text(os.path.join(target, "package.json"), json.dumps(manifest, indent=2, ensure_ascii=False))
-    copy_file(need(src(SRC_PACKAGE, "package.json.meta"), "the manifest's .meta"), os.path.join(target, "package.json.meta"))
+    copy_file(
+        need(src(SRC_PACKAGE, "package.json.meta"), "the manifest's .meta"), os.path.join(target, "package.json.meta")
+    )
 
 
 def make_code(target):
     counts = {}
     for name in ("Runtime", "Editor"):
-        counts[name] = copy_tree_with_metas(src(SRC_PACKAGE, name), os.path.join(target, name), "the package's " + name + " folder")
+        counts[name] = copy_tree_with_metas(
+            src(SRC_PACKAGE, name), os.path.join(target, name), "the package's " + name + " folder"
+        )
         copy_file(need(src(SRC_PACKAGE, name + ".meta"), name + ".meta"), os.path.join(target, name + ".meta"))
     plugin = need(os.path.join(target, "Runtime", "Plugins", "x86_64", "sfxforge.dll"), "the native plugin")
     # The plugin's platforms must be written down, not left to Unity's guess from the folder's name: a package
     # installed from a git URL is read-only, so Unity could not write them there.
     meta = read_text(plugin + ".meta")
-    wanted = ("PluginImporter:", "    Editor:\n      enabled: 1", "    Win64:\n      enabled: 1", "    Any:\n      enabled: 0",
-              "    Linux64:\n      enabled: 0", "    OSXUniversal:\n      enabled: 0", "    Win:\n      enabled: 0")
+    wanted = (
+        "PluginImporter:",
+        "    Editor:\n      enabled: 1",
+        "    Win64:\n      enabled: 1",
+        "    Any:\n      enabled: 0",
+        "    Linux64:\n      enabled: 0",
+        "    OSXUniversal:\n      enabled: 0",
+        "    Win:\n      enabled: 0",
+    )
     missing = [w.split("\n")[0].strip() for w in wanted if w not in meta]
     if missing:
-        fail("sfxforge.dll.meta does not pin the plugin to the editor and Windows x64 (looked at: %s). Set it in Unity's "
-             "Inspector (Editor + Windows x86_64 only), Apply, and keep the .meta." % ", ".join(missing))
-    for asmdef, name in (("Runtime/CatSplat.SfxForge.asmdef", "CatSplat.SfxForge"), ("Editor/CatSplat.SfxForge.Editor.asmdef", "CatSplat.SfxForge.Editor")):
+        fail(
+            "sfxforge.dll.meta does not pin the plugin to the editor and Windows x64 (looked at: %s). Set it in "
+            "Unity's "
+            "Inspector (Editor + Windows x86_64 only), Apply, and keep the .meta." % ", ".join(missing)
+        )
+    for asmdef, name in (
+        ("Runtime/CatSplat.SfxForge.asmdef", "CatSplat.SfxForge"),
+        ("Editor/CatSplat.SfxForge.Editor.asmdef", "CatSplat.SfxForge.Editor"),
+    ):
         if json.loads(read_text(os.path.join(target, asmdef))).get("name") != name:
             fail(asmdef + " is not the assembly " + name)
     return counts
@@ -288,19 +369,34 @@ def make_code(target):
 def make_sample(target):
     destination = os.path.join(target, "Samples~", "Showcase")
     count = copy_tree_with_metas(src(SRC_SHOWCASE), destination, "the showcase")
-    for name in ("Showcase.unity", "Song/DemoSong.asset", "Song/DemoSong.bytes", "Editor/SfxShowcase.Editor.asmdef", "Tests/SfxShowcase.Tests.asmdef"):
+    for name in (
+        "Showcase.unity",
+        "Song/DemoSong.asset",
+        "Song/DemoSong.bytes",
+        "Editor/SfxShowcase.Editor.asmdef",
+        "Tests/SfxShowcase.Tests.asmdef",
+    ):
         need(os.path.join(destination, name), "the showcase's " + name)
 
     # The song is kept twice in the source (the older demo has its own copy). They must be the same song.
-    with open(src(SRC_SHOWCASE, "Song", "DemoSong.bytes"), "rb") as a, open(need(src(SRC_OLD_SONG), "the older demo's song"), "rb") as b:
+    with (
+        open(src(SRC_SHOWCASE, "Song", "DemoSong.bytes"), "rb") as a,
+        open(need(src(SRC_OLD_SONG), "the older demo's song"), "rb") as b,
+    ):
         if a.read() != b.read():
-            fail("Showcase/Song/DemoSong.bytes and SfxDemo/DemoSong.bytes differ: copy the regenerated song to the showcase and rebuild it")
+            fail(
+                "Showcase/Song/DemoSong.bytes and SfxDemo/DemoSong.bytes differ: copy the regenerated song to the "
+                "showcase and rebuild it"
+            )
 
     # The tests must not break a project that has no Test Framework: the assembly is compiled only with it.
     tests = json.loads(read_text(os.path.join(destination, "Tests", "SfxShowcase.Tests.asmdef")))
     gate = [d.get("define") for d in tests.get("versionDefines", []) if d.get("name") == "com.unity.test-framework"]
     if not gate or gate[0] not in tests.get("defineConstraints", []):
-        fail("Tests/SfxShowcase.Tests.asmdef is not constrained on com.unity.test-framework (versionDefines + defineConstraints)")
+        fail(
+            "Tests/SfxShowcase.Tests.asmdef is not constrained on com.unity.test-framework (versionDefines + "
+            "defineConstraints)"
+        )
 
     # The scene must point at the sample's own song and at nothing outside the sample or the package.
     guids = set()
@@ -322,31 +418,59 @@ def make_sample(target):
                     if guid not in guids and not guid.startswith("0000000000000000"):
                         outside.add((name, guid))
     if outside:
-        fail("the showcase refers to assets that are not in the sample or the package: " + ", ".join("%s -> %s" % o for o in sorted(outside)))
+        fail(
+            "the showcase refers to assets that are not in the sample or the package: "
+            + ", ".join("%s -> %s" % o for o in sorted(outside))
+        )
 
     # Its pages: links that pointed into this repository point into the package; the old package id is the new one.
     readme = os.path.join(destination, "README.md")
     text = read_text(readme)
-    text = replace_once(text, "**The Unity manual**, [`docs/UNITY.md`](../../../../docs/UNITY.md), explains",
-                        "**The Unity manual**, [`Documentation~/UNITY.md`](../../Documentation~/UNITY.md), explains", "the showcase's README")
-    text = replace_once(text, "](../../../../docs/img/showcase.png)", "](../../Documentation~/img/showcase.png)", "the showcase's README")
-    text = replace_once(text, "[section 5 of the Unity manual](../../../../docs/UNITY.md#cueing-patterns)",
-                        "[section 5 of the Unity manual](../../Documentation~/UNITY.md#cueing-patterns)", "the showcase's README")
-    text = replace_once(text, "## Open it and play\n\n",
-                        "## Open it and play\n\n"
-                        "> **In the package.** This folder is the sample \"" + SAMPLE_NAME + "\" of the package `" + PACKAGE_ID + "`.\n"
-                        "> Import it from the Package Manager (SFX Forge > Samples > Import), open `Showcase.unity` in the imported\n"
-                        "> folder and press Play. The page below was written in the repository the package is generated from: where\n"
-                        "> it says `unity/Demo`, read \"your project\"; where it names `docs/`, `tests/`, `videos/`, `out/` or `.tools/`, those are\n"
-                        "> that repository's and are not in the package (the videos and figures are made there). The older demo it\n"
-                        "> mentions (`SfxDemo`) is not in the package either. The links to the manual work in the package's own\n"
-                        "> folder or repository, not from the imported copy under `Assets`. The tests in `Tests/` are compiled\n"
-                        "> only when the Test Framework package (`com.unity.test-framework`) is in the project, and a new project\n"
-                        "> has to get the scene into its build settings once (**SFX Forge > Rebuild Showcase Scene** does it).\n\n", "the showcase's README")
-    text = replace_once(text, "`docs/MANUAL.md` in the repository\nhas the full reference",
-                        "the device's manual (`Documentation~/MANUAL.md` in the package)\nhas the full reference", "the showcase's README")
-    text = replace_once(text, "- Add the package to `Packages/manifest.json`:\n  `\"com.catsplat.sfxforge\": \"file:<path to>/com.catsplat.sfxforge\"`, and reference",
-                        "- Add the package (the package's README, \"Install\"), and reference", "the showcase's README")
+    text = replace_once(
+        text,
+        "**The Unity manual**, [`docs/UNITY.md`](../../../../docs/UNITY.md), explains",
+        "**The Unity manual**, [`Documentation~/UNITY.md`](../../Documentation~/UNITY.md), explains",
+        "the showcase's README",
+    )
+    text = replace_once(
+        text,
+        "](../../../../docs/img/showcase.png)",
+        "](../../Documentation~/img/showcase.png)",
+        "the showcase's README",
+    )
+    text = replace_once(
+        text,
+        "[section 5 of the Unity manual](../../../../docs/UNITY.md#cueing-patterns)",
+        "[section 5 of the Unity manual](../../Documentation~/UNITY.md#cueing-patterns)",
+        "the showcase's README",
+    )
+    text = replace_once(
+        text,
+        "## Open it and play\n\n",
+        "## Open it and play\n\n"
+        "> **In the package.** This folder is the sample \"" + SAMPLE_NAME + "\" of the package `" + PACKAGE_ID + "`.\n"
+        "> Import it from the Package Manager (SFX Forge > Samples > Import), open `Showcase.unity` in the imported\n"
+        "> folder and press Play. The page below was written in the repository the package is generated from: where\n"
+        "> it says `unity/Demo`, read \"your project\"; where it names `docs/`, `tests/`, `videos/`, `out/` or `.tools/`, those are\n"
+        "> that repository's and are not in the package (the videos and figures are made there). The older demo it\n"
+        "> mentions (`SfxDemo`) is not in the package either. The links to the manual work in the package's own\n"
+        "> folder or repository, not from the imported copy under `Assets`. The tests in `Tests/` are compiled\n"
+        "> only when the Test Framework package (`com.unity.test-framework`) is in the project, and a new project\n"
+        "> has to get the scene into its build settings once (**SFX Forge > Rebuild Showcase Scene** does it).\n\n",
+        "the showcase's README",
+    )
+    text = replace_once(
+        text,
+        "`docs/MANUAL.md` in the repository\nhas the full reference",
+        "the device's manual (`Documentation~/MANUAL.md` in the package)\nhas the full reference",
+        "the showcase's README",
+    )
+    text = replace_once(
+        text,
+        "- Add the package to `Packages/manifest.json`:\n  `\"com.catsplat.sfxforge\": \"file:<path to>/com.catsplat.sfxforge\"`, and reference",
+        "- Add the package (the package's README, \"Install\"), and reference",
+        "the showcase's README",
+    )
     write_text(readme, text.replace(OLD_PACKAGE_ID, PACKAGE_ID))
     architecture = os.path.join(destination, "Docs", "ARCHITECTURE.md")
     write_text(architecture, read_text(architecture).replace(OLD_PACKAGE_ID, PACKAGE_ID))
@@ -355,83 +479,178 @@ def make_sample(target):
 
 # ---------------------------------------------------------------- documentation
 
+
 def make_manuals(target):
+    # The long strings below are each ONE line of a manual, exactly as it stands there: replace_once must find it.
+    # They are left as long as the line is, so that a line of the manual can be searched for here.
     docs = os.path.join(target, "Documentation~")
 
     # --- the Unity manual
     where = "docs/UNITY.md"
     text = read_text(need(src("docs", "UNITY.md"), "the Unity manual"))
-    text = replace_once(text, "This is the sibling of [the device's manual](MANUAL.md). That one explains the instrument. This one explains the\n"
-                              "package `unity/com.catsplat.sfxforge` and the example game built with it.\n",
-                        "This is the sibling of [the device's manual](MANUAL.md). That one explains the instrument. This one explains the\n"
-                        "package `" + PACKAGE_ID + "` and the example game built with it.\n\n"
-                        "> **Where things are.** This manual is written in the repository the package is generated from, and a few of\n"
-                        "> its lines name things there. In the package:\n"
-                        ">\n"
-                        "> - the showcase game is the sample \"" + SAMPLE_NAME + "\" (`Samples~/Showcase`; imported, it is a folder\n"
-                        ">   under `Assets/Samples`). Paths such as `Scripts/Audio` are inside that folder;\n"
-                        "> - the firmware is `Firmware~/sfx-forge.zip`, the videos are in [`video/`](video), the MIDI protocol is in\n"
-                        ">   [LINK-PROTOCOL.md](LINK-PROTOCOL.md);\n"
-                        "> - **not in the package:** the older demo scene the manual mentions (a hovercraft, `SfxDemo`, with its tests\n"
-                        ">   `SfxDemoTests`), and the scripts under `docs/`, `tests/`, `core/` and `out/`: the engine's C source, the\n"
-                        ">   emulator script of the link tests, the test project of the editor UI (`tests/unity-inspectors`, with\n"
-                        ">   the pictures it writes to `out/inspector-shots`), and the scripts that draw the figures and cut the videos.\n", where)
-    text = replace_once(text, "**Two videos** show the Unity side running. They are built by `docs/video/make_unity_videos.py` and kept in\n"
-                              "[`videos/`](../videos/README.md), the repository's folder of finished videos:\n\n"
-                              "| File | What it shows |\n|---|---|\n"
-                              "| [`videos/sfx-forge-unity-showcase.mp4`](../videos/sfx-forge-unity-showcase.mp4) | the showcase game played from start to goal, with captions naming what you hear |\n"
-                              "| [`videos/sfx-forge-unity-how-it-works.mp4`](../videos/sfx-forge-unity-how-it-works.mp4) | the three routes and the adaptive music, one at a time. Its pages of code are silent; the game plays between them |\n",
-                        "**Three videos** show the Unity side running. They are in the package, in `Documentation~/video`:\n\n"
-                        "| File | What it shows |\n|---|---|\n"
-                        "| [`sfx-forge-unity-showcase.mp4`](video/sfx-forge-unity-showcase.mp4) | the showcase game played from start to goal, with captions naming what you hear |\n"
-                        "| [`sfx-forge-unity-how-it-works.mp4`](video/sfx-forge-unity-how-it-works.mp4) | the three routes and the adaptive music, one at a time. Its pages of code are silent; the game plays between them |\n"
-                        "| [`sfx-forge-unity-link.mp4`](video/sfx-forge-unity-link.mp4) | the device (in the emulator) and the game, linked: the song and a patch arrive in the running game ([section 6](#6-from-the-device-to-the-game)) |\n", where)
-    text = replace_once(text, "**The pictures** in this manual are built by `docs/unity_figures.py`.",
-                        "**The pictures** in this manual are built by a script in the source repository (`docs/unity_figures.py`).", where)
-    text = replace_once(text, "You need Windows x64 and Unity. The package says Unity 2022.3 or newer; it is developed and tested with Unity 6.3\n(6000.3.8f1) only.",
-                        "You need Windows x64 and Unity " + UNITY + ". The package is developed and tested with Unity 6.3 (" + UNITY_TESTED + ") only; its\n"
-                        "manifest asks for " + UNITY + " for that reason, not because an older version is known to fail.", where)
-    text = replace_once(text, "and pick `unity/com.catsplat.sfxforge/package.json` | \"SFX Forge Bridge\" appears in the list |",
-                        "and pick the `package.json` in this package's folder | \"" + DISPLAY_NAME + "\" appears in the list |", where)
-    text = replace_once(text, "    \"com.catsplat.sfxforge\": \"file:<path to>/com.catsplat.sfxforge\"",
-                        "    \"" + PACKAGE_ID + "\": \"file:<path to the package's folder>\"", where)
-    text = replace_once(text, "`<path to>` is where the folder `unity/com.catsplat.sfxforge` of this repository is on your disk. Write it as an\n"
-                              "absolute path, or relative to your project's `Packages` folder. The demo project, two folders below `unity/`, has\n"
-                              "`file:../../com.catsplat.sfxforge`.",
-                        "The path is where this package's folder (the one with `package.json`) is on your disk. Write it as an absolute\n"
-                        "path, or relative to your project's `Packages` folder. Once the package's repository is published, its git URL\n"
-                        "can stand there instead (the package's README, \"Install\").", where)
-    text = replace_once(text, "You need a song asset. The repository has one ready: `unity/Demo/Assets/SfxDemo/DemoSong.asset`, the firmware's own\ndemo song.",
-                        "You need a song asset. The package has one ready, in its sample: `Song/DemoSong.asset` of the showcase, the firmware's own\ndemo song.", where)
-    text = replace_once(text, "| **1** | Copy `DemoSong.asset` and `DemoSong.asset.meta` from `unity/Demo/Assets/SfxDemo/` into your project's `Assets` |",
-                        "| **1** | Import the sample \"" + SAMPLE_NAME + "\" (Package Manager > SFX Forge > Samples) and find `Song/DemoSong.asset` in the imported folder |", where)
-    text = replace_once(text, "Copying the asset this way was not tried in a second project; it is the asset the demo project itself plays.",
-                        "These five steps were not tried as written, in a project of their own; the asset is the one the showcase itself plays.", where)
-    text = replace_once(text, "The demo song's marks, read from the asset (`Assets/SfxDemo/DemoSong.asset`):",
-                        "The demo song's marks, read from the asset (the showcase's `Song/DemoSong.asset`):", where)
-    text = replace_once(text, "*Brio: First Harmonic* is an original one-level 2D momentum platformer in `unity/Demo/Assets/Showcase`.",
-                        "*Brio: First Harmonic* is an original one-level 2D momentum platformer, the package's sample (`Samples~/Showcase`).", where)
-    text = replace_once(text, "Open `unity/Demo` with Unity 6000.3, open `Assets/Showcase/Showcase.unity`, press Play. The keys, the checks and the\n"
-                              "whole folder map are in [the showcase's README](../unity/Demo/Assets/Showcase/README.md).",
-                        "Import the sample from the Package Manager (SFX Forge > Samples), open `Showcase.unity` in the imported folder, press\n"
-                        "Play. The keys, the checks and the whole folder map are in [the showcase's README](../Samples~/Showcase/README.md).", where)
-    text = replace_once(text, "ten files of `Scripts/Core`, and the song `Assets/SfxDemo/DemoSong.asset` | below |",
-                        "ten files of `Scripts/Core`, and the song `Song/DemoSong.asset` | below |", where)
-    text = replace_once(text, "Copy `unity/Demo/Assets/SfxDemo/DemoSong.asset` with its `.meta` and pass it\nto `Install`.",
-                        "Copy the showcase's `Song/DemoSong.asset` with its `.meta` and pass it\nto `Install`.", where)
-    text = replace_once(text, "| **0** | Add the package to `Packages/manifest.json`. Reference", "| **0** | Add the package to your project. Reference", where)
-    text = replace_once(text, "[the showcase's README](../unity/Demo/Assets/Showcase/README.md#check-it-test-it-rebuild-it)",
-                        "[the showcase's README](../Samples~/Showcase/README.md#check-it-test-it-rebuild-it)", where)
-    text = replace_once(text, "| **SFX Forge > Rebuild Demo Scene** · **Rebuild Showcase Scene** | in the demo project only. They rewrite generated files |",
-                        "| **SFX Forge > Rebuild Showcase Scene** · **SFX Forge > Showcase > Build for Windows** | only with the showcase sample imported. The first rewrites the sample's generated files |", where)
-    text = replace_once(text, "The demo's song was not fetched over MIDI. `tests/make-demo-song.mjs` writes what the firmware sends on SEND into\n"
-                              "`DemoSong.bytes` – 16 patches of 28 bytes, then the song, 2487 bytes of format 6 – and the demo's builder turns that\n"
-                              "file into the asset. This is the path that is proven to work:",
-                        "The showcase's song was not fetched over MIDI. A script in the source repository (`tests/make-demo-song.mjs`) wrote\n"
-                        "what the firmware sends on SEND into a file – 16 patches of 28 bytes, then the song, 2487 bytes of format 6. That file is in the\n"
-                        "sample, `Song/DemoSong.bytes`, and the sample's builder (`Editor/ShowcaseAudio.cs`) turns it into the asset\n"
-                        "`Song/DemoSong.asset`. This is the path that is proven to work:", where)
-    for test in ("`SfxDemoTests.FiringPlaysTheLaserAndSpawnsABolt` |", "`SfxDemoTests.TheMusicPlaysAndFollowsTheSpeed` |"):
+    text = replace_once(
+        text,
+        "This is the sibling of [the device's manual](MANUAL.md). That one explains the instrument. This one explains the\n"
+        "package `unity/com.catsplat.sfxforge` and the example game built with it.\n",
+        "This is the sibling of [the device's manual](MANUAL.md). That one explains the instrument. This one explains the\n"
+        "package `" + PACKAGE_ID + "` and the example game built with it.\n\n"
+        "> **Where things are.** This manual is written in the repository the package is generated from, and a few of\n"
+        "> its lines name things there. In the package:\n"
+        ">\n"
+        "> - the showcase game is the sample \"" + SAMPLE_NAME + "\" (`Samples~/Showcase`; imported, it is a folder\n"
+        ">   under `Assets/Samples`). Paths such as `Scripts/Audio` are inside that folder;\n"
+        "> - the firmware is `Firmware~/sfx-forge.zip`, the videos are in [`video/`](video), the MIDI protocol is in\n"
+        ">   [LINK-PROTOCOL.md](LINK-PROTOCOL.md);\n"
+        "> - **not in the package:** the older demo scene the manual mentions (a hovercraft, `SfxDemo`, with its tests\n"
+        ">   `SfxDemoTests`), and the scripts under `docs/`, `tests/`, `core/` and `out/`: the engine's C source, the\n"
+        ">   emulator script of the link tests, the test project of the editor UI (`tests/unity-inspectors`, with\n"
+        ">   the pictures it writes to `out/inspector-shots`), and the scripts that draw the figures and cut the videos.\n",
+        where,
+    )
+    text = replace_once(
+        text,
+        "**Two videos** show the Unity side running. They are built by `docs/video/make_unity_videos.py` and kept in\n"
+        "[`videos/`](../videos/README.md), the repository's folder of finished videos:\n\n"
+        "| File | What it shows |\n|---|---|\n"
+        "| [`videos/sfx-forge-unity-showcase.mp4`](../videos/sfx-forge-unity-showcase.mp4) | the showcase game played from start to goal, with captions naming what you hear |\n"
+        "| [`videos/sfx-forge-unity-how-it-works.mp4`](../videos/sfx-forge-unity-how-it-works.mp4) | the three routes and the adaptive music, one at a time. Its pages of code are silent; the game plays between them |\n",
+        "**Three videos** show the Unity side running. They are in the package, in `Documentation~/video`:\n\n"
+        "| File | What it shows |\n|---|---|\n"
+        "| [`sfx-forge-unity-showcase.mp4`](video/sfx-forge-unity-showcase.mp4) | the showcase game played from start to goal, with captions naming what you hear |\n"
+        "| [`sfx-forge-unity-how-it-works.mp4`](video/sfx-forge-unity-how-it-works.mp4) | the three routes and the adaptive music, one at a time. Its pages of code are silent; the game plays between them |\n"
+        "| [`sfx-forge-unity-link.mp4`](video/sfx-forge-unity-link.mp4) | the device (in the emulator) and the game, linked: the song and a patch arrive in the running game ([section 6](#6-from-the-device-to-the-game)) |\n",
+        where,
+    )
+    text = replace_once(
+        text,
+        "**The pictures** in this manual are built by `docs/unity_figures.py`.",
+        "**The pictures** in this manual are built by a script in the source repository (`docs/unity_figures.py`).",
+        where,
+    )
+    text = replace_once(
+        text,
+        "You need Windows x64 and Unity. The package says Unity 2022.3 or newer; it is developed and tested with Unity 6.3\n(6000.3.8f1) only.",
+        "You need Windows x64 and Unity "
+        + UNITY
+        + ". The package is developed and tested with Unity 6.3 ("
+        + UNITY_TESTED
+        + ") only; its\n"
+        "manifest asks for " + UNITY + " for that reason, not because an older version is known to fail.",
+        where,
+    )
+    text = replace_once(
+        text,
+        "and pick `unity/com.catsplat.sfxforge/package.json` | \"SFX Forge Bridge\" appears in the list |",
+        "and pick the `package.json` in this package's folder | \"" + DISPLAY_NAME + "\" appears in the list |",
+        where,
+    )
+    text = replace_once(
+        text,
+        "    \"com.catsplat.sfxforge\": \"file:<path to>/com.catsplat.sfxforge\"",
+        "    \"" + PACKAGE_ID + "\": \"file:<path to the package's folder>\"",
+        where,
+    )
+    text = replace_once(
+        text,
+        "`<path to>` is where the folder `unity/com.catsplat.sfxforge` of this repository is on your disk. Write it as an\n"
+        "absolute path, or relative to your project's `Packages` folder. The demo project, two folders below `unity/`, has\n"
+        "`file:../../com.catsplat.sfxforge`.",
+        "The path is where this package's folder (the one with `package.json`) is on your disk. Write it as an absolute\n"
+        "path, or relative to your project's `Packages` folder. Once the package's repository is published, its git URL\n"
+        "can stand there instead (the package's README, \"Install\").",
+        where,
+    )
+    text = replace_once(
+        text,
+        "You need a song asset. The repository has one ready: `unity/Demo/Assets/SfxDemo/DemoSong.asset`, the firmware's own\ndemo song.",
+        "You need a song asset. The package has one ready, in its sample: `Song/DemoSong.asset` of the showcase, the firmware's own\ndemo song.",
+        where,
+    )
+    text = replace_once(
+        text,
+        "| **1** | Copy `DemoSong.asset` and `DemoSong.asset.meta` from `unity/Demo/Assets/SfxDemo/` into your "
+        "project's `Assets` |",
+        "| **1** | Import the sample \""
+        + SAMPLE_NAME
+        + "\" (Package Manager > SFX Forge > Samples) and find `Song/DemoSong.asset` in the imported folder |",
+        where,
+    )
+    text = replace_once(
+        text,
+        "Copying the asset this way was not tried in a second project; it is the asset the demo project itself plays.",
+        "These five steps were not tried as written, in a project of their own; the asset is the one the showcase "
+        "itself plays.",
+        where,
+    )
+    text = replace_once(
+        text,
+        "The demo song's marks, read from the asset (`Assets/SfxDemo/DemoSong.asset`):",
+        "The demo song's marks, read from the asset (the showcase's `Song/DemoSong.asset`):",
+        where,
+    )
+    text = replace_once(
+        text,
+        "*Brio: First Harmonic* is an original one-level 2D momentum platformer in `unity/Demo/Assets/Showcase`.",
+        "*Brio: First Harmonic* is an original one-level 2D momentum platformer, the package's sample "
+        "(`Samples~/Showcase`).",
+        where,
+    )
+    text = replace_once(
+        text,
+        "Open `unity/Demo` with Unity 6000.3, open `Assets/Showcase/Showcase.unity`, press Play. The keys, the checks and the\n"
+        "whole folder map are in [the showcase's README](../unity/Demo/Assets/Showcase/README.md).",
+        "Import the sample from the Package Manager (SFX Forge > Samples), open `Showcase.unity` in the imported folder, press\n"
+        "Play. The keys, the checks and the whole folder map are in [the showcase's "
+        "README](../Samples~/Showcase/README.md).",
+        where,
+    )
+    text = replace_once(
+        text,
+        "ten files of `Scripts/Core`, and the song `Assets/SfxDemo/DemoSong.asset` | below |",
+        "ten files of `Scripts/Core`, and the song `Song/DemoSong.asset` | below |",
+        where,
+    )
+    text = replace_once(
+        text,
+        "Copy `unity/Demo/Assets/SfxDemo/DemoSong.asset` with its `.meta` and pass it\nto `Install`.",
+        "Copy the showcase's `Song/DemoSong.asset` with its `.meta` and pass it\nto `Install`.",
+        where,
+    )
+    text = replace_once(
+        text,
+        "| **0** | Add the package to `Packages/manifest.json`. Reference",
+        "| **0** | Add the package to your project. Reference",
+        where,
+    )
+    text = replace_once(
+        text,
+        "[the showcase's README](../unity/Demo/Assets/Showcase/README.md#check-it-test-it-rebuild-it)",
+        "[the showcase's README](../Samples~/Showcase/README.md#check-it-test-it-rebuild-it)",
+        where,
+    )
+    text = replace_once(
+        text,
+        "| **SFX Forge > Rebuild Demo Scene** · **Rebuild Showcase Scene** | in the demo project only. They rewrite "
+        "generated files |",
+        "| **SFX Forge > Rebuild Showcase Scene** · **SFX Forge > Showcase > Build for Windows** | only with the "
+        "showcase sample imported. The first rewrites the sample's generated files |",
+        where,
+    )
+    text = replace_once(
+        text,
+        "The demo's song was not fetched over MIDI. `tests/make-demo-song.mjs` writes what the firmware sends on SEND into\n"
+        "`DemoSong.bytes` – 16 patches of 28 bytes, then the song, 2487 bytes of format 6 – and the demo's builder turns that\n"
+        "file into the asset. This is the path that is proven to work:",
+        "The showcase's song was not fetched over MIDI. A script in the source repository (`tests/make-demo-song.mjs`) wrote\n"
+        "what the firmware sends on SEND into a file – 16 patches of 28 bytes, then the song, 2487 bytes of format 6. That file is in the\n"
+        "sample, `Song/DemoSong.bytes`, and the sample's builder (`Editor/ShowcaseAudio.cs`) turns it into the asset\n"
+        "`Song/DemoSong.asset`. This is the path that is proven to work:",
+        where,
+    )
+    for test in (
+        "`SfxDemoTests.FiringPlaysTheLaserAndSpawnsABolt` |",
+        "`SfxDemoTests.TheMusicPlaysAndFollowsTheSpeed` |",
+    ):
         text = replace_once(text, test, test[:-2] + " (the older demo, in the source repository) |", where)
     if OLD_PACKAGE_ID in text or "](../unity/" in text or "2021.3" in text or "2022.3" in text:
         fail(where + ": a line still names the old package, an old Unity version or a path into the source repository")
@@ -440,17 +659,27 @@ def make_manuals(target):
     # --- the device's manual
     where = "docs/MANUAL.md"
     text = read_text(need(src("docs", "MANUAL.md"), "the device's manual"))
-    text = replace_once(text, "Everything is synthesized. There are no samples and no recordings in it.\n",
-                        "Everything is synthesized. There are no samples and no recordings in it.\n\n"
-                        "> **In the Unity package.** This is the manual of the instrument, as it is in the repository the package is\n"
-                        "> generated from. The built instrument (firmware " + FIRMWARE_VERSION + ") is in the package's `Firmware~` folder:\n"
-                        "> `sfx-forge.zip`, with `sfx-forge.wasm` inside it. The game's side is [the Unity manual](UNITY.md). The\n"
-                        "> instrument's and the engine's C source (`sfx-forge/`, `core/`) and the scripts under `tests/` and `docs/` are\n"
-                        "> in that repository, not in the package; here the engine is the compiled `Runtime/Plugins/x86_64/sfxforge.dll`.\n", where)
-    text = replace_once(text, "The protocol, byte by byte, is in the [README](../README.md#the-link-device--game-engine). The Unity package is in\n"
-                              "`unity/com.catsplat.sfxforge`; the demo project in `unity/Demo` shows all of it in one scene.",
-                        "The protocol, byte by byte, is in [LINK-PROTOCOL.md](LINK-PROTOCOL.md). The Unity side is this package:\n"
-                        "[the Unity manual](UNITY.md) explains it, and its sample, the showcase game, shows all of it in one level.", where)
+    text = replace_once(
+        text,
+        "Everything is synthesized. There are no samples and no recordings in it.\n",
+        "Everything is synthesized. There are no samples and no recordings in it.\n\n"
+        "> **In the Unity package.** This is the manual of the instrument, as it is in the repository the package is\n"
+        "> generated from. The built instrument (firmware "
+        + FIRMWARE_VERSION
+        + ") is in the package's `Firmware~` folder:\n"
+        "> `sfx-forge.zip`, with `sfx-forge.wasm` inside it. The game's side is [the Unity manual](UNITY.md). The\n"
+        "> instrument's and the engine's C source (`sfx-forge/`, `core/`) and the scripts under `tests/` and `docs/` are\n"
+        "> in that repository, not in the package; here the engine is the compiled `Runtime/Plugins/x86_64/sfxforge.dll`.\n",
+        where,
+    )
+    text = replace_once(
+        text,
+        "The protocol, byte by byte, is in the [README](../README.md#the-link-device--game-engine). The Unity package is in\n"
+        "`unity/com.catsplat.sfxforge`; the demo project in `unity/Demo` shows all of it in one scene.",
+        "The protocol, byte by byte, is in [LINK-PROTOCOL.md](LINK-PROTOCOL.md). The Unity side is this package:\n"
+        "[the Unity manual](UNITY.md) explains it, and its sample, the showcase game, shows all of it in one level.",
+        where,
+    )
     if "](../" in text:
         fail(where + ": a link still leaves the documentation folder")
     write_text(os.path.join(docs, "MANUAL.md"), text)
@@ -460,21 +689,23 @@ def make_manuals(target):
     found = re.search(r"^## The link \(device ⇄ game engine\)\n(.*?)^## ", readme, re.S | re.M)
     if not found or "F0 7D 56 42" not in found.group(1):
         fail("README.md: the section \"The link (device ⇄ game engine)\" was not found")
-    write_text(os.path.join(docs, "LINK-PROTOCOL.md"),
-               "# SFX FORGE – the link, byte by byte\n\n"
-               "What travels between the device and a game engine. The Unity package implements it in\n"
-               "`Runtime/Core/SfxProtocol.cs` and `Runtime/Core/SfxLink.cs`; [section 6 of the Unity manual](UNITY.md#6-from-the-device-to-the-game)\n"
-               "says how to use it and what of it is tested. The C functions named here (`sfx_song_pack`, `sfx_player_note_on`)\n"
-               "are the engine's, and `tests/check-identity.mjs`, `check-wire.mjs`, `check-store.mjs` and `build.sh` are the firmware's\n"
-               "checks and its build script:\n"
-               "all of them are in the source repository, not in this package.\n\n" + found.group(1).strip() + "\n")
+    write_text(
+        os.path.join(docs, "LINK-PROTOCOL.md"),
+        "# SFX FORGE – the link, byte by byte\n\n"
+        "What travels between the device and a game engine. The Unity package implements it in\n"
+        "`Runtime/Core/SfxProtocol.cs` and `Runtime/Core/SfxLink.cs`; [section 6 of the Unity manual](UNITY.md#6-from-the-device-to-the-game)\n"
+        "says how to use it and what of it is tested. The C functions named here (`sfx_song_pack`, `sfx_player_note_on`)\n"
+        "are the engine's, and `tests/check-identity.mjs`, `check-wire.mjs`, `check-store.mjs` and `build.sh` are the firmware's\n"
+        "checks and its build script:\n"
+        "all of them are in the source repository, not in this package.\n\n" + found.group(1).strip() + "\n",
+    )
 
     # --- the pictures the two manuals and the showcase's README use
     used = set()
     for name in ("UNITY.md", "MANUAL.md"):
         used.update(re.findall(r"\]\(img/([A-Za-z0-9._-]+)\)", read_text(os.path.join(docs, name))))
     used.add("showcase.png")
-    used.update(README_FIGURES)                  # the front page's pictures of the editor UI
+    used.update(README_FIGURES)  # the front page's pictures of the editor UI
     for name in sorted(used):
         copy_file(need(src("docs", "img", name), "a figure of the manuals"), os.path.join(docs, "img", name))
     return len(used)
@@ -486,7 +717,8 @@ RECORDED_ELSEWHERE = (
     "Where a video shows the package id `" + OLD_PACKAGE_ID + "`, read `" + PACKAGE_ID + "`, and install it as\n"
     "{install} says, not with the manifest line on the video's \"INSTALL\" page. Where it shows `unity/Demo` or\n"
     "`unity/Demo/Assets/Showcase`, read the imported sample ({sample}); where it shows `docs/UNITY.md` or \"the\n"
-    "manual in the repository\", read {manual}.")
+    "manual in the repository\", read {manual}."
+)
 
 
 def make_videos(target):
@@ -494,30 +726,57 @@ def make_videos(target):
         fail("ffmpeg and ffprobe must be on the PATH (the previews are cut from the videos)")
     missing = [v["file"] for v in VIDEOS if not os.path.exists(src("videos", v["file"]))]
     if missing:
-        fail("these videos are missing in videos/: " + ", ".join(missing)
-             + ". Make them first (docs/video/make_videos.py, make_unity_videos.py, make_link_video.py); nothing was skipped.")
-    print("ffmpeg: %s   (the previews and still frames are encoded by it: another version may give other bytes)"
-          % run(["ffmpeg", "-version"], "ffmpeg").splitlines()[0].strip())
+        fail(
+            "these videos are missing in videos/: "
+            + ", ".join(missing)
+            + ". Make them first (docs/video/make_videos.py, make_unity_videos.py, make_link_video.py); "
+            "nothing was skipped."
+        )
+    print(
+        "ffmpeg: %s   (the previews and still frames are encoded by it: another version may give other bytes)"
+        % run(["ffmpeg", "-version"], "ffmpeg").splitlines()[0].strip()
+    )
     videos = os.path.join(target, "Documentation~", "video")
     previews = os.path.join(target, "Documentation~", "img", "readme")
     os.makedirs(previews, exist_ok=True)
     for v in VIDEOS:
         source = src("videos", v["file"])
-        length = float(run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", source], "ffprobe").strip())
+        length = float(
+            run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", source], "ffprobe"
+            ).strip()
+        )
+        # the video is not as long as VIDEOS says (2 s either way), or its preview's clip runs past its end
         if abs(length - v["seconds"]) > 2 or v["clip"][0] + v["clip"][1] > length:
-            fail("%s is %.1f s long, not about %d s: it was made again. Look at it and choose its preview's place again (VIDEOS in this script)."
-                 % (v["file"], length, v["seconds"]))
+            fail(
+                "%s is %.1f s long, not about %d s: it was made again. Look at it and choose its preview's place "
+                "again (VIDEOS in this script)." % (v["file"], length, v["seconds"])
+            )
         copy_file(source, os.path.join(videos, v["file"]))
         stem = os.path.splitext(v["file"])[0]
         start, seconds = v["clip"]
-        run(["ffmpeg", "-v", "error", "-y", "-ss", str(start), "-t", str(seconds), "-i", source, "-an", "-map_metadata", "-1",
-             "-filter_complex",
-             "fps=%d,scale=%d:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];"
-             "[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" % (PREVIEW_FPS, PREVIEW_WIDTH),
-             "-threads", "1", os.path.join(previews, stem + ".gif")], "cutting the preview of " + v["file"])
-        run(["ffmpeg", "-v", "error", "-y", "-ss", str(v["poster"]), "-i", source, "-an", "-map_metadata", "-1", "-frames:v", "1",
-             "-vf", "scale=%d:-2:flags=lanczos" % POSTER_WIDTH, "-q:v", "3", "-threads", "1", "-bitexact",
-             os.path.join(previews, stem + ".jpg")], "taking the poster of " + v["file"])
+        # fmt: off
+        run(
+            [
+                "ffmpeg", "-v", "error", "-y", "-ss", str(start), "-t", str(seconds), "-i", source, "-an",
+                "-map_metadata", "-1",
+                "-filter_complex",
+                "fps=%d,scale=%d:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];"
+                "[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" % (PREVIEW_FPS, PREVIEW_WIDTH),
+                "-threads", "1",
+                os.path.join(previews, stem + ".gif"),
+            ],
+            "cutting the preview of " + v["file"],
+        )
+        run(
+            [
+                "ffmpeg", "-v", "error", "-y", "-ss", str(v["poster"]), "-i", source, "-an", "-map_metadata", "-1",
+                "-frames:v", "1", "-vf", "scale=%d:-2:flags=lanczos" % POSTER_WIDTH, "-q:v", "3", "-threads", "1",
+                "-bitexact", os.path.join(previews, stem + ".jpg"),
+            ],
+            "taking the poster of " + v["file"],
+        )
+        # fmt: on
         size = os.path.getsize(os.path.join(previews, stem + ".gif"))
         if size > 4 * 1024 * 1024:
             fail("the preview of %s is %.1f MB: too large for a front page" % (v["file"], size / 1048576.0))
@@ -526,20 +785,30 @@ def make_videos(target):
     for v in VIDEOS:
         stem = os.path.splitext(v["file"])[0]
         minutes = "%d:%02d" % divmod(v["seconds"], 60)
-        rows.append("## %s\n\n[![%s](../img/readme/%s.jpg)](%s)\n\n[`%s`](%s) · %s · 1920×1080, 30 frames a second, with sound.\n\n%s\n"
-                    % (v["title"], v["title"], stem, v["file"], v["file"], v["file"], minutes, v["shows"]))
-    write_text(os.path.join(videos, "README.md"),
-               "# The videos\n\n"
-               "Five videos, made by scripts from the firmware and the game themselves: nobody held a controller or a camera.\n"
-               "The sound in them is what SFX FORGE produced, on the device or in Unity; there is no voice-over, the captions\n"
-               "say what happens. Nobody has listened to them: their levels were measured, not judged.\n\n"
-               "The device in the two device videos and in the link video is drawn by the VIBE FM SDK's emulator\n"
-               "(see [Third Party Notices](../../Third%20Party%20Notices.md)).\n\n" + RECORDED_ELSEWHERE.format(
-                   manual="[`Documentation~/UNITY.md`](../UNITY.md)", install="[the package's README](../../README.md#install)",
-                   sample="[`Samples~/Showcase`](../../Samples~/Showcase/README.md)") + "\n\n" + "\n".join(rows))
+        rows.append(
+            "## %s\n\n[![%s](../img/readme/%s.jpg)](%s)\n\n[`%s`](%s) · %s · 1920×1080, 30 frames a second, with sound.\n\n%s\n"
+            % (v["title"], v["title"], stem, v["file"], v["file"], v["file"], minutes, v["shows"])
+        )
+    write_text(
+        os.path.join(videos, "README.md"),
+        "# The videos\n\n"
+        "Five videos, made by scripts from the firmware and the game themselves: nobody held a controller or a camera.\n"
+        "The sound in them is what SFX FORGE produced, on the device or in Unity; there is no voice-over, the captions\n"
+        "say what happens. Nobody has listened to them: their levels were measured, not judged.\n\n"
+        "The device in the two device videos and in the link video is drawn by the VIBE FM SDK's emulator\n"
+        "(see [Third Party Notices](../../Third%20Party%20Notices.md)).\n\n"
+        + RECORDED_ELSEWHERE.format(
+            manual="[`Documentation~/UNITY.md`](../UNITY.md)",
+            install="[the package's README](../../README.md#install)",
+            sample="[`Samples~/Showcase`](../../Samples~/Showcase/README.md)",
+        )
+        + "\n\n"
+        + "\n".join(rows),
+    )
 
 
 def make_firmware(target):
+    # the built firmware: the zip must hold the .wasm and its manifest
     source = need(src("build", "sfx-forge.zip"), "the built Vibe (run build.sh)")
     with zipfile.ZipFile(source) as z:
         names = set(z.namelist())
@@ -547,52 +816,66 @@ def make_firmware(target):
             fail("build/sfx-forge.zip does not hold sfx-forge.wasm and sfx-forge.json")
         version = json.loads(z.read("sfx-forge.json").decode("utf-8")).get("version")
         wasm = z.read("sfx-forge.wasm")
+
+    # it must be fit to give away (no debug sections, no path of this machine) and of the version the documents name
     debug = strip_wasm_debug.debug_sections(wasm)
     if debug or strip_wasm_debug.paths_in(wasm):
-        fail("build/sfx-forge.zip: the .wasm holds debug sections or a machine path (%s). Run "
-             "python tools/strip_wasm_debug.py build/sfx-forge.wasm build/sfx-forge.zip (build.sh does it)."
-             % ", ".join([name for name, _ in debug] + strip_wasm_debug.paths_in(wasm)[:3]))
+        fail(
+            "build/sfx-forge.zip: the .wasm holds debug sections or a machine path (%s). Run "
+            "python tools/strip_wasm_debug.py build/sfx-forge.wasm build/sfx-forge.zip (build.sh does it)."
+            % ", ".join([name for name, _ in debug] + strip_wasm_debug.paths_in(wasm)[:3])
+        )
     if version != FIRMWARE_VERSION:
-        fail("build/sfx-forge.zip is firmware %s, this script expects %s (FIRMWARE_VERSION): build it, or update the script and the documents"
-             % (version, FIRMWARE_VERSION))
+        fail(
+            "build/sfx-forge.zip is firmware %s, this script expects %s (FIRMWARE_VERSION): build it, or update the "
+            "script and the documents" % (version, FIRMWARE_VERSION)
+        )
+
+    # into the package: the zip, and a README beside it (its text is checked against the documents: change both)
     copy_file(source, os.path.join(target, "Firmware~", "sfx-forge.zip"))
-    write_text(os.path.join(target, "Firmware~", "README.md"),
-               "# The device's side: SFX FORGE " + FIRMWARE_VERSION + " for VIBE FM\n\n"
-               "`sfx-forge.zip` is the built instrument (a \"Vibe\"). Drop the zip onto the window of the VIBE FM plugin; or unzip it\n"
-               "and drop `sfx-forge.wasm` onto the VIBE FM Playground, <https://play.thefirmwarehub.com/>, in Chrome or Edge.\n\n"
-               "How to play it: [the device's manual](../Documentation~/MANUAL.md). How to join it to Unity:\n"
-               "[section 6 of the Unity manual](../Documentation~/UNITY.md#6-from-the-device-to-the-game).\n\n"
-               "This build (" + FIRMWARE_VERSION + ") was run without the emulator's page, in the VIBE FM SDK's command-line tools and, for\n"
-               "SysEx and stored files, in a small host of the source repository's own: its checks hand the built `.wasm`\n"
-               "events and SysEx and read its sound, its MIDI and what it stores, and all 20 of them pass. A few of them also\n"
-               "compare the display, to tell that it changed or that the LINK light is on: what a page shows and what a toast\n"
-               "says is not read. Against\n"
-               "Unity, the six link tests of the Unity manual passed with firmware 1.6.0 in the SDK's local emulator on\n"
-               "22 Nov 2026, with songs of sixteenths only. It was not run in the plugin or on hardware, and nobody has listened to\n"
-               "what is new in it. Its source is not in this package.\n\n"
-               "New in 1.6.0: each pattern has its own grid of 1/16, 1/32 or 1/64, which is 16, 32 or 64 steps a bar (SHIFT+F5\n"
-               "and SHIFT+F6 on the SEQ and AUTO pages: coarser and finer; SHIFT+LEFT and SHIFT+RIGHT: the 16 steps before and\n"
-               "after). With it the song is in format 6, which has no fixed length (the factory song is 2487 bytes), the song\n"
-               "message has a new shape (pieces of up to 240 bytes, 27 messages for the factory song with its 16 sounds), the\n"
-               "song is stored in `song6.bin`, and the identity says song format 6 and 64 steps. Songs of the formats 1 to 5\n"
-               "and the song message of before are still taken.\n\n"
-               "**This firmware and this package belong together.** A firmware up to 1.5.0 drops the new song message without a\n"
-               "word, so the package does not send a format-6 song to one and says why (`SfxLink.Refusal`,\n"
-               "[the Unity manual](../Documentation~/UNITY.md#when-a-song-is-not-sent)). A package from before firmware 1.6.0 takes no\n"
-               "song from this firmware and does not read a format-6 song asset. An older firmware's `song.bin` is still read,\n"
-               "and never written: put the older firmware back and its song is still there.\n\n"
-               "New in 1.5.0, on the sequencer pages: LOOP and SONG (F1: a pattern repeats, or the song plays in order), a\n"
-               "pattern strip that shows which pattern plays, which is shown and which waits, REC that plays the pads as the\n"
-               "kit and loops the pattern, ERASE while recording (F4), and UNDO (F2, one step, again for redo).\n\n"
-               "The `.wasm` is SFX FORGE's code compiled together with the VIBE FM SDK's runtime and its display fonts\n"
-               "(Apache-2.0 and SIL OFL 1.1): see [Third Party Notices](../Third%20Party%20Notices.md) and the licence texts in\n"
-               "[`Documentation~/licenses`](../Documentation~/licenses). It carries no debug information.\n")
+    write_text(
+        os.path.join(target, "Firmware~", "README.md"),
+        "# The device's side: SFX FORGE " + FIRMWARE_VERSION + " for VIBE FM\n\n"
+        "`sfx-forge.zip` is the built instrument (a \"Vibe\"). Drop the zip onto the window of the VIBE FM plugin; or unzip it\n"
+        "and drop `sfx-forge.wasm` onto the VIBE FM Playground, <https://play.thefirmwarehub.com/>, in Chrome or Edge.\n\n"
+        "How to play it: [the device's manual](../Documentation~/MANUAL.md). How to join it to Unity:\n"
+        "[section 6 of the Unity manual](../Documentation~/UNITY.md#6-from-the-device-to-the-game).\n\n"
+        "This build ("
+        + FIRMWARE_VERSION
+        + ") was run without the emulator's page, in the VIBE FM SDK's command-line tools and, for\n"
+        "SysEx and stored files, in a small host of the source repository's own: its checks hand the built `.wasm`\n"
+        "events and SysEx and read its sound, its MIDI and what it stores, and all 20 of them pass. A few of them also\n"
+        "compare the display, to tell that it changed or that the LINK light is on: what a page shows and what a toast\n"
+        "says is not read. Against\n"
+        "Unity, the six link tests of the Unity manual passed with firmware 1.6.0 in the SDK's local emulator on\n"
+        "22 Nov 2026, with songs of sixteenths only. It was not run in the plugin or on hardware, and nobody has listened to\n"
+        "what is new in it. Its source is not in this package.\n\n"
+        "New in 1.6.0: each pattern has its own grid of 1/16, 1/32 or 1/64, which is 16, 32 or 64 steps a bar (SHIFT+F5\n"
+        "and SHIFT+F6 on the SEQ and AUTO pages: coarser and finer; SHIFT+LEFT and SHIFT+RIGHT: the 16 steps before and\n"
+        "after). With it the song is in format 6, which has no fixed length (the factory song is 2487 bytes), the song\n"
+        "message has a new shape (pieces of up to 240 bytes, 27 messages for the factory song with its 16 sounds), the\n"
+        "song is stored in `song6.bin`, and the identity says song format 6 and 64 steps. Songs of the formats 1 to 5\n"
+        "and the song message of before are still taken.\n\n"
+        "**This firmware and this package belong together.** A firmware up to 1.5.0 drops the new song message without a\n"
+        "word, so the package does not send a format-6 song to one and says why (`SfxLink.Refusal`,\n"
+        "[the Unity manual](../Documentation~/UNITY.md#when-a-song-is-not-sent)). A package from before firmware 1.6.0 takes no\n"
+        "song from this firmware and does not read a format-6 song asset. An older firmware's `song.bin` is still read,\n"
+        "and never written: put the older firmware back and its song is still there.\n\n"
+        "New in 1.5.0, on the sequencer pages: LOOP and SONG (F1: a pattern repeats, or the song plays in order), a\n"
+        "pattern strip that shows which pattern plays, which is shown and which waits, REC that plays the pads as the\n"
+        "kit and loops the pattern, ERASE while recording (F4), and UNDO (F2, one step, again for redo).\n\n"
+        "The `.wasm` is SFX FORGE's code compiled together with the VIBE FM SDK's runtime and its display fonts\n"
+        "(Apache-2.0 and SIL OFL 1.1): see [Third Party Notices](../Third%20Party%20Notices.md) and the licence texts in\n"
+        "[`Documentation~/licenses`](../Documentation~/licenses). It carries no debug information.\n",
+    )
 
 
 # The licence and notice texts of what is compiled into the two binaries, read where the build took the code from.
 def licence_sources():
     sdk = src(".tools", "vibe-fm-sdk")
-    zigs = sorted(name for name in (os.listdir(src(".tools")) if os.path.isdir(src(".tools")) else []) if name.startswith("zig-"))
+    zigs = sorted(
+        name for name in (os.listdir(src(".tools")) if os.path.isdir(src(".tools")) else []) if name.startswith("zig-")
+    )
     if not zigs:
         fail("Zig is not in .tools (zig-*): its licence and the mingw-w64 runtime's are read from there")
     zig = src(".tools", zigs[-1])
@@ -619,6 +902,7 @@ def make_licences(target):
 
 # ---------------------------------------------------------------- the front page and its companions
 
+
 def toc_of(path):
     """The manual's own chapter list: its level-two headings, with GitHub's anchors."""
     return [(h, slug(h)) for h in re.findall(r"^## (.+)$", strip_code(read_text(path)), re.M)]
@@ -643,9 +927,19 @@ def make_readme(target):
     def length(v):
         return "%d:%02d" % divmod(v["seconds"], 60)
 
-    link, showcase, how, tour, song = VIDEOS
-    unity_toc = "\n".join("- [%s](Documentation~/UNITY.md#%s)" % t for t in toc_of(os.path.join(target, "Documentation~", "UNITY.md")))
-    device_toc = " · ".join("[%s](Documentation~/MANUAL.md#%s)" % t for t in toc_of(os.path.join(target, "Documentation~", "MANUAL.md")))
+    # the five videos, each by its file's name (so that the order of VIDEOS may change)
+    by_file = {v["file"]: v for v in VIDEOS}
+    link = by_file["sfx-forge-unity-link.mp4"]
+    showcase = by_file["sfx-forge-unity-showcase.mp4"]
+    how = by_file["sfx-forge-unity-how-it-works.mp4"]
+    tour = by_file["sfx-forge-tour.mp4"]
+    song = by_file["sfx-forge-build-a-song.mp4"]
+    unity_toc = "\n".join(
+        "- [%s](Documentation~/UNITY.md#%s)" % t for t in toc_of(os.path.join(target, "Documentation~", "UNITY.md"))
+    )
+    device_toc = " · ".join(
+        "[%s](Documentation~/MANUAL.md#%s)" % t for t in toc_of(os.path.join(target, "Documentation~", "MANUAL.md"))
+    )
 
     text = """# SFX Forge for Unity
 
@@ -1048,19 +1342,52 @@ in [Third Party Notices](Third%20Party%20Notices.md), with the licence texts in
 [`Documentation~/licenses`](Documentation~/licenses). "VIBE FM" is its owner's trademark; this package is not
 affiliated with it.
 """.format(
-        link_gif=video(link), link_title=link["title"], link_file=link["file"], link_len=length(link), link_shows=link["shows"],
-        showcase_gif=video(showcase), showcase_title=showcase["title"], showcase_file=showcase["file"], showcase_len=length(showcase), showcase_shows=showcase["shows"],
-        how_gif=video(how), how_title=how["title"], how_file=how["file"], how_len=length(how), how_shows=how["shows"],
-        tour_gif=video(tour), tour_title=tour["title"], tour_file=tour["file"], tour_len=length(tour), tour_shows=tour["shows"],
-        song_gif=video(song), song_title=song["title"], song_file=song["file"], song_len=length(song), song_shows=song["shows"],
-        recorded_elsewhere=RECORDED_ELSEWHERE.format(manual="[`Documentation~/UNITY.md`](Documentation~/UNITY.md)", install="[Install](#install)",
-                                                     sample="[The showcase sample](#the-showcase-sample)"),
-        unity=UNITY, version=VERSION, unity_tested=UNITY_TESTED, package_id=PACKAGE_ID, sample=SAMPLE_NAME, unity_toc=unity_toc, device_toc=device_toc)
+        link_gif=video(link),
+        link_title=link["title"],
+        link_file=link["file"],
+        link_len=length(link),
+        link_shows=link["shows"],
+        showcase_gif=video(showcase),
+        showcase_title=showcase["title"],
+        showcase_file=showcase["file"],
+        showcase_len=length(showcase),
+        showcase_shows=showcase["shows"],
+        how_gif=video(how),
+        how_title=how["title"],
+        how_file=how["file"],
+        how_len=length(how),
+        how_shows=how["shows"],
+        tour_gif=video(tour),
+        tour_title=tour["title"],
+        tour_file=tour["file"],
+        tour_len=length(tour),
+        tour_shows=tour["shows"],
+        song_gif=video(song),
+        song_title=song["title"],
+        song_file=song["file"],
+        song_len=length(song),
+        song_shows=song["shows"],
+        recorded_elsewhere=RECORDED_ELSEWHERE.format(
+            manual="[`Documentation~/UNITY.md`](Documentation~/UNITY.md)",
+            install="[Install](#install)",
+            sample="[The showcase sample](#the-showcase-sample)",
+        ),
+        unity=UNITY,
+        version=VERSION,
+        unity_tested=UNITY_TESTED,
+        package_id=PACKAGE_ID,
+        sample=SAMPLE_NAME,
+        unity_toc=unity_toc,
+        device_toc=device_toc,
+    )
     write_text(os.path.join(target, "README.md"), text)
 
 
 def make_companions(target, counts):
-    write_text(os.path.join(target, "CHANGELOG.md"), """# Changelog
+    # (counts is not used here: the numbers in these texts are written out, see the texts)
+    write_text(
+        os.path.join(target, "CHANGELOG.md"),
+        """# Changelog
 
 ## [{version}] - {released}
 
@@ -1174,14 +1501,24 @@ version are new; namespaces, assembly names and asset GUIDs are unchanged.
   by hand, a git URL, a project with another render pipeline or the Input System alone.
 - Straight after the import, one of the sample's 32 editor checks fails (the scene is not in the build settings)
   until **SFX Forge > Rebuild Showcase Scene** is run or the scene is added by hand.
-""".format(version=VERSION, released=RELEASED, sample=SAMPLE_NAME, firmware=FIRMWARE_VERSION, old_id=OLD_PACKAGE_ID, unity_tested=UNITY_TESTED))
+""".format(
+            version=VERSION,
+            released=RELEASED,
+            sample=SAMPLE_NAME,
+            firmware=FIRMWARE_VERSION,
+            old_id=OLD_PACKAGE_ID,
+            unity_tested=UNITY_TESTED,
+        ),
+    )
 
     licence = read_text(need(src("LICENSE"), "the repository's LICENSE"))
     if "MIT License" not in licence or "Cat Splat Studios" not in licence:
         fail("LICENSE is not the MIT licence of Cat Splat Studios any more")
     write_text(os.path.join(target, "LICENSE.md"), licence)
 
-    write_text(os.path.join(target, "Third Party Notices.md"), """# Third Party Notices
+    write_text(
+        os.path.join(target, "Third Party Notices.md"),
+        """# Third Party Notices
 
 The package's code, the showcase, the manuals and their figures are Cat Splat Studios' own work under the MIT
 licence ([LICENSE.md](LICENSE.md)). Everything you hear is synthesized by that code: there are no samples or
@@ -1242,23 +1579,31 @@ No source file of the SDK is in this package, and the Unity code does not use it
 
 - loopMIDI (Tobias Erichsen) is named as an example of a virtual MIDI cable. It is not part of the package.
 - The showcase is an original game. Its character, level, art and song are Cat Splat Studios' own.
-""".format(sdk=SDK_URL))
+""".format(
+            sdk=SDK_URL
+        ),
+    )
 
     for name in ("README.md", "CHANGELOG.md", "LICENSE.md", "Third Party Notices.md"):
         write_meta(target, name, "TextScriptImporter")
 
-    write_text(os.path.join(target, ".gitignore"),
-               "# A Unity package repository: Unity writes nothing here. Keep every .meta.\n"
-               ".DS_Store\nThumbs.db\ndesktop.ini\n*.tmp\n*.swp\n*~.bak\n.vs/\n.vscode/\n.idea/\n")
-    write_text(os.path.join(target, ".gitattributes"),
-               "# Everything is stored byte for byte: the package is generated, and Unity's YAML and .meta files must not be\n"
-               "# rewritten by line-ending conversion.\n"
-               "* -text\n"
-               "*.mp4 binary\n*.gif binary\n*.png binary\n*.jpg binary\n*.dll binary\n*.zip binary\n*.bytes binary\n"
-               "*.cs diff=csharp\n*.md diff=markdown\n")
+    write_text(
+        os.path.join(target, ".gitignore"),
+        "# A Unity package repository: Unity writes nothing here. Keep every .meta.\n"
+        ".DS_Store\nThumbs.db\ndesktop.ini\n*.tmp\n*.swp\n*~.bak\n.vs/\n.vscode/\n.idea/\n",
+    )
+    write_text(
+        os.path.join(target, ".gitattributes"),
+        "# Everything is stored byte for byte: the package is generated, and Unity's YAML and .meta files must not be\n"
+        "# rewritten by line-ending conversion.\n"
+        "* -text\n"
+        "*.mp4 binary\n*.gif binary\n*.png binary\n*.jpg binary\n*.dll binary\n*.zip binary\n*.bytes binary\n"
+        "*.cs diff=csharp\n*.md diff=markdown\n",
+    )
 
 
 # ---------------------------------------------------------------- checks
+
 
 def all_files(target):
     for folder, folders, files in os.walk(target):
@@ -1281,7 +1626,7 @@ def check_metas(target):
     seen = {}
     for path in all_files(target):
         relative = os.path.relpath(path, target).replace("\\", "/")
-        if path.endswith(".meta"):                                   # all of them, the sample's too
+        if path.endswith(".meta"):  # all of them, the sample's too
             guid = re.search(r"^guid: ([0-9a-f]{32})$", read_text(path), re.M)
             if not guid:
                 problems.append(relative + " has no guid")
@@ -1293,7 +1638,10 @@ def check_metas(target):
 
 
 def check_privacy(target, final):
+    """Looks through every file of the package for what must not be published. Returns the problems, as lines."""
     problems = []
+
+    # ---- what is looked for: the studio's mail domain, this machine's folders in three spellings, the user's name
     allowed_name = b"github.com/hisham-css"
     machine = [os.path.expanduser("~"), ROOT, os.path.dirname(ROOT), target, final, os.path.dirname(final)]
     needles = [b"@catsplatstudios", b"cat splat repos", b"\\users\\", b"/users/"]
@@ -1301,7 +1649,9 @@ def check_privacy(target, final):
         for form in (value, value.replace("\\", "/"), value.replace("\\", "\\\\")):
             needles.append(form.lower().encode("utf-8"))
     user = os.path.basename(os.path.expanduser("~")).lower().encode("utf-8")
-    blobs = []                                   # every file, and every member of every zip
+
+    # ---- where: every file, and every member of every zip
+    blobs = []
     for path in all_files(target):
         relative = os.path.relpath(path, target).replace("\\", "/")
         with open(path, "rb") as f:
@@ -1312,31 +1662,44 @@ def check_privacy(target, final):
                 for info in z.infolist():
                     blobs.append((relative + " > " + info.filename, info.filename, z.read(info.filename)))
     for relative, path, raw in blobs:
+        # ---- a .wasm: no debug section, no path
         if path.lower().endswith(".wasm"):
             for name, size in strip_wasm_debug.debug_sections(raw):
                 problems.append("%s has the debug section %s (%d bytes)" % (relative, name, size))
             for found in strip_wasm_debug.paths_in(raw):
                 problems.append("%s holds what looks like a machine path: %r" % (relative, found))
+        # ---- the bytes as they are, and read as UTF-16 (an odd last byte is left off): the needles, and the name
         data = raw.lower()
-        wide = raw.decode("utf-16-le", "ignore").lower().encode("utf-8", "ignore") if len(raw) % 2 == 0 else raw[:-1].decode("utf-16-le", "ignore").lower().encode("utf-8", "ignore")
+        wide = (
+            raw.decode("utf-16-le", "ignore").lower().encode("utf-8", "ignore")
+            if len(raw) % 2 == 0
+            else raw[:-1].decode("utf-16-le", "ignore").lower().encode("utf-8", "ignore")
+        )
         for hay, kind in ((data, ""), (wide, " (UTF-16)")):
             for needle in needles:
                 if needle in hay:
                     problems.append("%s contains %r%s" % (relative, needle.decode("utf-8"), kind))
             for word in {b"hisham", user} if len(user) >= 4 else {b"hisham"}:
                 for found in re.finditer(re.escape(word), hay):
+                    # the name may stand inside the GitHub address only: 11 is len("github.com/"), and 10 bytes
+                    # from the name's start reach the end of "hisham-css"
                     start = found.start()
-                    context = hay[max(0, start - 11):start + 10]
+                    context = hay[max(0, start - 11) : start + 10]
                     if allowed_name not in context:
-                        problems.append("%s contains %r outside the GitHub address%s" % (relative, word.decode("utf-8"), kind))
+                        problems.append(
+                            "%s contains %r outside the GitHub address%s" % (relative, word.decode("utf-8"), kind)
+                        )
                         break
+        # ---- text files only: a drive path (C:\...), an e-mail address
         if os.path.splitext(path)[1].lower() in TEXT_EXTENSIONS:
             text = raw.decode("utf-8", "replace")
             for allowed in ALLOWED_DRIVE_PATHS:
                 text = text.replace(allowed, "")
             for found in re.finditer(r"(?<![A-Za-z])[A-Za-z]:[\\/][A-Za-z_]", text):
                 line = text.count("\n", 0, found.start()) + 1
-                problems.append("%s line %d: a drive path, %r" % (relative, line, text[found.start():found.start() + 40]))
+                problems.append(
+                    "%s line %d: a drive path, %r" % (relative, line, text[found.start() : found.start() + 40])
+                )
             for found in re.finditer(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z]{2,}", text):
                 problems.append("%s: an e-mail address, %r" % (relative, found.group(0)))
     return sorted(set(problems))
@@ -1344,7 +1707,8 @@ def check_privacy(target, final):
 
 def anchors_of(path):
     text = strip_code(read_text(path))
-    found, counts = set(), {}
+    found = set()
+    counts = {}
     for heading in re.findall(r"^#{1,6} +(.+?)\s*$", text, re.M):
         s = slug(heading)
         n = counts.get(s, 0)
@@ -1355,7 +1719,8 @@ def anchors_of(path):
 
 def check_links(target):
     """Every relative link and picture in every Markdown file of the package resolves, anchors included."""
-    problems, checked = [], 0
+    problems = []
+    checked = 0
     pages = [p for p in all_files(target) if p.lower().endswith(".md")]
     for page in pages:
         relative = os.path.relpath(page, target).replace("\\", "/")
@@ -1377,12 +1742,17 @@ def check_links(target):
                 continue
             if anchor and destination.lower().endswith(".md") and os.path.isfile(destination):
                 if urllib.parse.unquote(anchor).lower() not in anchors_of(destination):
-                    problems.append("%s: no heading for #%s in %s" % (relative, anchor, os.path.relpath(destination, target).replace("\\", "/")))
+                    problems.append(
+                        "%s: no heading for #%s in %s"
+                        % (relative, anchor, os.path.relpath(destination, target).replace("\\", "/"))
+                    )
     return problems, checked, len(pages)
 
 
 def report_sizes(target):
-    total, parts, digest = 0, {}, hashlib.sha256()
+    total = 0
+    parts = {}
+    digest = hashlib.sha256()
     count = 0
     for path in all_files(target):
         relative = os.path.relpath(path, target).replace("\\", "/")
@@ -1402,39 +1772,25 @@ def report_sizes(target):
     print("content sha256: %s   (the same on every run from the same source)" % digest.hexdigest())
 
 
-def main():
-    arguments = sys.argv[1:]
-    if len(arguments) > 1 or (arguments and arguments[0].startswith("-")):
-        sys.exit(__doc__)
-    final = prepare_target(arguments[0] if arguments else os.path.join(ROOT, "..", "unity-sfx-forge"))
-    print("make_unity_package: %s %s -> %s" % (PACKAGE_ID, VERSION, os.path.basename(final)))
-    os.makedirs(os.path.dirname(final), exist_ok=True)
-    # Built and checked beside the target (the same disk, so the last step is a move); the target is touched last.
-    staging = tempfile.mkdtemp(prefix=".make-unity-package-", dir=os.path.dirname(final))
-    try:
-        build(staging, final)
-    finally:
-        if os.path.isdir(staging):               # the folder this run made: left over only when something failed
-            shutil.rmtree(staging)
-    warn_about_git_identity(final)
-    print("make_unity_package: done")
-
-
 def warn_about_git_identity(target):
     """The files hold no e-mail address, but commits do: say so before the repository is published."""
     if not os.path.isdir(os.path.join(target, ".git")) or not shutil.which("git"):
         return
+
     def git(*arguments):
         result = subprocess.run(["git", "-C", target] + list(arguments), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return result.stdout.decode("utf-8", "replace").split() if result.returncode == 0 else []
+
     private = lambda address: bool(address) and not address.lower().endswith("@users.noreply.github.com")
     configured = git("config", "user.email")
     history = sorted(set(a for a in git("log", "--format=%ae %ce") if private(a)))
     if history or any(private(a) for a in configured):
-        print("NOTE: git in the target: %d address(es) in its commits and the configured user.email are not no-reply addresses.\n"
-              "      No file of the package holds an e-mail address, but the commits will carry one when the repository is\n"
-              "      published. To avoid that, commit with a no-reply identity (and re-create the existing commits) first."
-              % len(history))
+        print(
+            "NOTE: git in the target: %d address(es) in its commits and the configured user.email are not no-reply addresses.\n"
+            "      No file of the package holds an e-mail address, but the commits will carry one when the repository is\n"
+            "      published. To avoid that, commit with a no-reply identity (and re-create the existing commits) "
+            "first." % len(history)
+        )
 
 
 def build(target, final):
@@ -1447,16 +1803,28 @@ def build(target, final):
     make_licences(target)
     make_readme(target)
     make_companions(target, counts)
-    print("copied: Runtime %(Runtime)d files, Editor %(Editor)d files, Samples~/Showcase %(Samples~/Showcase)d files, %(figures)d figures, 5 videos" % counts)
+    print(
+        "copied: Runtime %(Runtime)d files, Editor %(Editor)d files, Samples~/Showcase %(Samples~/Showcase)d files, "
+        "%(figures)d figures, 5 videos" % counts
+    )
 
     failed = False
-    for title, problems in (("meta files", check_metas(target)), ("privacy (no e-mail, no machine path, no owner's name outside the GitHub address; zip members too)", check_privacy(target, final))):
+    for title, problems in (
+        ("meta files", check_metas(target)),
+        (
+            "privacy (no e-mail, no machine path, no owner's name outside the GitHub address; zip members too)",
+            check_privacy(target, final),
+        ),
+    ):
         print("check: %s: %s" % (title, "ok" if not problems else "FAILED"))
         for p in problems[:40]:
             print("   " + p)
         failed = failed or bool(problems)
     problems, checked, pages = check_links(target)
-    print("check: links: %s (%d relative links in %d Markdown files)" % ("ok" if not problems else "FAILED", checked, pages))
+    print(
+        "check: links: %s (%d relative links in %d Markdown files)"
+        % ("ok" if not problems else "FAILED", checked, pages)
+    )
     for p in problems[:60]:
         print("   " + p)
     failed = failed or bool(problems)
@@ -1464,6 +1832,25 @@ def build(target, final):
     if failed:
         fail("the package did not pass its checks: the target was not touched")
     install(target, final)
+
+
+def main():
+    arguments = sys.argv[1:]
+    if len(arguments) > 1 or (arguments and arguments[0].startswith("-")):
+        sys.exit(__doc__)
+    final = prepare_target(arguments[0] if arguments else os.path.join(ROOT, "..", "unity-sfx-forge"))
+    print("make_unity_package: %s %s -> %s" % (PACKAGE_ID, VERSION, os.path.basename(final)))
+    os.makedirs(os.path.dirname(final), exist_ok=True)
+    # Built and checked beside the target (the same disk, so the last step is a move); the target is touched last.
+    staging = tempfile.mkdtemp(prefix=".make-unity-package-", dir=os.path.dirname(final))
+    try:
+        build(staging, final)
+    finally:
+        # the folder this run made: left over only when something failed
+        if os.path.isdir(staging):
+            shutil.rmtree(staging)
+    warn_about_git_identity(final)
+    print("make_unity_package: done")
 
 
 if __name__ == "__main__":

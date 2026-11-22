@@ -1,0 +1,11 @@
+# prettier (.prettierrc) formats the JavaScript of this repository and nothing else:
+#   npx prettier@3.3.3 --write "tests/*.mjs" docs/shots.mjs
+# Everything is ignored here but those files, so that "prettier --write ." cannot touch the test scenes (tests/*.json
+# are compared byte for byte), the documents or Unity's files.
+/*
+!/tests/
+/tests/*
+!/tests/*.mjs
+!/docs/
+/docs/*
+!/docs/shots.mjs

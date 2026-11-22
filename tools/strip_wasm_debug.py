@@ -22,7 +22,8 @@ ZIP_DATE = (1980, 1, 1, 0, 0, 0)
 
 
 def leb(data, at):
-    value, shift = 0, 0
+    value = 0
+    shift = 0
     while True:
         byte = data[at]
         at += 1
@@ -36,7 +37,8 @@ def sections(data):
     """(id, name or None, start, end) of every section; end is one past its last byte."""
     if data[:8] != b"\0asm\x01\0\0\0":
         raise ValueError("not a WebAssembly module (version 1)")
-    at, found = 8, []
+    at = 8
+    found = []
     while at < len(data):
         start = at
         kind = data[at]
@@ -47,7 +49,7 @@ def sections(data):
         name = None
         if kind == 0:
             length, text = leb(data, body)
-            name = data[text:text + length].decode("utf-8", "replace")
+            name = data[text : text + length].decode("utf-8", "replace")
         found.append((kind, name, start, end))
         at = end
     return found
@@ -62,7 +64,8 @@ def debug_sections(data):
 
 
 def strip(data):
-    kept, dropped = [data[:8]], []
+    kept = [data[:8]]
+    dropped = []
     for kind, name, start, end in sections(data):
         if is_debug(name):
             dropped.append((name, end - start))
@@ -74,7 +77,9 @@ def strip(data):
 def paths_in(data):
     """What looks like an absolute path of a machine: a drive letter, or a home folder."""
     found = set()
-    for match in re.finditer(rb"(?<![A-Za-z0-9])[A-Za-z]:[\/][A-Za-z0-9_. \/-]{3,60}|/(?:home|Users)/[A-Za-z0-9_. /-]{2,60}", data):
+    for match in re.finditer(
+        rb"(?<![A-Za-z0-9])[A-Za-z]:[\/][A-Za-z0-9_. \/-]{3,60}|/(?:home|Users)/[A-Za-z0-9_. /-]{2,60}", data
+    ):
         found.add(match.group(0).decode("latin-1"))
     return sorted(found)
 
@@ -90,12 +95,22 @@ def main():
     if dropped:
         with open(wasm_path, "wb") as f:
             f.write(stripped)
-    print("strip_wasm_debug: %s: %d -> %d bytes, %d debug sections removed%s"
-          % (os.path.basename(wasm_path), len(original), len(stripped), len(dropped),
-             "" if dropped else " (there were none)"))
+    print(
+        "strip_wasm_debug: %s: %d -> %d bytes, %d debug sections removed%s"
+        % (
+            os.path.basename(wasm_path),
+            len(original),
+            len(stripped),
+            len(dropped),
+            "" if dropped else " (there were none)",
+        )
+    )
     left = paths_in(stripped)
     if left:
-        sys.exit("strip_wasm_debug: ERROR: the stripped .wasm still holds what looks like a machine path: " + ", ".join(left[:5]))
+        sys.exit(
+            "strip_wasm_debug: ERROR: the stripped .wasm still holds what looks like a machine path: "
+            + ", ".join(left[:5])
+        )
 
     if len(arguments) == 2:
         zip_path = arguments[1]
@@ -113,8 +128,10 @@ def main():
                 info.external_attr = 0
                 z.writestr(info, stripped if name == member else content, compresslevel=9)
         os.replace(temporary, zip_path)
-        print("strip_wasm_debug: %s written again with %d members, %d bytes"
-              % (os.path.basename(zip_path), len(members), os.path.getsize(zip_path)))
+        print(
+            "strip_wasm_debug: %s written again with %d members, %d bytes"
+            % (os.path.basename(zip_path), len(members), os.path.getsize(zip_path))
+        )
 
 
 if __name__ == "__main__":

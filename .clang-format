@@ -1,0 +1,36 @@
+# The C style of SFX FORGE (core/, native/, sfx-forge/, tests/*.c). clang-format 15 or later.
+# Run it from the repository root, for example:
+#   npx clang-format@1.8.0 -i core/*.h native/*.c sfx-forge/*.c sfx-forge/*.h tests/*.c
+# A table of data that is aligned by hand is kept so between "// clang-format off" and "// clang-format on".
+# The formatter is a first pass: read what it made and tidy by hand (a long comment belongs ABOVE its line).
+BasedOnStyle: LLVM
+IndentWidth: 2
+ContinuationIndentWidth: 4
+UseTab: Never
+ColumnLimit: 120
+
+# one statement a line, always with braces
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+InsertBraces: true
+BreakBeforeBraces: Attach
+
+# the code as it is written here
+PointerAlignment: Right
+IndentCaseLabels: false
+IndentPPDirectives: None
+SortIncludes: Never
+AlignConsecutiveMacros: Consecutive
+AlignTrailingComments: true
+AlignOperands: Align
+BreakBeforeBinaryOperators: None
+BinPackArguments: true
+BinPackParameters: true
+ReflowComments: true
+MaxEmptyLinesToKeep: 1
+KeepEmptyLinesAtTheStartOfBlocks: false
+SpacesBeforeTrailingComments: 2

@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Runs the Unity package's engine-independent code (Runtime/Core) without Unity: dotnet run -c Release -->
+  <!-- Runs the Unity package's engine-independent code (Runtime/Core) without Unity: dotnet run -c Release.
+       Every .cs file of this folder is part of the program: Program.cs has Main and says what the others hold. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
@@ -10,7 +11,7 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Program.cs" />
+    <Compile Include="*.cs" />
     <Compile Include="..\..\unity\com.catsplat.sfxforge\Runtime\Core\*.cs" />
     <None Include="..\..\unity\com.catsplat.sfxforge\Runtime\Plugins\x86_64\sfxforge.dll" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
