@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: MIT
  * sfx_song.h – music for SFX FORGE: a song of 8 patterns over the 16 sounds, and the player that makes it sound.
+ * A pattern is a bar of up to 16 sixteenths; its grid cuts each in 1, 2 or 4 steps (16, 32, 64 steps a pattern).
  *
  * The same player runs in the VIBE FM firmware and in the native library a game uses, so a song sounds in the game as
  * it did on the device. What makes it game music:
@@ -16,25 +17,36 @@
 #include "sfx_core.h"
 
 #define SFX_TRACKS   16            /* one per sound */
-#define SFX_STEPS    16
+#define SFX_BAR      16            /* sixteenths in a bar at most: sfx_song.len is 1..SFX_BAR */
+#define SFX_STEPS    64            /* cells in a pattern: SFX_BAR sixteenths, each cut in up to 4 */
+#define SFX_GRIDS    3             /* a pattern's grid: 0, 1, 2 = sixteenths, thirty-seconds, sixty-fourths */
 #define SFX_PATTERNS 8
-#define SFX_SONG_VERSION 5
+#define SFX_SONG_VERSION 6
 #define SFX_LANES 24               /* automation lanes in a song: each moves one knob of one sound (or the master) */
 #define SFX_ARR_MAX 32             /* bars in an arrangement */
 #define SFX_M_COUNT    8           /* the master's values (three spare) */
-#define SFX_SONG_BODY_V4 (SFX_PATTERNS * SFX_TRACKS * (3 + 3 * SFX_STEPS))
-#define SFX_SONG_BODY_V3 (SFX_PATTERNS * SFX_TRACKS * (3 + 2 * SFX_STEPS))
-#define SFX_SONG_BODY  (SFX_SONG_BODY_V3 + SFX_PATTERNS * SFX_LANES * SFX_STEPS)
-#define SFX_SONG_BODY_V2 (SFX_PATTERNS * SFX_TRACKS * (3 + SFX_STEPS))
+/* the formats before this one: a row of 16 steps for every sound of every pattern, whatever was in it */
+#define SFX_SONG_BODY_V4 (SFX_PATTERNS * SFX_TRACKS * (3 + 3 * SFX_BAR))
+#define SFX_SONG_BODY_V3 (SFX_PATTERNS * SFX_TRACKS * (3 + 2 * SFX_BAR))
+#define SFX_SONG_BODY_V5 (SFX_SONG_BODY_V3 + SFX_PATTERNS * SFX_LANES * SFX_BAR)
+#define SFX_SONG_BODY_V2 (SFX_PATTERNS * SFX_TRACKS * (3 + SFX_BAR))
 #define SFX_SONG_HEAD_V2 (7 + SFX_TRACKS * 3 + 3 + SFX_M_COUNT)
 #define SFX_SONG_HEAD_V4 (SFX_SONG_HEAD_V2 + SFX_TRACKS + 1 + SFX_ARR_MAX)
-#define SFX_SONG_HEAD  (SFX_SONG_HEAD_V2 + 1 + SFX_ARR_MAX + SFX_LANES * 2)
-#define SFX_SONG_BYTES (SFX_SONG_HEAD + SFX_SONG_BODY)           /* packed: 7699 bytes, each 0..127 */
+/* format 6: the head of format 5, then a block a pattern that holds only the rows that are used - so a packed song has
+   no fixed size: SFX_SONG_MIN .. SFX_SONG_MAX bytes, each 0..127 (sfx_song_pack says how many) */
+#define SFX_SONG_HEAD     147
+#define SFX_SONG_MIN      211       /* 147 + 8 * 8 */
+#define SFX_SONG_MAX      38355     /* 147 + 8 * (8 + 16 * 202 + 24 * 64) */
+#define SFX_SONG_BYTES_V5 7699      /* version 5 (16 steps a pattern, every row written) - still taken */
 #define SFX_SONG_BYTES_V4 (SFX_SONG_HEAD_V4 + SFX_SONG_BODY_V4)  /* version 4 (one lane a sound): 6643 bytes – still taken */
 #define SFX_SONG_BYTES_V3 (SFX_SONG_HEAD_V2 + SFX_SONG_BODY_V3)  /* version 3 (no automation, no arrangement): 4546 bytes – still taken */
 #define SFX_SONG_BYTES_V2 (SFX_SONG_HEAD_V2 + SFX_SONG_BODY_V2)  /* version 2 (no velocity, no length either): 2498 bytes – still taken */
 #define SFX_SONG_BYTES_V1 (7 + SFX_TRACKS + SFX_SONG_BODY_V2) /* version 1 (no mixer either): 2455 bytes – still taken */
-/* a step's accent byte: its velocity (8 levels) and its length */
+_Static_assert(SFX_SONG_BYTES_V1 == 2455 && SFX_SONG_BYTES_V2 == 2498 && SFX_SONG_BYTES_V3 == 4546 && SFX_SONG_BYTES_V4 == 6643 && SFX_SONG_BYTES_V5 == 7699, "old sizes");
+_Static_assert(SFX_SONG_HEAD == SFX_SONG_HEAD_V2 + 1 + SFX_ARR_MAX + SFX_LANES * 2 && SFX_SONG_BYTES_V5 == SFX_SONG_HEAD + SFX_SONG_BODY_V5, "format 5");
+_Static_assert(SFX_SONG_HEAD == 147 && SFX_SONG_MAX == 147 + 8 * (8 + 16 * 202 + 24 * 64), "format 6");
+static inline int sfx_div(int grid) { return grid == 2 ? 4 : grid == 1 ? 2 : 1; }   /* steps a sixteenth; any other byte reads as 1 */
+/* a step's accent byte in the formats 3 to 5: its velocity (8 levels) and its length */
 #define SFX_VEL_DEFAULT 5
 #define SFX_ACC(vel, len) ((uint8_t)(((len) & 15) << 3 | ((vel) & 7)))
 #define SFX_ACC_VEL(a) ((a) & 7)                   /* 0..7: soft .. full (5 = as it always was) */
@@ -51,17 +63,21 @@ enum { SFX_M_DELAY_TIME,           /* 0..5: the echo after 1, 2, 3, 4, 6, 8 sixt
 #define SFX_DELAY_TIMES 6
 enum { SFX_SCALE_CHROMATIC, SFX_SCALE_MAJOR, SFX_SCALE_MINOR, SFX_SCALE_PENTATONIC, SFX_SCALE_COUNT };
 
+/* A pattern is a bar. Its grid cuts every sixteenth of the bar in 1, 2 or 4 steps: 16, 32 or 64 steps a full bar.
+   The cells from 16 * sfx_div(grid) on are always empty (sfx_song_init, sfx_song_unpack and sfx_pattern_regrid keep it so). */
 typedef struct {
+  uint8_t  grid;                          /* 0, 1, 2 = 16, 32, 64 steps a full bar */
   uint16_t on[SFX_STEPS];                 /* per step: bit = sound */
   uint8_t  note[SFX_TRACKS][SFX_STEPS];   /* 0 = the sound as designed (drums, effects), else a MIDI note */
-  uint8_t  acc[SFX_TRACKS][SFX_STEPS];    /* SFX_ACC: velocity and length */
+  uint8_t  vel[SFX_TRACKS][SFX_STEPS];    /* 0..7: soft .. full (SFX_VEL_DEFAULT 5 = as it always was) */
+  uint8_t  len[SFX_TRACKS][SFX_STEPS];    /* 0 = by itself (to the sound's end, its next note or the bar line), else steps of THIS pattern's grid: 1 .. 16 * div - 1 */
   uint8_t  aut[SFX_LANES][SFX_STEPS];     /* the automation lanes: 0 = no point, else value + 1 (1..127). A point holds to the next, or the bar's end */
 } sfx_pattern;
 
 typedef struct {
   sfx_pattern pat[SFX_PATTERNS];
   uint16_t bpm;                           /* 40..240 */
-  uint8_t  len;                           /* steps a pattern, 1..16 */
+  uint8_t  len;                           /* the bar in sixteenths, 1..16 (a pattern plays len * sfx_div(its grid) steps) */
   uint8_t  swing;                         /* 0..100 */
   uint8_t  scale;                         /* for entering notes (key of C) */
   uint8_t  chain;                         /* 1 = stay on a pattern, n = walk patterns 1..n, one bar each */
@@ -83,15 +99,74 @@ static inline void sfx_song_mix_init(sfx_song *s)
   s->mute = s->solo = 0;
 }
 
+static inline void sfx__cell_clear(sfx_pattern *p, int i)
+{
+  p->on[i] = 0;
+  for (int t = 0; t < SFX_TRACKS; t++) { p->note[t][i] = 0; p->vel[t][i] = SFX_VEL_DEFAULT; p->len[t][i] = 0; }
+  for (int l = 0; l < SFX_LANES; l++) p->aut[l][i] = 0;
+}
+
+/* all 64 cells empty; the grid stays */
+static inline void sfx_pattern_clear(sfx_pattern *p) { for (int i = 0; i < SFX_STEPS; i++) sfx__cell_clear(p, i); }
+
+/* what lowering the pattern to `grid` would drop: the steps (a sound on a step counts one) and the points that stand
+   between the steps of the coarser grid. 0 when that is not lowering. */
+static inline int sfx_pattern_regrid_loss(const sfx_pattern *p, int grid)
+{
+  int od = sfx_div(p->grid), nd = sfx_div(grid), n = 0;
+  if (grid < 0 || grid >= SFX_GRIDS || nd >= od) return 0;
+  int k = od / nd;
+  for (int i = 0; i < SFX_BAR * od; i++) {
+    if (i % k == 0) continue;
+    for (unsigned m = p->on[i]; m; m &= m - 1) n++;
+    for (int l = 0; l < SFX_LANES; l++) if (p->aut[l][i]) n++;
+  }
+  return n;
+}
+
+/* the pattern in another grid, in place. Finer: every step moves to the step that begins at the same moment, a length
+   is multiplied - it sounds the same. Coarser: what stands between the steps of the new grid is dropped, a length is
+   rounded up. A grid above 2 is ignored. */
+static inline void sfx_pattern_regrid(sfx_pattern *p, int grid)
+{
+  int og = p->grid < SFX_GRIDS ? p->grid : 0;
+  if (grid < 0 || grid >= SFX_GRIDS) return;
+  int od = sfx_div(og), nd = sfx_div(grid);
+  if (nd > od) {
+    int k = nd / od;
+    for (int i = SFX_BAR * od - 1; i >= 0; i--) {
+      int to = i * k;
+      if (i) p->on[to] = p->on[i];
+      for (int t = 0; t < SFX_TRACKS; t++) { p->note[t][to] = p->note[t][i]; p->vel[t][to] = p->vel[t][i]; p->len[t][to] = (uint8_t)(p->len[t][i] * k); }
+      for (int l = 0; l < SFX_LANES; l++) p->aut[l][to] = p->aut[l][i];
+      if (i) sfx__cell_clear(p, i);
+    }
+  }
+  else if (nd < od) {
+    int k = od / nd, top = SFX_BAR * nd - 1;
+    for (int i = 0; i < SFX_BAR * nd; i++) {
+      int from = i * k;
+      p->on[i] = p->on[from];
+      for (int t = 0; t < SFX_TRACKS; t++) {
+        int len = (p->len[t][from] + k - 1) / k;
+        p->note[t][i] = p->note[t][from]; p->vel[t][i] = p->vel[t][from]; p->len[t][i] = (uint8_t)(len > top ? top : len);
+      }
+      for (int l = 0; l < SFX_LANES; l++) p->aut[l][i] = p->aut[l][from];
+    }
+    for (int i = SFX_BAR * nd; i < SFX_STEPS; i++) sfx__cell_clear(p, i);
+  }
+  p->grid = (uint8_t)grid;
+}
+
 static inline void sfx_song_init(sfx_song *s)
 {
-  for (int p = 0; p < SFX_PATTERNS; p++) for (int i = 0; i < SFX_STEPS; i++) { s->pat[p].on[i] = 0; for (int t = 0; t < SFX_TRACKS; t++) { s->pat[p].note[t][i] = 0; s->pat[p].acc[t][i] = SFX_VEL_DEFAULT; } for (int l = 0; l < SFX_LANES; l++) s->pat[p].aut[l][i] = 0; }
+  for (int p = 0; p < SFX_PATTERNS; p++) { sfx_pattern_clear(&s->pat[p]); s->pat[p].grid = 0; }
   for (int t = 0; t < SFX_TRACKS; t++) s->level[t] = 0;
   for (int l = 0; l < SFX_LANES; l++) s->lane[l].track = s->lane[l].to = 0;
   for (int i = 0; i < SFX_ARR_MAX; i++) s->arr[i] = 0;
   s->arr_len = 0;
   sfx_song_mix_init(s);
-  s->bpm = 120; s->len = SFX_STEPS; s->swing = 0; s->scale = SFX_SCALE_MINOR; s->chain = 1;
+  s->bpm = 120; s->len = SFX_BAR; s->swing = 0; s->scale = SFX_SCALE_MINOR; s->chain = 1;
 }
 
 /* the next note up (dir > 0) or down in the scale; below the lowest: 0 = "as designed", and up from there: middle C */
@@ -108,8 +183,21 @@ static inline int sfx_scale_step(int note, int dir, int scale)
   return note;
 }
 
-/* ---- a song as bytes 0..127: for storage, for SysEx, for a game's asset --------------------------------------------- */
-static inline void sfx_song_pack(const sfx_song *s, uint8_t *out)
+/* ---- a song as bytes 0..127: for storage, for SysEx, for a game's asset ---------------------------------------------
+   Format 6:
+     0          6
+     1 .. 146   the bar, the tempo, swing, scale, chain, the layers, the mixer, the master, the arrangement, the lanes
+     147 ..     8 pattern blocks, A to H. A block:
+        +0        grid 0, 1, 2          (G = 16, 32, 64 steps; B = 3, 5, 10 bytes of step bits)
+        +1 .. +3  the sounds with a row: bit t, as 7 + 7 + 2 bits
+        +4 .. +7  the lanes with a row: bit l, as 7 + 7 + 7 + 3 bits
+        for each sound with a row, ascending:  B bytes: the steps that are on, 7 bits a byte, step 0 = bit 0 of the first
+                                               G bytes notes · G bytes velocities 0..7 · G bytes lengths 0 .. G-1
+        for each lane with a row, ascending:   G bytes points: 0 none, else value + 1
+   A sound has a row when anything is kept for it in that pattern, a lane when it has a point there. */
+
+/* out holds SFX_SONG_MAX bytes. Returns the bytes written. */
+static inline int sfx_song_pack(const sfx_song *s, uint8_t *out)
 {
   uint8_t *o = out;
   *o++ = SFX_SONG_VERSION; *o++ = s->len; *o++ = (uint8_t)(s->bpm >> 7); *o++ = (uint8_t)(s->bpm & 0x7F);
@@ -125,26 +213,35 @@ static inline void sfx_song_pack(const sfx_song *s, uint8_t *out)
     int ok = s->lane[l].track <= SFX_TRACKS && s->lane[l].to > 0 && s->lane[l].to < SFX_AT_COUNT;
     *o++ = ok ? s->lane[l].track : 0; *o++ = ok ? s->lane[l].to : 0;
   }
-  for (int p = 0; p < SFX_PATTERNS; p++) for (int t = 0; t < SFX_TRACKS; t++) {
-    unsigned bits = 0;
-    for (int i = 0; i < SFX_STEPS; i++) if (s->pat[p].on[i] & (1u << t)) bits |= 1u << i;
-    *o++ = (uint8_t)(bits & 0x7F); *o++ = (uint8_t)((bits >> 7) & 0x7F); *o++ = (uint8_t)(bits >> 14);
-    for (int i = 0; i < SFX_STEPS; i++) *o++ = s->pat[p].note[t][i] & 0x7F;
-    for (int i = 0; i < SFX_STEPS; i++) *o++ = s->pat[p].acc[t][i] & 0x7F;
+  for (int p = 0; p < SFX_PATTERNS; p++) {
+    const sfx_pattern *pt = &s->pat[p];
+    int grid = pt->grid < SFX_GRIDS ? pt->grid : 0, g = SFX_BAR * sfx_div(grid), nb = (g + 6) / 7;
+    uint32_t rows = 0, lanes = 0;
+    for (int i = 0; i < g; i++) {
+      rows |= pt->on[i];
+      for (int t = 0; t < SFX_TRACKS; t++) if ((pt->note[t][i] & 0x7F) || (pt->vel[t][i] & 7) != SFX_VEL_DEFAULT || pt->len[t][i]) rows |= 1u << t;
+      for (int l = 0; l < SFX_LANES; l++) if (pt->aut[l][i] & 0x7F) lanes |= 1u << l;
+    }
+    *o++ = (uint8_t)grid;
+    *o++ = (uint8_t)(rows & 0x7F); *o++ = (uint8_t)((rows >> 7) & 0x7F); *o++ = (uint8_t)((rows >> 14) & 3);
+    *o++ = (uint8_t)(lanes & 0x7F); *o++ = (uint8_t)((lanes >> 7) & 0x7F); *o++ = (uint8_t)((lanes >> 14) & 0x7F); *o++ = (uint8_t)((lanes >> 21) & 7);
+    for (int t = 0; t < SFX_TRACKS; t++) {
+      if (!(rows & (1u << t))) continue;
+      for (int b = 0; b < nb; b++) { unsigned bits = 0; for (int i = b * 7; i < b * 7 + 7 && i < g; i++) if (pt->on[i] & (1u << t)) bits |= 1u << (i - b * 7); *o++ = (uint8_t)bits; }
+      for (int i = 0; i < g; i++) *o++ = pt->note[t][i] & 0x7F;
+      for (int i = 0; i < g; i++) *o++ = pt->vel[t][i] & 7;
+      for (int i = 0; i < g; i++) *o++ = (uint8_t)(pt->len[t][i] > g - 1 ? g - 1 : pt->len[t][i]);
+    }
+    for (int l = 0; l < SFX_LANES; l++) if (lanes & (1u << l)) for (int i = 0; i < g; i++) *o++ = pt->aut[l][i] & 0x7F;
   }
-  for (int p = 0; p < SFX_PATTERNS; p++) for (int l = 0; l < SFX_LANES; l++) for (int i = 0; i < SFX_STEPS; i++) *o++ = s->pat[p].aut[l][i] & 0x7F;
+  return (int)(o - out);
 }
 
-/* 0 = taken, -1 = not a song (length, version, a value out of range) – *s is untouched then. Takes the formats before
-   this one too: 1 (no mixer), 2 (no velocity, no length), 3 (no automation, no arrangement), 4 (one lane a sound). */
-static inline int sfx_song_unpack(sfx_song *s, const uint8_t *in, int n)
+/* the head's values as formats 5 and 6 have them (and the earlier ones their part of it): 0 = in range */
+static inline int sfx__head_ok(const uint8_t *in, int ver)
 {
-  int ver = n == SFX_SONG_BYTES && in[0] == 5 ? 5 : n == SFX_SONG_BYTES_V4 && in[0] == 4 ? 4 : n == SFX_SONG_BYTES_V3 && in[0] == 3 ? 3
-          : n == SFX_SONG_BYTES_V2 && in[0] == 2 ? 2 : n == SFX_SONG_BYTES_V1 && in[0] == 1 ? 1 : 0;
-  if (!ver) return -1;
-  for (int i = 0; i < n; i++) if (in[i] > 127) return -1;
   int bpm = in[2] << 7 | in[3];
-  if (in[1] < 1 || in[1] > SFX_STEPS || bpm < 40 || bpm > 240 || in[4] > 100 || in[5] >= SFX_SCALE_COUNT || in[6] < 1 || in[6] > SFX_PATTERNS) return -1;
+  if (in[1] < 1 || in[1] > SFX_BAR || bpm < 40 || bpm > 240 || in[4] > 100 || in[5] >= SFX_SCALE_COUNT || in[6] < 1 || in[6] > SFX_PATTERNS) return -1;
   if (ver >= 2 && in[7 + SFX_TRACKS * 3 + 3 + SFX_M_DELAY_TIME] >= SFX_DELAY_TIMES) return -1;
   if (ver >= 4) {
     const uint8_t *a = in + SFX_SONG_HEAD_V2 + (ver == 4 ? SFX_TRACKS : 0);       /* the arrangement */
@@ -153,12 +250,47 @@ static inline int sfx_song_unpack(sfx_song *s, const uint8_t *in, int n)
     if (ver == 4) { for (int t = 0; t < SFX_TRACKS; t++) if (in[SFX_SONG_HEAD_V2 + t] >= SFX_AT_COUNT) return -1; }
     else for (int l = 0; l < SFX_LANES; l++) if (a[1 + SFX_ARR_MAX + l * 2] > SFX_TRACKS || a[2 + SFX_ARR_MAX + l * 2] >= SFX_AT_COUNT) return -1;
   }
+  return 0;
+}
+
+/* 0 = taken, -1 = not a song (length, version, a value out of range) – *s is untouched then. Takes the formats before
+   this one too: 1 (no mixer), 2 (no velocity, no length), 3 (no automation, no arrangement), 4 (one lane a sound),
+   5 (16 steps a pattern, every row written): their patterns come in at grid 16. */
+static inline int sfx_song_unpack(sfx_song *s, const uint8_t *in, int n)
+{
+  if (n < 7) return -1;
+  int ver = in[0] == 6 && n >= SFX_SONG_MIN && n <= SFX_SONG_MAX ? 6
+          : n == SFX_SONG_BYTES_V5 && in[0] == 5 ? 5 : n == SFX_SONG_BYTES_V4 && in[0] == 4 ? 4 : n == SFX_SONG_BYTES_V3 && in[0] == 3 ? 3
+          : n == SFX_SONG_BYTES_V2 && in[0] == 2 ? 2 : n == SFX_SONG_BYTES_V1 && in[0] == 1 ? 1 : 0;
+  if (!ver) return -1;
+  for (int i = 0; i < n; i++) if (in[i] > 127) return -1;
+  if (sfx__head_ok(in, ver)) return -1;
+  if (ver == 6) {                                     /* the blocks, before anything is written: every one inside the bytes, every value in range */
+    int o = SFX_SONG_HEAD;
+    for (int p = 0; p < SFX_PATTERNS; p++) {
+      if (o + 8 > n || in[o] >= SFX_GRIDS || in[o + 3] > 3 || in[o + 7] > 7) return -1;
+      int g = SFX_BAR * sfx_div(in[o]), nb = (g + 6) / 7, rows = 0, lanes = 0;
+      uint32_t rm = (uint32_t)in[o + 1] | (uint32_t)in[o + 2] << 7 | (uint32_t)in[o + 3] << 14;
+      uint32_t lm = (uint32_t)in[o + 4] | (uint32_t)in[o + 5] << 7 | (uint32_t)in[o + 6] << 14 | (uint32_t)in[o + 7] << 21;
+      for (uint32_t m = rm; m; m &= m - 1) rows++;
+      for (uint32_t m = lm; m; m &= m - 1) lanes++;
+      int size = 8 + rows * (nb + 3 * g) + lanes * g;
+      if (o + size > n) return -1;
+      const uint8_t *r = in + o + 8;
+      for (int k = 0; k < rows; k++, r += nb + 3 * g) {
+        if (r[nb - 1] >> (g - (nb - 1) * 7)) return -1;                            /* a step bit from G on */
+        for (int i = 0; i < g; i++) if (r[nb + g + i] > 7 || r[nb + 2 * g + i] > g - 1) return -1;
+      }
+      o += size;
+    }
+    if (o != n) return -1;
+  }
   const uint8_t *o = in + 7;
   uint8_t was[SFX_TRACKS];                            /* format 4: what each sound's one lane moved */
-  s->len = in[1]; s->bpm = (uint16_t)bpm; s->swing = in[4]; s->scale = in[5]; s->chain = in[6];
+  s->len = in[1]; s->bpm = (uint16_t)(in[2] << 7 | in[3]); s->swing = in[4]; s->scale = in[5]; s->chain = in[6];
   for (int t = 0; t < SFX_TRACKS; t++) { s->level[t] = *o++; was[t] = 0; }
   for (int l = 0; l < SFX_LANES; l++) s->lane[l].track = s->lane[l].to = 0;
-  for (int p = 0; p < SFX_PATTERNS; p++) for (int l = 0; l < SFX_LANES; l++) for (int i = 0; i < SFX_STEPS; i++) s->pat[p].aut[l][i] = 0;
+  for (int p = 0; p < SFX_PATTERNS; p++) { sfx_pattern_clear(&s->pat[p]); s->pat[p].grid = 0; }
   s->arr_len = 0;
   sfx_song_mix_init(s);
   if (ver >= 2) {
@@ -173,15 +305,33 @@ static inline int sfx_song_unpack(sfx_song *s, const uint8_t *in, int n)
     for (int i = 0; i < SFX_ARR_MAX; i++) s->arr[i] = *o++;
   }
   if (ver >= 5) for (int l = 0; l < SFX_LANES; l++) { s->lane[l].track = *o++; s->lane[l].to = *o++; if (!s->lane[l].to) s->lane[l].track = 0; }
-  for (int p = 0; p < SFX_PATTERNS; p++) for (int i = 0; i < SFX_STEPS; i++) s->pat[p].on[i] = 0;
+  if (ver == 6) {
+    for (int p = 0; p < SFX_PATTERNS; p++) {
+      sfx_pattern *pt = &s->pat[p];
+      int g = SFX_BAR * sfx_div(o[0]), nb = (g + 6) / 7;
+      uint32_t rm = (uint32_t)o[1] | (uint32_t)o[2] << 7 | (uint32_t)o[3] << 14;
+      uint32_t lm = (uint32_t)o[4] | (uint32_t)o[5] << 7 | (uint32_t)o[6] << 14 | (uint32_t)o[7] << 21;
+      pt->grid = o[0]; o += 8;
+      for (int t = 0; t < SFX_TRACKS; t++) {
+        if (!(rm & (1u << t))) continue;
+        for (int i = 0; i < g; i++) {
+          if (o[i / 7] & (1u << (i % 7))) pt->on[i] |= (uint16_t)(1u << t);
+          pt->note[t][i] = o[nb + i]; pt->vel[t][i] = o[nb + g + i]; pt->len[t][i] = o[nb + 2 * g + i];
+        }
+        o += nb + 3 * g;
+      }
+      for (int l = 0; l < SFX_LANES; l++) if (lm & (1u << l)) { for (int i = 0; i < g; i++) pt->aut[l][i] = o[i]; o += g; }
+    }
+    return 0;
+  }
   for (int p = 0; p < SFX_PATTERNS; p++) for (int t = 0; t < SFX_TRACKS; t++) {
     unsigned bits = (unsigned)o[0] | (unsigned)o[1] << 7 | (unsigned)(o[2] & 3) << 14; o += 3;
-    for (int i = 0; i < SFX_STEPS; i++) { if (bits & (1u << i)) s->pat[p].on[i] |= (uint16_t)(1u << t); s->pat[p].note[t][i] = *o++; }
-    for (int i = 0; i < SFX_STEPS; i++) s->pat[p].acc[t][i] = ver >= 3 ? *o++ : SFX_VEL_DEFAULT;
-    if (ver == 4) for (int i = 0; i < SFX_STEPS; i++) s->pat[p].aut[t][i] = *o++;        /* (sound t's lane becomes lane t) */
+    for (int i = 0; i < SFX_BAR; i++) { if (bits & (1u << i)) s->pat[p].on[i] |= (uint16_t)(1u << t); s->pat[p].note[t][i] = *o++; }
+    if (ver >= 3) for (int i = 0; i < SFX_BAR; i++) { uint8_t a = *o++; s->pat[p].vel[t][i] = SFX_ACC_VEL(a); s->pat[p].len[t][i] = SFX_ACC_LEN(a); }
+    if (ver == 4) for (int i = 0; i < SFX_BAR; i++) s->pat[p].aut[t][i] = *o++;        /* (sound t's lane becomes lane t) */
   }
   if (ver == 4) for (int t = 0; t < SFX_TRACKS; t++) if (was[t]) { s->lane[t].track = (uint8_t)(t + 1); s->lane[t].to = was[t]; }
-  if (ver >= 5) for (int p = 0; p < SFX_PATTERNS; p++) for (int l = 0; l < SFX_LANES; l++) for (int i = 0; i < SFX_STEPS; i++) s->pat[p].aut[l][i] = *o++;
+  if (ver >= 5) for (int p = 0; p < SFX_PATTERNS; p++) for (int l = 0; l < SFX_LANES; l++) for (int i = 0; i < SFX_BAR; i++) s->pat[p].aut[l][i] = *o++;
   return 0;
 }
 
@@ -313,16 +463,19 @@ typedef struct {
   int16_t key[SFX_PLAYER_VOICES];
   uint32_t age[SFX_PLAYER_VOICES], ages, seed;
   sfx_patch patch[SFX_TRACKS];
-  sfx_song song;                          /* (a host with two threads: the one that edits writes single values only) */
+  sfx_song song;                          /* (a host with two threads: the one that edits writes single values - and where it rewrites a whole
+                                             pattern or song while this plays (a grid change, a copy, an undo, a song that comes in), a step that
+                                             begins in those microseconds may play what is half moved; no index leaves the arrays) */
   sfx_mods mods;
   float intensity;                        /* 0..1 */
   int running, pattern, cue;              /* cue: the pattern to change to on the next bar line, -1 = none */
-  uint8_t gate[SFX_TRACKS];               /* steps a sequenced note still holds (0: no length given) */
+  uint8_t gate[SFX_TRACKS];               /* sixty-fourths a sequenced note still holds (0: no length given) */
+  uint8_t div;                            /* the steps a sixteenth in which `step` is counted: 1, 2, 4 */
   uint8_t aut[SFX_LANES];                 /* where each automation lane stands (sfx_auto) */
   int arr_pos, hold;                      /* the bar of the arrangement; hold: a cued pattern outside it loops until the next cue */
   int loop;                               /* 1: the pattern repeats until a cue (sfx_player_set_loop); 0: arrangement or chain */
   double pos;                             /* steps since the start */
-  int step, bar; float frac;              /* where it is: step -1 = not yet */
+  int step, bar; float frac;              /* where it is: the step in the grid of the pattern that plays (-1 = not yet), how far into it */
   int tail, wet;                          /* samples the effects may still ring after the last voice; a voice sent to them */
   float dry[2][SFX_BLOCK], bus_c[SFX_BLOCK], bus_d[SFX_BLOCK], bus_r[SFX_BLOCK], one[SFX_BLOCK];
   sfx_fx fx;
@@ -339,7 +492,7 @@ static inline void sfx_player_init(sfx_player *p, float sr)
   for (int t = 0; t < SFX_TRACKS; t++) p->gate[t] = 0;
   for (int l = 0; l < SFX_LANES; l++) p->aut[l] = 0;
   p->arr_pos = 0; p->hold = 0; p->loop = 0;
-  p->intensity = 1.0f; p->running = 0; p->pattern = 0; p->cue = -1; p->pos = 0.0; p->step = -1; p->bar = -1; p->frac = 0.0f; p->tail = 0; p->wet = 0;
+  p->intensity = 1.0f; p->running = 0; p->pattern = 0; p->cue = -1; p->pos = 0.0; p->step = -1; p->bar = -1; p->frac = 0.0f; p->tail = 0; p->wet = 0; p->div = 1;
   sfx_fx_init(&p->fx, sr);
 }
 
@@ -378,7 +531,7 @@ static inline void sfx__seq_release(sfx_player *p, int all)
 
 static inline void sfx_player_start(sfx_player *p, int pattern)
 {
-  p->running = 1; p->pos = 0.0; p->step = -1; p->bar = -1; p->cue = -1;
+  p->running = 1; p->pos = 0.0; p->step = -1; p->bar = -1; p->cue = -1; p->div = 1;
   for (int t = 0; t < SFX_TRACKS; t++) p->gate[t] = 0;
   for (int l = 0; l < SFX_LANES; l++) p->aut[l] = 0;
   if (pattern >= 0) p->pattern = pattern % SFX_PATTERNS;
@@ -386,7 +539,7 @@ static inline void sfx_player_start(sfx_player *p, int pattern)
   for (int i = 0; i < p->song.arr_len && i < SFX_ARR_MAX; i++) if (p->song.arr[i] == p->pattern) { p->arr_pos = i; break; }
 }
 
-static inline void sfx_player_stop(sfx_player *p) { if (p->running) sfx__seq_release(p, 1); for (int l = 0; l < SFX_LANES; l++) p->aut[l] = 0; p->running = 0; p->step = -1; p->bar = -1; }
+static inline void sfx_player_stop(sfx_player *p) { if (p->running) sfx__seq_release(p, 1); for (int l = 0; l < SFX_LANES; l++) p->aut[l] = 0; p->running = 0; p->step = -1; p->bar = -1; p->div = 1; }
 
 /* change to this pattern on the next bar line (at once while stopped) */
 static inline void sfx_player_cue(sfx_player *p, int pattern)
@@ -429,14 +582,28 @@ static inline void sfx__render(sfx_player *p, int from, int to)
   }
 }
 
+/* the step at sixteenth st, fraction fr of it: swing stretches the even sixteenth of a pair and squeezes the odd one,
+   and the steps inside go with their sixteenth. *frac: how far into that step. */
+static inline int sfx__sub(int st, float fr, float swing, int div, int steps, float *frac)
+{
+  int idx = st; double q = (double)fr, sw = (double)swing;
+  if (st & 1) { if (fr < swing) { idx = st - 1; q = (1.0 + q) / (1.0 + sw); } else q = (q - sw) / (1.0 - sw); }
+  else if (st + 1 < steps) q = q / (1.0 + sw);
+  q *= (double)div; int j = (int)q; if (j > div - 1) j = div - 1; if (j < 0) j = 0;
+  *frac = (float)(q - (double)j); if (*frac > 1.0f) *frac = 1.0f;
+  return idx * div + j;
+}
+
 /* ADDS n stereo samples to l and r; every voice starts on the very sample of its step.
+   The clock counts sixteenths; a pattern with a finer grid has 2 or 4 steps in each (a pattern that was only made
+   finer plays the same samples as before: its steps begin where they began).
    host_pos < 0: its own clock at the song's tempo. Else the host leads (a DAW): host_pos = its position in steps
    (quarter notes x 4) at the first sample, host_step = steps per sample.
    Returns the sounds that play now, a bit each; bit 31 while only the effects still ring. */
 static inline uint32_t sfx_player_render(sfx_player *p, float *l, float *r, int total, double host_pos, double host_step)
 {
   const sfx_song *s = &p->song;
-  int host = host_pos >= 0.0, steps = s->len >= 1 && s->len <= SFX_STEPS ? s->len : SFX_STEPS;
+  int host = host_pos >= 0.0, steps = s->len >= 1 && s->len <= SFX_BAR ? s->len : SFX_BAR;
   double per = host ? host_step : (double)s->bpm / 60.0 * 4.0 / (double)p->sr, len = (double)steps;
   static const uint8_t SIXTEENTHS[SFX_DELAY_TIMES] = { 1, 2, 3, 4, 6, 8 };
   float swing = (float)s->swing * 0.005f;
@@ -458,12 +625,21 @@ static inline uint32_t sfx_player_render(sfx_player *p, float *l, float *r, int 
         double f = a - len * (double)bar;
         int st = (int)f; float fr = (float)(f - (double)st);
         p->frac = fr;
-        if ((st & 1) && fr < swing) continue;                      /* swing: the off-beat step waits */
-        if (st == p->step && (int)bar == p->bar) continue;
+        int newbar = (int)bar != p->bar, sub = st;
+        int div = sfx_div(s->pat[p->pattern % SFX_PATTERNS].grid);
+        if (!newbar && div != p->div) {                            /* the grid changed under the playhead: no step fires for that */
+          if (p->step >= 0) p->step = p->step * div / p->div;
+          p->div = (uint8_t)div;
+        }
+        if ((st & 1) && fr < swing && (div == 1 || newbar)) continue;   /* swing: the off-beat step waits */
+        if (!newbar) {
+          if (div > 1) { float f2; sub = sfx__sub(st, fr, swing, div, steps, &f2); p->frac = f2; }
+          if (sub == p->step) continue;
+        }
         sfx__render(p, from, k); from = k;
-        for (int t = 0; t < SFX_TRACKS; t++)                       /* a note with a length: its steps are over */
-          if (p->gate[t] && --p->gate[t] == 0) sfx_player_note_off(p, SFX_KEY_SEQ + t);
-        if ((int)bar != p->bar) {                                  /* a bar line: the cue, else the loop, else the chain */
+        for (int t = 0, dec = 4 / p->div; t < SFX_TRACKS; t++)     /* a note with a length: its steps are over */
+          if (p->gate[t]) { if (p->gate[t] <= dec) { p->gate[t] = 0; sfx_player_note_off(p, SFX_KEY_SEQ + t); } else p->gate[t] = (uint8_t)(p->gate[t] - dec); }
+        if (newbar) {                                  /* a bar line: the cue, else the loop, else the chain */
           int bars = s->arr_len <= SFX_ARR_MAX ? s->arr_len : 0;
           if (p->cue >= 0) {                                       /* a cue: on in the arrangement from its next bar with that pattern – or, outside it, that pattern until the next cue */
             p->pattern = p->cue; p->cue = -1; p->hold = bars > 0;
@@ -475,15 +651,18 @@ static inline uint32_t sfx_player_render(sfx_player *p, float *l, float *r, int 
           for (int l = 0; l < SFX_LANES; l++) p->aut[l] = 0;       /* every bar starts with the knobs where they were made */
           p->bar = (int)bar;
           sfx__seq_release(p, 0);                                  /* what was held is let go at the bar line … */
+          div = sfx_div(s->pat[p->pattern % SFX_PATTERNS].grid);   /* … and the pattern that plays now has its own grid */
+          p->div = (uint8_t)div; sub = st;
+          if (div > 1) { float f2; sub = sfx__sub(st, fr, swing, div, steps, &f2); p->frac = f2; }
         }
-        p->step = st;
+        p->step = sub;
         const sfx_pattern *pt = &s->pat[p->pattern % SFX_PATTERNS];
-        unsigned m = pt->on[st], gate = (unsigned)(p->intensity * 127.0f + 0.5f);
+        unsigned m = pt->on[sub], gate = (unsigned)(p->intensity * 127.0f + 0.5f);
         sfx_patch moved;
         unsigned turned = 0;
         for (int l = 0; l < SFX_LANES; l++) {                      /* the lanes: a point here moves its knob … */
-          if (!pt->aut[l][st] || !s->lane[l].track || s->lane[l].track > SFX_TRACKS) continue;
-          p->aut[l] = pt->aut[l][st];
+          if (!pt->aut[l][sub] || !s->lane[l].track || s->lane[l].track > SFX_TRACKS) continue;
+          p->aut[l] = pt->aut[l][sub];
           if (s->lane[l].to < SFX_AT_VOL) turned |= 1u << (s->lane[l].track - 1);
         }
         for (int t = 0; turned && t < SFX_TRACKS; t++) {           /* … also for what sounds now */
@@ -493,8 +672,9 @@ static inline uint32_t sfx_player_render(sfx_player *p, float *l, float *r, int 
         }
         for (int t = 0; t < SFX_TRACKS; t++)                       /* … or when its sound plays again (note_on does that) */
           if ((m & (1u << t)) && gate >= s->level[t]) {
-            sfx_player_note_on(p, t, SFX_KEY_SEQ + t, SFX_VEL[SFX_ACC_VEL(pt->acc[t][st])], pt->note[t][st], 0.0f, sfx_auto_patch(s, p->aut, t, &p->patch[t], &moved));
-            p->gate[t] = (uint8_t)SFX_ACC_LEN(pt->acc[t][st]);
+            int len = pt->len[t][sub];
+            sfx_player_note_on(p, t, SFX_KEY_SEQ + t, SFX_VEL[pt->vel[t][sub] & 7], pt->note[t][sub], 0.0f, sfx_auto_patch(s, p->aut, t, &p->patch[t], &moved));
+            p->gate[t] = (uint8_t)((len > 63 ? 63 : len) * (4 / div));
           }
       }
       if (!host) p->pos += (double)n * per;

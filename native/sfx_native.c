@@ -11,9 +11,9 @@
 #define API __attribute__((visibility("default")))
 #endif
 
-API int sfxn_abi(void) { return 4; }
+API int sfxn_abi(void) { return 5; }
 API int sfxn_patch_bytes(void) { return SFX_PATCH_BYTES; }
-API int sfxn_song_bytes(void) { return SFX_SONG_BYTES; }
+API int sfxn_song_bytes(void) { return SFX_SONG_MAX; }      /* the most a packed song has: it has no fixed size from format 6 on */
 
 /* ---- one voice, dry and mono: the smallest way to play a patch ------------------------------------------------------- */
 API int sfxn_voice_size(void) { return (int)sizeof(sfx_voice); }
@@ -106,11 +106,56 @@ API void sfxn_player_note_off(void *player, int key) { if (key >= 0 && key < SFX
    effects still ring; 0 = silence. */
 API unsigned sfxn_player_render(void *player, float *l, float *r, int n) { return sfx_player_render((sfx_player *)player, l, r, n, -1.0, 0.0); }
 
-/* out4: running, step (-1 = none yet), pattern, bar */
+/* out4: running, the sixteenth of the bar (-1 = none yet), pattern, bar */
 API void sfxn_player_state(const void *player, int *out4)
 {
   const sfx_player *p = (const sfx_player *)player;
-  out4[0] = p->running; out4[1] = p->step; out4[2] = p->pattern; out4[3] = p->bar;
+  out4[0] = p->running; out4[1] = p->step < 0 ? -1 : p->step / (p->div ? p->div : 1); out4[2] = p->pattern; out4[3] = p->bar;
+}
+
+/* out2: the step in the grid of the pattern that plays (-1 = none yet), the steps a sixteenth of that grid (1, 2, 4) */
+API void sfxn_player_grid(const void *player, int *out2)
+{
+  const sfx_player *p = (const sfx_player *)player;
+  out2[0] = p->step; out2[1] = p->div ? p->div : 1;
+}
+
+/* ---- tools for a packed song. Not for an audio thread: they hold a whole song on the stack (about 38 KB). ------------ */
+/* the song packed into out (max bytes): straight into it where it holds the longest song there is (sfxn_song_bytes()),
+   else by way of a copy - so the caller's stack carries one song (38 KB), and a second only for a short buffer */
+__attribute__((noinline)) static int sfxn__pack_small(const sfx_song *s, uint8_t *out, int max)
+{
+  uint8_t b[SFX_SONG_MAX];
+  int len = sfx_song_pack(s, b);
+  if (len > max) return -1;
+  for (int i = 0; i < len; i++) out[i] = b[i];
+  return len;
+}
+static int sfxn__pack(const sfx_song *s, uint8_t *out, int max) { return max >= SFX_SONG_MAX ? sfx_song_pack(s, out) : sfxn__pack_small(s, out, max); }
+
+/* any format in, format 6 out: the bytes written; -1 = not a song, or max is too small (sfxn_song_bytes() always holds it) */
+API int sfxn_song_convert(const uint8_t *in, int n, uint8_t *out, int max)
+{
+  sfx_song s;
+  if (sfx_song_unpack(&s, in, n)) return -1;
+  return sfxn__pack(&s, out, max);
+}
+
+/* what putting one pattern (0..7) in grid 0..2 (16, 32, 64 steps) would drop: steps and points; 0 when nothing; -1 = not a song */
+API int sfxn_song_regrid_loss(const uint8_t *in, int n, int pattern, int grid)
+{
+  sfx_song s;
+  if (pattern < 0 || pattern >= SFX_PATTERNS || grid < 0 || grid >= SFX_GRIDS || sfx_song_unpack(&s, in, n)) return -1;
+  return sfx_pattern_regrid_loss(&s.pat[pattern], grid);
+}
+
+/* the song with one pattern (0..7) in grid 0..2, as format 6: the bytes written, -1 as sfxn_song_convert */
+API int sfxn_song_regrid(const uint8_t *in, int n, int pattern, int grid, uint8_t *out, int max)
+{
+  sfx_song s;
+  if (pattern < 0 || pattern >= SFX_PATTERNS || grid < 0 || grid >= SFX_GRIDS || sfx_song_unpack(&s, in, n)) return -1;
+  sfx_pattern_regrid(&s.pat[pattern], grid);
+  return sfxn__pack(&s, out, max);
 }
 
 /* the whole sound with its effects into l and r (at most max samples each), for a sample asset. `player` is scratch:

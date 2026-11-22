@@ -18,7 +18,7 @@ namespace Inspector.Harness
         static readonly int[] Widths = { 340, 640 };
         // the ends of the range a layout must reflow over: only these pictures are taken there too
         static readonly int[] EndWidths = { 300, 700 };
-        static readonly string[] AtTheEnds = { "sound-env", "kit", "song", "song-mix", "song-master" };
+        static readonly string[] AtTheEnds = { "sound-env", "kit", "song", "song-mix", "song-master", "song-32", "song-64", "song-auto-64" };
 
         static readonly (string name, Func<VisualElement> build)[] Pictures =
         {
@@ -39,6 +39,10 @@ namespace Inspector.Harness
             ("song-mix",       () => Song(SfxSongPanel.PageMix, 0, 127)),
             ("song-master",    () => Song(SfxSongPanel.PageMaster, 0, 127)),
             ("song-auto",      () => Song(SfxSongPanel.PageAuto, 5, 127)),      // pattern F: the bass's CUTOFF rises
+            // the same song with pattern B at 32 steps, C and F at 64 (firmware 1.6.0): the rows show the pattern's own steps
+            ("song-32",        () => FineSong(SfxSongPanel.PageSteps, 1, 127)),
+            ("song-64",        () => FineSong(SfxSongPanel.PageSteps, 2, 127)),
+            ("song-auto-64",   () => FineSong(SfxSongPanel.PageAuto, 5, 127)),
             ("song-none",      () => SfxSongEditor.Build(new SerializedObject(EmptySong()))),
             ("song-newer",     () => SfxSongEditor.Build(new SerializedObject(NewerSong()))),
             // the tools of a sound: the drawer under its keys, a tab each (the level line is over the keys in every sound picture)
@@ -176,6 +180,13 @@ namespace Inspector.Harness
             return panel;
         }
 
+        static VisualElement FineSong(int page, int pattern, int intensity)
+        {
+            var panel = (SfxSongPanel)SfxSongEditor.Build(new SerializedObject(SfxSongGridTests.Fine()));
+            panel.Sound = 6; panel.Pattern = pattern; panel.Intensity = intensity; panel.Page = page;
+            return panel;
+        }
+
         static SfxPreset NewerSound()
         {
             var preset = UnityEngine.Object.Instantiate(Preset("Jump"));
@@ -188,9 +199,9 @@ namespace Inspector.Harness
         {
             var song = SfxSongPanelTests.Demo();
             byte[] later = (byte[])song.data.Clone();
-            later[0] = 6;
+            later[0] = 7;
             song.Set(song.sounds, later);
-            return SfxPresetPanelTests.FromFormat(song, 2);
+            return SfxPresetPanelTests.FromFormat(song, 3);      // (a song asset's own number: 2 is this version's)
         }
 
         static SfxSong EmptySong()

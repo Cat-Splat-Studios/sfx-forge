@@ -17,7 +17,8 @@ namespace Inspector.Harness
     public class SfxAssetFormatTests
     {
         const string Folder = "Assets/FormatTemp";
-        const string JumpPath = "Assets/Data/Presets/Jump.asset", DemoPath = "Assets/Data/DemoSong.asset";
+        // (the song copied here is the one from before the asset kept its format: a file without the line, holding a format-5 song)
+        const string JumpPath = "Assets/Data/Presets/Jump.asset", DemoPath = "Assets/Data/DemoSong-format5.asset", Demo6Path = "Assets/Data/DemoSong.asset";
         const string After = "  m_EditorClassIdentifier:";        // the line the new ones are put after
 
         readonly List<string> warnings = new List<string>();
@@ -69,11 +70,15 @@ namespace Inspector.Harness
         [Test]
         public void AnAssetFileWithoutTheLineIsFormatOne()
         {
-            Assert.AreEqual(1, SfxPreset.CurrentFormat); Assert.AreEqual(1, SfxSong.CurrentFormat);
+            Assert.AreEqual(1, SfxPreset.CurrentFormat); Assert.AreEqual(1, SfxAssetFormat.Current);
+            Assert.AreEqual(2, SfxSong.CurrentFormat, "a song asset counts its own format: 2 since the packed song has format 6");
             var jump = AssetDatabase.LoadAssetAtPath<SfxPreset>(JumpPath);
             var demo = AssetDatabase.LoadAssetAtPath<SfxSong>(DemoPath);
+            var demo6 = AssetDatabase.LoadAssetAtPath<SfxSong>(Demo6Path);
             Assert.AreEqual(1, jump.Format); Assert.IsFalse(jump.IsFromNewerVersion);
-            Assert.AreEqual(1, demo.Format); Assert.IsFalse(demo.IsFromNewerVersion);
+            Assert.AreEqual(1, demo.Format); Assert.IsFalse(demo.IsFromNewerVersion); Assert.AreEqual(5, demo.PackedFormat);
+            Assert.AreEqual(2, demo6.Format, "the demo song's asset says 2: it holds a format-6 song"); Assert.IsFalse(demo6.IsFromNewerVersion); Assert.AreEqual(6, demo6.PackedFormat);
+            StringAssert.Contains("\n  format: 2\n", File.ReadAllText(Demo6Path).Replace("\r\n", "\n"));
 
             string name = Unique("Plain");
             var copy = Copy<SfxPreset>(JumpPath, name, null);
@@ -108,10 +113,14 @@ namespace Inspector.Harness
             StringAssert.Contains("asset format 2", panel.NewerBanner.Small);
 
             string songName = Unique("LaterSong");
-            var song = Copy<SfxSong>(DemoPath, songName, "  format: 2\n");
-            Assert.AreEqual(2, song.Format); Assert.IsTrue(song.IsFromNewerVersion);
+            var song = Copy<SfxSong>(DemoPath, songName, "  format: 3\n");      // (a song asset's own number: 2 is this version's, 3 a later one's)
+            Assert.AreEqual(3, song.Format); Assert.IsTrue(song.IsFromNewerVersion);
             Assert.IsTrue(song.IsValid, "the song this version reads of it plays"); Assert.AreEqual(120, song.Bpm);
             Assert.AreEqual(1, Warned(songName));
+            StringAssert.Contains("asset format 3, this version knows 2", warnings.Find(w => w.Contains(songName)));
+            string twoName = Unique("SongOfTwo");
+            var two = Copy<SfxSong>(DemoPath, twoName, "  format: 2\n");
+            Assert.AreEqual(2, two.Format); Assert.IsFalse(two.IsFromNewerVersion); Assert.AreEqual(0, Warned(twoName), "a song asset that says 2 is of this version: nothing is said");
         }
 
         [Test]
@@ -141,8 +150,26 @@ namespace Inspector.Harness
             StringAssert.Contains("  format: 1", text);
             StringAssert.Contains("  savedBy: 1", text);
             Assert.AreEqual(1, made.Format);
+            // a song asset's number follows the packed song: 2 for a format-6 song (firmware 1.6.0), 1 for an older one
             var song = SfxForgeEditorLink.CreateSong(SfxSongPanelTests.Demo().sounds, SfxSongPanelTests.Demo().data, Folder, "MadeSong");
-            StringAssert.Contains("  format: 1", File.ReadAllText(AssetDatabase.GetAssetPath(song)));
+            string songText = File.ReadAllText(AssetDatabase.GetAssetPath(song));
+            StringAssert.Contains("  format: 2", songText); StringAssert.Contains("  savedBy: 2", songText);
+            Assert.AreEqual(2, song.Format); Assert.AreEqual(6, song.PackedFormat);
+            var older = SfxForgeEditorLink.CreateSong(SfxSongPanelTests.Demo5().sounds, SfxSongPanelTests.Demo5().data, Folder, "MadeOlderSong");
+            string olderText = File.ReadAllText(AssetDatabase.GetAssetPath(older));
+            StringAssert.Contains("  format: 1", olderText); StringAssert.Contains("  savedBy: 2", olderText);
+            Assert.AreEqual(1, older.Format); Assert.AreEqual(5, older.PackedFormat);
+            // Set writes the number: a format-6 song into the older asset makes it 2, a format-5 song back makes it 1
+            older.Set(song.sounds, song.data);
+            Assert.AreEqual(2, older.Format);
+            older.Set(song.sounds, SfxSongPanelTests.Demo5().data);
+            Assert.AreEqual(1, older.Format);
+            // … and a format-6 song that reached the bytes past Set (the Inspector's undo, a script) is written with 2 all the same
+            older.data = (byte[])song.data.Clone();
+            EditorUtility.SetDirty(older);
+            AssetDatabase.SaveAssetIfDirty(older);
+            StringAssert.Contains("  format: 2", File.ReadAllText(AssetDatabase.GetAssetPath(older)));
+            Assert.AreEqual(2, older.Format);
         }
 
         [Test]

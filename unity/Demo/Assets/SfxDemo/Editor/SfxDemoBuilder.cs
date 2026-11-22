@@ -107,7 +107,7 @@ namespace SfxDemo.Editor
             byte[] raw = AssetDatabase.LoadAssetAtPath<TextAsset>(Root + "/DemoSong.bytes").bytes;
             var sounds = new SfxPatch[SfxProtocol.Slots];
             for (int i = 0; i < sounds.Length; i++) SfxPatch.TryUnpack(raw, i * SfxPatch.Bytes, out sounds[i]);
-            var packed = new byte[SfxProtocol.SongBytes];
+            var packed = new byte[raw.Length - sounds.Length * SfxPatch.Bytes];       // (16 patches, then the rest of the file: a packed song has no fixed size from format 6 on)
             Array.Copy(raw, sounds.Length * SfxPatch.Bytes, packed, 0, packed.Length);
             var song = AssetDatabase.LoadAssetAtPath<SfxSong>(Root + "/DemoSong.asset");
             if (song == null) { song = ScriptableObject.CreateInstance<SfxSong>(); AssetDatabase.CreateAsset(song, Root + "/DemoSong.asset"); }

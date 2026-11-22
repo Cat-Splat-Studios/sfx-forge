@@ -44,8 +44,11 @@ ok(full > sparse * 3 && full > 0.05, `INTENSITY (CC 14) brings the layers in (${
 // pattern H (empty) was cued by CC 15 at 24.0 s: it takes over on the bar line at 25.5 s, not before
 ok(rms(24.6, 25.4) > 0.05 && rms(27.0, 27.4) < 0.01, `a cued pattern takes over on the next bar line (${rms(24.6, 25.4).toFixed(3)}, then ${rms(27.0, 27.4).toFixed(3)} once the echoes have faded)`);
 const chunks = midi.filter((m) => m[0] === 0xF0 && m[4] === 0x05), dumps = midi.filter((m) => m[0] === 0xF0 && m[4] === 0x01);
-const bytes = chunks.reduce((a, m) => a + m.length - 8, 0);
-ok(chunks.length === 39 && chunks.every((m, i) => m[5] === i && m[6] === 39) && bytes === 7699 && dumps.length === 17, `SEND gives the 16 sounds and the song in 39 pieces (${dumps.length - 1} dumps, ${chunks.length} pieces, ${bytes} bytes)`);
+// the song message of firmware 1.6.0: F0 7D 56 42 05 <piece lo> <piece hi> <format> <pieces lo> <pieces hi> <up to 240 bytes> F7
+const bytes = chunks.reduce((a, m) => a + m.length - 11, 0), count = Math.ceil(bytes / 240);
+ok(chunks.length === count && chunks.every((m, i) => (m[5] | m[6] << 7) === i && m[7] === 6 && (m[8] | m[9] << 7) === count && m.length <= 251 && (i === count - 1 || m.length === 251)) && bytes >= 211 && bytes <= 38355
+   && chunks[0][10] === 6 && dumps.length === 17,
+   `SEND gives the 16 sounds and the song (format 6) in pieces of 240 bytes (${dumps.length - 1} dumps, ${chunks.length} pieces, ${bytes} bytes)`);
 ok(rms(33.5, 34.0) < 0.01, 'silence at the end');
 console.log(failed ? `FAILED (${failed})` : 'tour PASSED');
 process.exit(failed ? 1 : 0);

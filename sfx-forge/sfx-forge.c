@@ -15,8 +15,9 @@
  *   LEFT RIGHT   the sound page before / after; on SEQ, SONG and AUTO the pattern
  *   PLAY         plays what the top line of the song's pages says: LOOP – the pattern repeats, a chosen one takes over on
  *                the bar line – or SONG – the arrangement, else the chain. F1 there changes it; REC lit switches to LOOP
- *   SEQ          a 16-step pattern over the 16 sounds: the pads are the steps of the selected sound, a step may carry a
- *                note (hold its pad and play a key, or the NOTE encoder), a velocity and a length
+ *   SEQ          a pattern over the 16 sounds: a bar of 16, 32 or 64 steps (its grid: SHIFT + F5 / F6). The pads are 16
+ *                steps of the selected sound (SHIFT + LEFT / RIGHT: the 16 before / after), a step may carry a note
+ *                (hold its pad and play a key, or the NOTE encoder), a velocity and a length
  *   SONG         8 patterns, a chain, and what makes it game music: every sound has a LAYER threshold and plays only
  *                while INTENSITY is at or above it; a cued pattern takes over on the next bar line
  *   LINK         the game engine's side: telemetry in (CC 10-15, channel 2: pitch, cutoff, timbre, level, intensity,
@@ -41,7 +42,7 @@ char *strcpy(char *d, const char *s);
 VIBE_PARALLEL_AUDIO
 
 #define SLOTS  SFX_TRACKS
-#define STEPS  SFX_STEPS
+#define PADS   16                  /* the pads, and the steps they show at a time */
 
 /* ---- the protocol (README: "The link") --------------------------------------------------------------------------- */
 #define SX_DUMP     0x01           /* out (and in): F0 7D 56 42 01 <slot> <28 patch bytes> F7 (in: not our own, come straight back) */
@@ -49,20 +50,24 @@ VIBE_PARALLEL_AUDIO
                                       selected. Slot 16-31 (1.3.1): pad 1-16 of the MUSIC kit, whatever is selected - a song's sounds */
 #define SX_TEXT     0x03           /* in:           F0 7D 56 42 03 <ASCII, up to 24> F7 */
 #define SX_REQUEST  0x04           /* in:           F0 7D 56 42 04 <slot> F7  -> answers with a dump */
-#define SX_SONG     0x05           /* both ways:    F0 7D 56 42 05 <chunk> <chunks> <up to 200 song bytes> F7 (in: in any order) */
+#define SX_SONG     0x05           /* both ways (1.6.0): F0 7D 56 42 05 <piece lo> <piece hi> <format> <pieces lo> <pieces hi> <1..240 song bytes> F7,
+                                      in any order. In, also the shape of before: F0 7D 56 42 05 <piece> 39 <up to 200 bytes> F7 (a format-5 song) */
 #define SX_REQ_SONG 0x06           /* in:           F0 7D 56 42 06 F7 -> answers with 16 dumps and the song */
 #define SX_REQ_IDENT 0x07          /* in (1.4.0):   F0 7D 56 42 07 F7 (these 6 bytes, no others) -> answers with the identity */
 #define SX_IDENT    0x08           /* out:          F0 7D 56 42 08 <18 bytes, each 0..127> F7. One that comes in is left alone */
 /* The identity: what this device is and what it holds, so that a game can ask before it sends. Fields are only ever
    added at the end: a reader takes the first 18 and ignores what follows. A firmware before 1.4.0 never answers. */
 #define FW_MAJOR 1                 /* the firmware's version: firmware.json says the same (tests/check-identity.mjs) */
-#define FW_MINOR 5
+#define FW_MINOR 6
 #define FW_PATCH 0
 #define ID_HARDWARE 1              /* 0 unknown, 1 VIBE FM (the SDK's host: emulator, plugin, VIBE Box - not told apart from here) */
 #define ID_PROFILE  1              /* what SFX FORGE 1.x offers on VIBE FM */
 #define ID_FLAGS    0x0F           /* bit0 pads, bit1 encoders for the game (LINK), bit2 takes a song's sounds (LOAD 16-31), bit3 takes telemetry */
-#define SONG_CHUNK  200
-#define SONG_CHUNKS ((SFX_SONG_BYTES + SONG_CHUNK - 1) / SONG_CHUNK)
+#define SONG_OLD_PIECE  200        /* the song message up to 1.5.0: 39 pieces of 200 bytes (the last 99), a 7-bit piece number */
+#define SONG_OLD_PIECES 39
+#define SONG_PIECE      240        /* from 1.6.0: pieces of 240 bytes (the last what is left), 14-bit piece number and count */
+#define SONG_PIECES_MAX 160
+_Static_assert(SONG_PIECES_MAX * SONG_PIECE >= SFX_SONG_MAX && SONG_OLD_PIECES * SONG_OLD_PIECE >= SFX_SONG_BYTES_V5, "a song fits its pieces");
 #define CC_TELEMETRY 10            /* in, channel 2: CC 10..17 */
 #define CC_ENCODERS  20            /* out, channel 1: CC 20..25 */
 #define NOTE_PADS    36            /* pads <-> notes 36..51 */
@@ -147,7 +152,12 @@ static float vol_s;
 #define SCOPE 164
 static volatile uint32_t seq_arr;                    /* the bar of the arrangement that plays (NO_STEP: none) */
 static volatile uint32_t seq_step = NO_STEP, seq_pattern, play_k[2];   /* play_k: what sounds, a bit a sound, for each kit */
-static volatile float seq_frac;
+/* where the song is, in one word (so that step, grid and fraction are read together): div << 28 | step << 20 | fraction
+   of the step in 20 bits. step counts in the grid of the pattern that plays, div is its steps a sixteenth. */
+static volatile uint32_t seq_pos = NO_STEP;
+static int pos_step(uint32_t w) { return (int)(w >> 20 & 0xFF); }
+static int pos_div(uint32_t w) { int d = (int)(w >> 28); return d == 2 || d == 4 ? d : 1; }
+static float pos_frac(uint32_t w) { return (float)(w & 0xFFFFFu) * (1.0f / 1048575.0f); }
 static volatile float scope_lo[SCOPE], scope_hi[SCOPE];
 static volatile uint32_t scope_w;
 static float sc_lo, sc_hi; static int sc_n;
@@ -197,7 +207,17 @@ static int from_outside;                            /* a game's or a DAW's note 
 static int tour_mode0;
 static uint32_t blink;                              /* draws counted: what is queued blinks */
 #define BLINK ((blink >> 3) & 1)
-static int edit_pat, cur_step, held_step = -1;      /* the pattern and the step being edited; the step pad held */
+static int edit_pat, cur_step;                      /* the pattern and the step being edited (a step of that pattern's grid) */
+static int held_pad = -1, held_step = -1;           /* the pad held on SEQ, and the step it stands for */
+static int follow_win = -1;                         /* the 16 steps a take showed last (-1: none) */
+static int cur_pat = -1, cur_div = 1;               /* what cur_step was counted in: the pattern, its steps a sixteenth */
+static const char *const GRID_NAME[SFX_GRIDS] = { "1/16", "1/32", "1/64" };
+static int wrap(int v, int d, int n) { return ((v + d) % n + n) % n; }
+static int clampi(int v, int a, int b) { return v < a ? a : v > b ? b : v; }
+static int bar_len(void) { return SONG.len >= 1 && SONG.len <= SFX_BAR ? SONG.len : SFX_BAR; }   /* the bar in sixteenths */
+static int pat_grid(int k) { int g = SONG.pat[k % SFX_PATTERNS].grid; return g < SFX_GRIDS ? g : 0; }
+static int pat_div(int k) { return sfx_div(SONG.pat[k % SFX_PATTERNS].grid); }
+static int gsteps(void) { return SFX_BAR * pat_div(edit_pat); }      /* the cells of the pattern shown: 16, 32, 64 */
 static int touch_i = -1; static uint64_t touch_t;    /* the encoder (1-4) turned last, and when */
 static float acc[VE_COUNT];                         /* encoder turns not yet a whole step */
 static uint32_t rng = 0x5F3759DFu;
@@ -215,9 +235,17 @@ static int tour_kit0;
 static int tour_page0, tour_sel0, tour_kept = -1;   /* what it puts back; the sound it changed */
 static sfx_patch tour_keep;
 static int export_at = -1;                          /* sending the sounds and the song: the next message, -1 = not */
-static uint8_t song_rx[SFX_SONG_BYTES]; static uint64_t song_rx_seen, song_rx_t;   /* a song coming in: which of its pieces are here (a bit a piece), and when the last came */
+/* a song coming in: its pieces, which of them are here (a bit a piece), how many it has, their size (200: the shape of
+   before, 240), the format its pieces name (0: the old shape names none), how long its last piece is, when the last came */
+static uint8_t song_rx[SONG_PIECES_MAX * SONG_PIECE]; static uint32_t song_rx_seen[(SONG_PIECES_MAX + 31) / 32];
+static int song_rx_K, song_rx_size, song_rx_format, song_rx_last; static uint64_t song_rx_t;
+/* how often each piece of it came, and the most of them; after it was taken: the pieces that came again since (a bit a
+   piece, and how often), and whether one of them had other bytes */
+static uint8_t song_rx_n[SONG_PIECES_MAX], song_rx_n2[SONG_PIECES_MAX]; static int song_rx_most;
+static uint32_t song_rx_again[(SONG_PIECES_MAX + 31) / 32]; static int song_rx_done, song_rx_other;
 /* What went out last, to know our own echo by (sysex_in): the dump of each slot, and the song as it was sent. */
-static uint8_t sent_dump[SLOTS][SFX_PATCH_BYTES], song_tx[SFX_SONG_BYTES];
+static uint8_t sent_dump[SLOTS][SFX_PATCH_BYTES], song_tx[SONG_PIECES_MAX * SONG_PIECE];
+static int song_tx_n, song_tx_K;                    /* the song as it was sent: its bytes, its pieces */
 static uint64_t sent_dump_t, sent_song_t; static uint32_t sent_dump_any; static int sent_song_any;
 #define ECHO_FRAMES ((uint64_t)SR / 10)              /* an echo comes back within a tenth of a second */
 static const char *const SOFT[5][6] = { { "PRESET", "MUTATE", "UNDO", "RANDOM", "EXPORT", "SAVE" },
@@ -233,6 +261,10 @@ static const char *soft_caption(int i)               /* F1-F6 as they are now: F
 {
   if (i == 0 && song_keys()) return loop_mode ? "TO SONG" : "TO LOOP";
   if (i == 3 && page == PG_SEQ && rec && running) return "ERASE";
+  if (shift && i >= 4 && (page == PG_SEQ || page == PG_AUTO)) {      /* SHIFT held: F5 and F6 are the pattern's grid, coarser and finer */
+    static const char *const TO[2][SFX_GRIDS] = { { "IS 1/16", "TO 1/16", "TO 1/32" }, { "TO 1/32", "TO 1/64", "IS 1/64" } };
+    return TO[i - 4][pat_grid(edit_pat)];
+  }
   return SOFT[soft_set()][i];
 }
 static void relabel(void) { for (int i = 0; i < 6; i++) vibe_label(VB_F1 + i, soft_caption(i)); }
@@ -291,11 +323,12 @@ void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames)
   uint32_t music = 0, effects = 0;
   for (int i = 0; i < SFX_PLAYER_VOICES; i++) if (P.voice[i].active) { if (P.voice[i].slot < SLOTS) music |= 1u << P.voice[i].slot; else effects |= 1u << (P.voice[i].slot - SLOTS); }
   play_k[0] = music; play_k[1] = effects;
-  seq_step = P.running && P.step >= 0 ? (uint32_t)P.step : NO_STEP; seq_frac = P.frac; seq_pattern = (uint32_t)P.pattern;
+  seq_step = P.running && P.step >= 0 ? (uint32_t)P.step : NO_STEP; seq_pattern = (uint32_t)P.pattern;
+  seq_pos = P.running && P.step >= 0 ? (uint32_t)P.div << 28 | (uint32_t)(P.step & 0xFF) << 20 | (uint32_t)(vd_clamp(P.frac, 0.0f, 1.0f) * 1048575.0f) : NO_STEP;
   seq_arr = P.running && !P.loop && !P.hold && P.arr_pos >= 0 ? (uint32_t)P.arr_pos : NO_STEP;
 
-  int at = P.running ? P.step : -1;
-  if (at != click_step) {                            /* a new step: on a beat, the click starts */
+  int at = P.running && P.step >= 0 ? P.step / (P.div ? P.div : 1) : -1;   /* (in sixteenths, whatever the pattern's grid) */
+  if (at != click_step) {                            /* a new sixteenth: on a beat, the click starts */
     click_step = at;
     if (at >= 0 && at % 4 == 0 && metro && rec_on) { click_env = at == 0 ? 0.30f : 0.20f; click_f = (at == 0 ? 2200.0f : 1500.0f) / SR; click_ph = 0.0f; }
   }
@@ -342,7 +375,7 @@ static void undo_mark(const char *what, int whole) { if (!whole && rec && runnin
 static void undo_close(void) { if (undo_run != 2) undo_run = 0; }   /* the next edit is a new step (a take ends with PLAY, STOP or REC) */
 static void pattern_pick(int p);
 static void swap_bytes(void *a, void *b, int n) { uint8_t *x = (uint8_t *)a, *y = (uint8_t *)b; for (int i = 0; i < n; i++) { uint8_t t = x[i]; x[i] = y[i]; y[i] = t; } }
-static void song_undo(void)                          /* back – and, pressed again, forth. The notes only (patterns, lanes, arrangement), unless a whole song was replaced */
+static void song_undo(void)                          /* back – and, pressed again, forth. The notes only (patterns with their grids, lanes, arrangement), unless a whole song was replaced */
 {
   static char t[24];
   if (!undo_has) { say("NOTHING TO UNDO"); return; }
@@ -351,7 +384,7 @@ static void song_undo(void)                          /* back – and, pressed ag
     swap_bytes(SONG.pat, undo_song.pat, (int)sizeof SONG.pat); swap_bytes(SONG.lane, undo_song.lane, (int)sizeof SONG.lane);
     swap_bytes(&SONG.arr_len, &undo_song.arr_len, 1); swap_bytes(SONG.arr, undo_song.arr, (int)sizeof SONG.arr);
   }
-  view_sync(); undo_run = 0; undo_redo = !undo_redo;
+  view_sync(); undo_run = 0; undo_redo = !undo_redo; erase_at = -1;      /* (the cursor follows a grid that came back: cur_sync, with the next poll) */
   if (undo_pat >= 0) { int was = queued >= 0 ? queued : edit_pat; pattern_pick(undo_pat); undo_run = 0; undo_pat = was; }   /* COPY: back on the pattern it was made from (and forth) */
   strcpy(t, undo_redo ? "UNDO: " : "REDO: "); strcpy(t + 6, undo_what); say(t);
 }
@@ -365,7 +398,7 @@ static int confirm(const char *prompt)               /* a key that asks twice: t
 static int pattern_holds(int k)                      /* a step or an automation point anywhere in it */
 {
   const sfx_pattern *p = &SONG.pat[k];
-  for (int i = 0; i < STEPS; i++) { if (p->on[i]) return 1; for (int l = 0; l < SFX_LANES; l++) if (p->aut[l][i]) return 1; }
+  for (int i = 0; i < SFX_STEPS; i++) { if (p->on[i]) return 1; for (int l = 0; l < SFX_LANES; l++) if (p->aut[l][i]) return 1; }
   return 0;
 }
 
@@ -385,14 +418,14 @@ static void step_set(sfx_pattern *p, int step, int slot, int note) { p->on[step]
 static void demo_song(void)
 {
   enum { SNARE = 1, KICK = 2, BRASS = 5, BASS = 6, KEYS = 7, HAT = 12, BELLS = 13, CHOIR = 14, PAD = 15, N = 6 };
-  static const uint8_t BASS_N[N][STEPS] = {
+  static const uint8_t BASS_N[N][SFX_BAR] = {
     { 28,  0,  0, 28,  0, 40,  0, 28,   31,  0, 33,  0,  0, 35, 38,  0 },      /* Em */
     { 28,  0,  0, 28,  0, 40,  0, 28,   33,  0, 33, 45,  0, 31, 35,  0 },      /* Em, A */
     { 36,  0,  0, 36,  0, 48,  0, 36,   38,  0,  0, 38,  0, 50, 38,  0 },      /* C, D */
     { 36,  0,  0, 36,  0, 48,  0, 36,   38,  0, 38,  0, 40,  0, 40, 35 },      /* C, D, back to E */
     { 33,  0,  0,  0, 33,  0,  0, 45,   35,  0,  0,  0, 35,  0, 47,  0 },      /* Am, Bm: the breakdown */
     { 28,  0, 40, 28,  0, 40,  0, 31,   33,  0, 45, 33, 35,  0, 38, 40 } };    /* the turnaround */
-  static const uint8_t KEYS_N[N][STEPS] = {
+  static const uint8_t KEYS_N[N][SFX_BAR] = {
     {  0,  0, 64, 67,  0,  0, 69,  0,    0, 67,  0, 64,  0,  0, 62,  0 },
     { 71,  0,  0, 69,  0,  0, 67,  0,   64,  0, 67,  0, 69,  0, 71, 74 },
     { 67,  0,  0, 64,  0, 67,  0,  0,   69,  0,  0, 66,  0, 69,  0, 71 },
@@ -412,25 +445,25 @@ static void demo_song(void)
   sfx_song_init(&SONG);
   for (int b = 0; b < N; b++) {
     sfx_pattern *p = &SONG.pat[b];
-    for (int i = 0; i < STEPS; i++) {
-      if ((KICKS[b] >> i) & 1) { step_set(p, i, KICK, 0); p->acc[KICK][i] = SFX_ACC(i % 4 ? 3 : 5, 0); }              /* the pushes between the beats: softer */
-      if ((SNARES[b] >> i) & 1) { step_set(p, i, SNARE, 0); p->acc[SNARE][i] = SFX_ACC(i % 8 == 4 ? 6 : b == 5 && i > 12 ? i - 9 : 2, 0); }   /* 2 and 4, ghosts, a fill that grows */
-      if ((HATS[b] >> i) & 1) { step_set(p, i, HAT, 0); p->acc[HAT][i] = SFX_ACC(i & 1 ? 2 : i % 4 ? 5 : 3, 0); }     /* the off-beat leads */
-      if (BASS_N[b][i]) { step_set(p, i, BASS, BASS_N[b][i]); p->acc[BASS][i] = SFX_ACC(BASS_N[b][i] >= 40 ? 7 : 5, 0); }   /* the octave pops */
-      if (KEYS_N[b][i]) { step_set(p, i, KEYS, KEYS_N[b][i]); p->acc[KEYS][i] = SFX_ACC(i & 1 ? 4 : 6, 0); }
+    for (int i = 0; i < SFX_BAR; i++) {
+      if ((KICKS[b] >> i) & 1) { step_set(p, i, KICK, 0); p->vel[KICK][i] = (uint8_t)(i % 4 ? 3 : 5); }              /* the pushes between the beats: softer */
+      if ((SNARES[b] >> i) & 1) { step_set(p, i, SNARE, 0); p->vel[SNARE][i] = (uint8_t)(i % 8 == 4 ? 6 : b == 5 && i > 12 ? i - 9 : 2); }   /* 2 and 4, ghosts, a fill that grows */
+      if ((HATS[b] >> i) & 1) { step_set(p, i, HAT, 0); p->vel[HAT][i] = (uint8_t)(i & 1 ? 2 : i % 4 ? 5 : 3); }     /* the off-beat leads */
+      if (BASS_N[b][i]) { step_set(p, i, BASS, BASS_N[b][i]); p->vel[BASS][i] = (uint8_t)(BASS_N[b][i] >= 40 ? 7 : 5); }   /* the octave pops */
+      if (KEYS_N[b][i]) { step_set(p, i, KEYS, KEYS_N[b][i]); p->vel[KEYS][i] = (uint8_t)(i & 1 ? 4 : 6); }
     }
     step_set(p, 0, PAD, PAD_N[b][0]); step_set(p, 8, PAD, PAD_N[b][1]);     /* strings: two long notes a bar, each let go before the next */
-    p->acc[PAD][0] = p->acc[PAD][8] = SFX_ACC(4, 7);
+    p->vel[PAD][0] = p->vel[PAD][8] = 4; p->len[PAD][0] = p->len[PAD][8] = 7;
   }
-  for (unsigned k = 0; k < sizeof STABS / sizeof STABS[0]; k++) { step_set(&SONG.pat[STABS[k][0]], STABS[k][1], BRASS, STABS[k][2]); SONG.pat[STABS[k][0]].acc[BRASS][STABS[k][1]] = SFX_ACC(6, STABS[k][3]); }
-  for (unsigned k = 0; k < sizeof CHIMES / sizeof CHIMES[0]; k++) { step_set(&SONG.pat[CHIMES[k][0]], CHIMES[k][1], BELLS, CHIMES[k][2]); SONG.pat[CHIMES[k][0]].acc[BELLS][CHIMES[k][1]] = SFX_ACC(4, 0); }
-  step_set(&SONG.pat[4], 0, CHOIR, 64); SONG.pat[4].acc[CHOIR][0] = SFX_ACC(4, 15);                     /* the breakdown: a choir holds through it */
+  for (unsigned k = 0; k < sizeof STABS / sizeof STABS[0]; k++) { step_set(&SONG.pat[STABS[k][0]], STABS[k][1], BRASS, STABS[k][2]); SONG.pat[STABS[k][0]].vel[BRASS][STABS[k][1]] = 6; SONG.pat[STABS[k][0]].len[BRASS][STABS[k][1]] = STABS[k][3]; }
+  for (unsigned k = 0; k < sizeof CHIMES / sizeof CHIMES[0]; k++) { step_set(&SONG.pat[CHIMES[k][0]], CHIMES[k][1], BELLS, CHIMES[k][2]); SONG.pat[CHIMES[k][0]].vel[BELLS][CHIMES[k][1]] = 4; }
+  step_set(&SONG.pat[4], 0, CHOIR, 64); SONG.pat[4].vel[CHOIR][0] = 4; SONG.pat[4].len[CHOIR][0] = 15;                     /* the breakdown: a choir holds through it */
   SONG.chain = N; SONG.swing = 20;
   for (int i = 0; i < 16; i++) SONG.arr[i] = BARS[i];
   SONG.arr_len = 16;
   SONG.lane[0].track = BASS + 1; SONG.lane[0].to = SFX_AT_PATCH + SFX_P_FILTER_CUTOFF;   /* automation: the bass opens through the turnaround … */
   SONG.lane[1].track = PAD + 1; SONG.lane[1].to = SFX_AT_VOL;                            /* … and the strings swell through the breakdown */
-  for (int i = 0; i < STEPS; i++) { SONG.pat[5].aut[0][i] = (uint8_t)(62 + i * 3); if (i % 2 == 0) SONG.pat[4].aut[1][i] = (uint8_t)(19 + i * 3); }
+  for (int i = 0; i < SFX_BAR; i++) { SONG.pat[5].aut[0][i] = (uint8_t)(62 + i * 3); if (i % 2 == 0) SONG.pat[4].aut[1][i] = (uint8_t)(19 + i * 3); }
   SONG.pan[HAT] = 84; SONG.pan[KEYS] = 76; SONG.pan[BRASS] = 48; SONG.pan[BELLS] = 36; SONG.pan[CHOIR] = 70;
   SONG.vol[KICK] = 68; SONG.vol[SNARE] = 100; SONG.vol[HAT] = 50; SONG.vol[BASS] = 52; SONG.vol[KEYS] = 24; SONG.vol[BRASS] = 54; SONG.vol[PAD] = 46; SONG.vol[BELLS] = 56; SONG.vol[CHOIR] = 52;   /* measured: tests/mix-report.mjs */
   SONG.level[HAT] = 20; SONG.level[BASS] = 35; SONG.level[SNARE] = 50; SONG.level[PAD] = 60; SONG.level[CHOIR] = 60; SONG.level[KEYS] = 72; SONG.level[BRASS] = 90; SONG.level[BELLS] = 100;
@@ -445,25 +478,49 @@ static void factory(void)
 }
 
 #define BANK_BYTES (2 * SLOTS * (SFX_PATCH_BYTES + 1))
-static void bank_save(void)
+/* What the device stores. kits.bin: both kits. song6.bin: the packed song (format 6) and two bytes more - a check of the
+   song.bin that lay beside it when it was written (0: there was none). song.bin is the file of the firmwares up to 1.5.0
+   (format 5): it is still read and never written again, so a device put back to an older firmware finds its song. And
+   should that older firmware save a song there and the device come forward again: its song.bin no longer fits the
+   check, so it is the later one and is loaded over song6.bin - the display says OLDER FIRMWARE'S SONG then, and the
+   song of song6.bin is one F2 away (until the next SAVE, which keeps what is there). */
+static uint8_t store_buf[SFX_SONG_MAX + 2];
+static int store_check(const uint8_t *b, int n) { uint32_t h = 1; for (int i = 0; i < n; i++) h = (h * 31 + b[i]) % 16381; return 1 + (int)h; }
+
+static int bank_save(void)                           /* 0 = kept, -1 = the store did not take it */
 {
-  static uint8_t b[BANK_BYTES], s[SFX_SONG_BYTES];
+  static uint8_t b[BANK_BYTES];
   for (int k = 0; k < 2; k++) for (int i = 0; i < SLOTS; i++) {
     sfx_patch_pack(&kits[k][i], b + (k * SLOTS + i) * SFX_PATCH_BYTES);
     b[2 * SLOTS * SFX_PATCH_BYTES + k * SLOTS + i] = (uint8_t)(pad_preset_k[k][i] + 1);
   }
-  vibe_store_write("kits.bin", b, sizeof b);
-  sfx_song_pack(&SONG, s);
-  vibe_store_write("song.bin", s, sizeof s);
+  int failed = vibe_store_write("kits.bin", b, sizeof b) != 0;
+  int old = vibe_store_size("song.bin"), c = 0;
+  if (old >= 1 && old <= SFX_SONG_BYTES_V5 && vibe_store_read("song.bin", store_buf, old) == old) c = store_check(store_buf, old);
+  int n = sfx_song_pack(&SONG, store_buf);
+  store_buf[n] = (uint8_t)(c & 0x7F); store_buf[n + 1] = (uint8_t)(c >> 7);
+  if (vibe_store_write("song6.bin", store_buf, n + 2)) failed = 1;
+  return failed ? -1 : 0;
 }
+static void save_say(void) { say(bank_save() ? "NOT SAVED: STORE FULL" : "SAVED"); }
 
 static void bank_load(void)
 {
-  static uint8_t b[BANK_BYTES], s[SFX_SONG_BYTES];
+  static uint8_t b[BANK_BYTES];
   if (vibe_store_read("kits.bin", b, sizeof b) == (int)sizeof b)
     for (int k = 0; k < 2; k++) for (int i = 0; i < SLOTS; i++)       /* a broken one keeps its factory sound */
       if (!sfx_patch_unpack(&kits[k][i], b + (k * SLOTS + i) * SFX_PATCH_BYTES)) { int n = b[2 * SLOTS * SFX_PATCH_BYTES + k * SLOTS + i]; pad_preset_k[k][i] = (int8_t)(n >= 1 && n <= PRESET_COUNT ? n - 1 : -1); }
-  if (vibe_store_read("song.bin", s, sizeof s) == (int)sizeof s) sfx_song_unpack(&SONG, s, sizeof s);
+  int n6 = vibe_store_size("song6.bin"), c = -1;       /* c: the check song6.bin kept, -1 while none was taken */
+  if (n6 >= SFX_SONG_MIN + 2 && n6 <= SFX_SONG_MAX + 2 && vibe_store_read("song6.bin", store_buf, n6) == n6 && !sfx_song_unpack(&SONG, store_buf, n6 - 2))
+    c = store_buf[n6 - 2] | store_buf[n6 - 1] << 7;
+  int n5 = vibe_store_size("song.bin");
+  if (n5 >= 1 && n5 <= SFX_SONG_BYTES_V5 && vibe_store_read("song.bin", store_buf, n5) == n5 && (c < 0 || store_check(store_buf, n5) != c)) {
+    if (c >= 0) undo_song = SONG;                      /* (the song of song6.bin: one F2 away) */
+    if (!sfx_song_unpack(&SONG, store_buf, n5) && c >= 0) {   /* (one that does not unpack leaves the song as it is) */
+      undo_has = 1; undo_whole = 1; undo_redo = 0; undo_run = 0; undo_pat = -1; undo_what = "OLDER SONG";
+      say("OLDER FIRMWARE'S SONG");                    /* both files held a song, and the one of the firmware before is the later: it is said, and F2 on SEQ brings the other */
+    }
+  }
 }
 
 static int same(const uint8_t *a, const uint8_t *b, int n) { for (int i = 0; i < n; i++) if (a[i] != b[i]) return 0; return 1; }
@@ -484,20 +541,21 @@ static int sysex_dump(int slot) { return sysex_dump_k(kit, slot); }
    every draw and every event) until all are out. */
 static void export_pump(void)
 {
-  static uint8_t b[8 + SONG_CHUNK];
-  uint8_t *song = song_tx;
+  static uint8_t b[11 + SONG_PIECE];
   for (int guard = 0; guard < 2 && export_at >= 0; guard++) {
     if (export_at < SLOTS) { if (sysex_dump_k(KIT_MUSIC, export_at)) return; }     /* (the song's sounds: the MUSIC kit) */
     else {
-      int k = export_at - SLOTS, n = k == SONG_CHUNKS - 1 ? SFX_SONG_BYTES - k * SONG_CHUNK : SONG_CHUNK;
-      if (k == 0) sfx_song_pack(&SONG, song);
-      b[0] = 0xF0; b[1] = 0x7D; b[2] = 0x56; b[3] = 0x42; b[4] = SX_SONG; b[5] = (uint8_t)k; b[6] = SONG_CHUNKS;
-      for (int i = 0; i < n; i++) b[7 + i] = song[k * SONG_CHUNK + i];
-      b[7 + n] = 0xF7;
-      if (vibe_midi_send_sysex(b, 8 + n)) return;
+      int k = export_at - SLOTS;
+      if (k == 0) { song_tx_n = sfx_song_pack(&SONG, song_tx); song_tx_K = (song_tx_n + SONG_PIECE - 1) / SONG_PIECE; }
+      int n = k == song_tx_K - 1 ? song_tx_n - k * SONG_PIECE : SONG_PIECE;
+      b[0] = 0xF0; b[1] = 0x7D; b[2] = 0x56; b[3] = 0x42; b[4] = SX_SONG; b[5] = (uint8_t)(k & 0x7F); b[6] = (uint8_t)(k >> 7);
+      b[7] = song_tx[0]; b[8] = (uint8_t)(song_tx_K & 0x7F); b[9] = (uint8_t)(song_tx_K >> 7);
+      for (int i = 0; i < n; i++) b[10 + i] = song_tx[k * SONG_PIECE + i];
+      b[10 + n] = 0xF7;
+      if (vibe_midi_send_sysex(b, 11 + n)) return;
       sent_song_any = 1; sent_song_t = vibe_frames();
     }
-    if (++export_at >= SLOTS + SONG_CHUNKS) { export_at = -1; say("SONG SENT"); }
+    if (++export_at > SLOTS && export_at >= SLOTS + song_tx_K) { export_at = -1; say("SONG SENT"); }
   }
 }
 
@@ -507,7 +565,7 @@ static int ident_due;
 static void ident_pump(void)
 {
   static const uint8_t b[6 + 18] = { 0xF0, 0x7D, 0x56, 0x42, SX_IDENT, ID_HARDWARE, FW_MAJOR, FW_MINOR, FW_PATCH, ID_PROFILE,
-    SFX_PATCH_VERSION, SFX_SONG_VERSION, SLOTS, 2 /* kits */, SFX_PATTERNS, STEPS, SFX_LANES, SFX_ARR_MAX, SFX_PLAYER_VOICES,
+    SFX_PATCH_VERSION, SFX_SONG_VERSION, SLOTS, 2 /* kits */, SFX_PATTERNS, SFX_STEPS /* the most steps a pattern holds */, SFX_LANES, SFX_ARR_MAX, SFX_PLAYER_VOICES,
     SFX_ENGINE_COUNT, SFX_WT_TABLES, SFX_P_COUNT, ID_FLAGS, 0xF7 };
   while (ident_due > 0 && !vibe_midi_send_sysex(b, sizeof b)) ident_due--;
 }
@@ -530,6 +588,79 @@ static void out_pump(void)
   if (ident_due) ident_pump();
   if (export_at >= 0) export_pump();
   if (dump_due) dump_pump();
+}
+
+/* A song from the game, piece by piece. Every piece is put where it belongs, and the song is taken when all are here. So
+   the pieces may come in any order: a MIDI path can swap two neighbours (a browser's Web MIDI output does, now and
+   then). And more than once: a host can deliver everything twice (the emulator does), and a piece that is here already,
+   byte for byte, is left alone. A piece that is here already with OTHER bytes belongs to another song: that begins a new
+   transfer - as does a piece that names another count of pieces, another format, or has the other shape. A transfer
+   that broke off is forgotten after two seconds without a piece.
+   After a song is taken its pieces stay here, so that its own late twins do not begin a transfer. What comes then is
+   such a twin - or a piece of another song of as many pieces, which may differ from the one taken in one late piece only
+   (a tempo is in the first, a step of pattern H in the last). So from then on the pieces are counted again: once every
+   piece has come again and one of them had other bytes, that is the next song, and it is taken. A twin is told by a
+   count: the same bytes in a piece that has come fewer times than the others (a host that delivers twice still owes it).
+   Two shapes (b[6] tells them apart: 39 is the old one's count of pieces, the new one has the piece number's high bits
+   there, 0 or 1):  old  F0 7D 56 42 05 <k> 39 <200 bytes, the last piece 99> F7            - a format-5 song, 7699 bytes
+                    new  F0 7D 56 42 05 <k lo> <k hi> <format> <K lo> <K hi> <1..240> F7    - any length up to 160 pieces
+   (format: the song's first byte, in every piece - a first piece that begins with another byte is no piece) */
+static int rx_seen(int k) { return (int)(song_rx_seen[k >> 5] >> (k & 31) & 1); }
+static int rx_again(int k) { return (int)(song_rx_again[k >> 5] >> (k & 31) & 1); }
+static void rx_again_clear(void) { for (unsigned i = 0; i < sizeof song_rx_again / sizeof song_rx_again[0]; i++) song_rx_again[i] = 0; for (int i = 0; i < SONG_PIECES_MAX; i++) song_rx_n2[i] = 0; song_rx_other = 0; }
+static void rx_clear(void) { for (unsigned i = 0; i < sizeof song_rx_seen / sizeof song_rx_seen[0]; i++) song_rx_seen[i] = 0; for (int i = 0; i < SONG_PIECES_MAX; i++) song_rx_n[i] = 0; song_rx_done = 0; rx_again_clear(); }
+static void rx_whole(int take)                       /* all its pieces are here (take 0: the song that is here already, sent once more) */
+{
+  song_rx_done = 1; song_rx_most = 0;
+  for (int i = 0; i < song_rx_K; i++) if (song_rx_n[i] > song_rx_most) song_rx_most = song_rx_n[i];
+  rx_again_clear();
+  if (!take) return;
+  undo_mark("LOAD", 1);
+  say(!sfx_song_unpack(&SONG, song_rx, (song_rx_K - 1) * song_rx_size + song_rx_last) ? "SONG LOADED" : song_rx[0] > SFX_SONG_VERSION ? "NEWER SONG: UPDATE" : "BAD SONG");
+  view_sync();
+}
+static void song_piece(const uint8_t *b, int n, uint64_t now)
+{
+  int k, K, size, len, format; const uint8_t *in;
+  if (b[6] == SONG_OLD_PIECES) {
+    k = b[5]; K = SONG_OLD_PIECES; size = SONG_OLD_PIECE; len = n - 8; in = b + 7; format = 0;
+    if (k >= K || len != (k == K - 1 ? SFX_SONG_BYTES_V5 - k * size : size)) return;
+  } else if (b[6] <= 1 && n >= 12) {
+    k = b[5] | b[6] << 7; K = b[8] | b[9] << 7; size = SONG_PIECE; len = n - 11; in = b + 10; format = b[7];
+    if (b[9] > 1 || K < 1 || K > SONG_PIECES_MAX || k >= K || len < 1 || len > size || (k < K - 1 && len != size) || format < 1) return;
+    if (format > SFX_SONG_VERSION) { if (k == 0) say("NEWER SONG: UPDATE"); return; }   /* a later firmware's song: nothing of it is collected */
+    if (k == 0 && in[0] != format) return;             /* (the format its pieces name is not the song's own) */
+    /* our own echo: the piece that just went out, come back while the song is going out or just after */
+    if (sent_song_any && (export_at >= SLOTS || now - sent_song_t < ECHO_FRAMES) && K == song_tx_K
+        && len == (k == K - 1 ? song_tx_n - k * size : size) && same(in, song_tx + k * size, len)) return;
+  } else return;
+  uint8_t *at = song_rx + k * size;
+  if (now - song_rx_t > (uint64_t)SR * 2 || K != song_rx_K || size != song_rx_size || format != song_rx_format) rx_clear();
+  song_rx_t = now;
+  int here = rx_seen(k) && len == (k == K - 1 ? song_rx_last : size) && same(in, at, len);
+  if (song_rx_done) {                                /* the song before was taken: its twin, or a piece of the next */
+    if (here && !song_rx_other && song_rx_n[k] < song_rx_most) { song_rx_n[k]++; return; }   /* the twin this piece still owed */
+    if (!here) {
+      if (rx_again(k)) rx_again_clear();             /* (a second piece with other bytes in the same place: yet another song begins) */
+      for (int i = 0; i < len; i++) at[i] = in[i];
+      if (k == K - 1) song_rx_last = len;
+      song_rx_other = 1;
+    }
+    song_rx_again[k >> 5] |= 1u << (k & 31);
+    if (song_rx_n2[k] < 255) song_rx_n2[k]++;
+    for (int i = 0; i < K; i++) if (!rx_again(i)) return;
+    int other = song_rx_other;
+    for (int i = 0; i < K; i++) song_rx_n[i] = song_rx_n2[i];
+    rx_whole(other);                                 /* (every piece again and all the same: the same song, sent once more - nothing to take) */
+    return;
+  }
+  if (rx_seen(k)) { if (here) { if (song_rx_n[k] < 255) song_rx_n[k]++; return; } rx_clear(); }
+  song_rx_K = K; song_rx_size = size; song_rx_format = format;
+  for (int i = 0; i < len; i++) at[i] = in[i];
+  song_rx_seen[k >> 5] |= 1u << (k & 31); song_rx_n[k] = 1;
+  if (k == K - 1) song_rx_last = len;
+  for (int i = 0; i < K; i++) if (!rx_seen(i)) return;
+  rx_whole(1);
 }
 
 static void sysex_in(const uint8_t *b, int n)
@@ -560,39 +691,24 @@ static void sysex_in(const uint8_t *b, int n)
     link_text[k] = 0;
   } else if (b[4] == SX_REQUEST && n == 7 && b[5] < SLOTS) { dump_due |= 1u << b[5]; out_pump(); }
   else if (b[4] == SX_REQ_SONG) { export_at = 0; out_pump(); }
-  else if (b[4] == SX_SONG && n > 8 && b[6] == SONG_CHUNKS) {                 /* a song from the game, piece by piece */
-    /* Every piece is put where it belongs, and the song is taken when all 39 are here. So the pieces may come in any
-       order: a MIDI path can swap two neighbours (a browser's Web MIDI output does, now and then). And more than once:
-       a host can deliver everything twice (the emulator does), and a piece that is here already, byte for byte, is
-       left alone. A piece that is here already with OTHER bytes belongs to another song: that begins a new transfer.
-       After a song is taken its pieces stay marked, so that its own late twins do not begin one. A transfer that
-       broke off is forgotten after two seconds without a piece. */
-    int k = b[5], len = n - 8;
-    if (k >= SONG_CHUNKS || len != (k == SONG_CHUNKS - 1 ? SFX_SONG_BYTES - k * SONG_CHUNK : SONG_CHUNK)) return;
-    const uint8_t *in = b + 7; uint8_t *at = song_rx + k * SONG_CHUNK;
-    uint64_t piece = (uint64_t)1 << k;
-    /* our own echo: the piece that just went out, come back while the song is going out or just after */
-    if (sent_song_any && (export_at >= SLOTS || now - sent_song_t < ECHO_FRAMES) && same(in, song_tx + k * SONG_CHUNK, len)) return;
-    if (now - song_rx_t > (uint64_t)SR * 2) song_rx_seen = 0;
-    song_rx_t = now;
-    if (song_rx_seen & piece) { if (same(in, at, len)) return; song_rx_seen = 0; }
-    for (int i = 0; i < len; i++) at[i] = in[i];
-    song_rx_seen |= piece;
-    if (song_rx_seen == ((uint64_t)1 << SONG_CHUNKS) - 1) { undo_mark("LOAD", 1); say(sfx_song_unpack(&SONG, song_rx, SFX_SONG_BYTES) ? "BAD SONG" : "SONG LOADED"); view_sync(); }
-  }
+  else if (b[4] == SX_SONG && n > 8) song_piece(b, n, now);
 }
 
 /* ---- playing -------------------------------------------------------------------------------------------------------- */
-static void record(int slot, int note, float vel)    /* REC while it runs: onto the nearest step of the pattern that plays, as hard as it was hit */
+static void record(int slot, int note, float vel)    /* REC while it runs: onto the nearest step of the pattern that plays - of its own grid -, as hard as it was hit */
 {
-  uint32_t st = seq_step;
+  uint32_t w = seq_pos;                              /* (step, grid and fraction: one word, read once) */
   if (rec && running && kit != KIT_MUSIC) { if (!from_outside) say("MUSIC KIT ONLY: K5 SEQ"); return; }   /* (the song plays the MUSIC kit: the SEQ page has it) */
-  if (!rec || st == NO_STEP) return;
+  if (!rec || w == NO_STEP) return;
   undo_open(2);
-  if (seq_frac > 0.5f) st = (st + 1) % SONG.len;
   sfx_pattern *p = &SONG.pat[seq_pattern % SFX_PATTERNS];
-  step_set(p, (int)(st % STEPS), slot, note);
-  p->acc[slot][st % STEPS] = SFX_ACC(vel > 0.0f ? (int)vd_clamp(vel * 7.99f, 0.0f, 7.0f) : SFX_VEL_DEFAULT, SFX_ACC_LEN(p->acc[slot][st % STEPS]));
+  int st = pos_step(w), div = pos_div(w), pd = sfx_div(p->grid);
+  if (pd != div) { st = st * pd / div; div = pd; }   /* (its grid changed since the audio said where it is) */
+  int n = bar_len() * div;
+  if (pos_frac(w) > 0.5f) st = (st + 1) % n;         /* past the middle of the step: the next one */
+  st %= n;
+  step_set(p, st, slot, note);
+  p->vel[slot][st] = (uint8_t)(vel > 0.0f ? (int)vd_clamp(vel * 7.99f, 0.0f, 7.0f) : SFX_VEL_DEFAULT);      /* (its length stays) */
 }
 
 static void pad(int slot, int down, float vel)
@@ -613,8 +729,28 @@ static int mode_set(int loop)
 }
 static void mode_toggle(void) { mode_set(!loop_mode); say(loop_mode ? "LOOP: PATTERN REPEATS" : "SONG: PLAYS IN ORDER"); }
 
+/* the 16 steps the pads and the tiles show: those round the cursor - while a take runs on SEQ, those that play */
+static int view_win(void)
+{
+  if (page == PG_SEQ && rec && running && follow_win >= 0 && follow_win * PADS < gsteps()) return follow_win;
+  return cur_step / PADS;
+}
+static void follow_end(void)                         /* a take ended: the tiles stay where it was */
+{
+  if (follow_win >= 0 && follow_win * PADS < gsteps() && cur_step / PADS != follow_win) cur_step = follow_win * PADS;
+  follow_win = -1;
+}
+static void cur_sync(void)                           /* another pattern is shown, or its grid changed: the cursor stays on its sixteenth */
+{
+  int d = pat_div(edit_pat);
+  if (edit_pat == cur_pat && d == cur_div) return;
+  cur_step = clampi(cur_step * d / cur_div, 0, SFX_BAR * d - 1);
+  held_pad = held_step = -1; cur_pat = edit_pat; cur_div = d;
+}
+
 static void seq_play(int on)                         /* (it never changes the mode: the top line said what it will play) */
 {
+  if (!on) follow_end();
   running = on; undo_run = 0;
   if (!on) { if (queued >= 0) edit_pat = queued; f4_held = 0; queued = -1; }   /* (a pattern chosen during a take, not yet begun: it is the one shown now) */
   if (on) send(M_LOOP, loop_mode, 0, 0, 0);          /* again, should the queue have been full when the mode was set */
@@ -625,7 +761,8 @@ static void seq_play(int on)                         /* (it never changes the mo
 
 static void seq_rec(int on)                          /* REC lit: PLAY loops the pattern (F1 may still say SONG: then the take goes along the song), and what is played is laid on top */
 {
-  rec = on; rec_on = on; undo_run = 0; held_step = -1;
+  if (!on) follow_end();
+  rec = on; rec_on = on; undo_run = 0; held_pad = held_step = -1;
   if (!on) f4_held = 0;
   vibe_led_button(VB_REC, 0xFF4040, on ? 1.0f : 0.0f);
   if (on && !tour_on && mode_set(1)) say("REC ON: PATTERN LOOPS");
@@ -649,20 +786,27 @@ static void pattern_home(void) { edit_pat = 0; send(M_CUE, 0, 0, 0, 0); queued =
    F4 held erases the selected sound on every step the bar has passed, in the pattern that plays. */
 static void seq_poll(void)
 {
-  uint32_t st = seq_step, now = seq_pattern % SFX_PATTERNS;
+  uint32_t w = seq_pos, now = seq_pattern % SFX_PATTERNS;
+  cur_sync();
   if (!running || (queued >= 0 && now == (uint32_t)queued)) queued = -1;
-  if (rec && running && st != NO_STEP) edit_pat = (int)now;
-  if (f4_held && rec && running && st != NO_STEP) {
+  if (rec && running && w != NO_STEP) edit_pat = (int)now;
+  if (w != NO_STEP) {
     sfx_pattern *p = &SONG.pat[now];
-    int len = SONG.len >= 1 && SONG.len <= STEPS ? SONG.len : STEPS, at = (int)st % len;
-    if (erase_pat != (int)now) { erase_pat = (int)now; erase_at = -1; }   /* another pattern began: only what passes in it */
-    for (int n = 0; n < len && erase_at != at; n++) {
-      int i = erase_at < 0 ? at : (erase_at + 1) % len;
-      undo_open(2);
-      p->on[i] &= (uint16_t)~(1u << sel); p->note[sel][i] = 0; p->acc[sel][i] = SFX_VEL_DEFAULT;
-      erase_at = i;
+    int pd = sfx_div(p->grid), st = pos_step(w) * pd / pos_div(w);   /* the step that plays, in its pattern's grid as it is now */
+    if (rec && running && page == PG_SEQ) follow_win = st / PADS;
+    if (f4_held && rec && running) {
+      int len = bar_len() * pd, at = st % len;
+      if (erase_pat != (int)now) { erase_pat = (int)now; erase_at = -1; }   /* another pattern began: only what passes in it */
+      if (erase_at >= len) erase_at = -1;
+      for (int n = 0; n < len && erase_at != at; n++) {
+        int i = erase_at < 0 ? at : (erase_at + 1) % len;
+        undo_open(2);
+        p->on[i] &= (uint16_t)~(1u << sel); p->note[sel][i] = 0; p->vel[sel][i] = SFX_VEL_DEFAULT; p->len[sel][i] = 0;
+        erase_at = i;
+      }
     }
   }
+  cur_sync();
 }
 
 static void intensity_set(float v) { vibe_param_set(P_INTENSITY, vd_clamp(v, 0.0f, 1.0f)); }
@@ -671,7 +815,7 @@ static void step_toggle(int step, int slot)
   undo_open(1);
   pat()->on[step] ^= (uint16_t)(1u << slot); cur_step = step;
   if (!running && (pat()->on[step] >> slot) & 1) {   /* switched on: hear it, at its note (while the song stands still) */
-    send(M_TRIGGER, slot, slot, SFX_VEL[SFX_ACC_VEL(pat()->acc[slot][step])], pat()->note[slot][step]); send(M_RELEASE, slot, slot, 0, 0);
+    send(M_TRIGGER, slot, slot, SFX_VEL[pat()->vel[slot][step] & 7], pat()->note[slot][step]); send(M_RELEASE, slot, slot, 0, 0);
   }
 }
 
@@ -683,20 +827,17 @@ static void note_turn(int d)                         /* the cursor step's note, 
   step_set(pat(), cur_step, sel, n);
 }
 
-static int wrap(int v, int d, int n) { return ((v + d) % n + n) % n; }
-static int clampi(int v, int a, int b) { return v < a ? a : v > b ? b : v; }
-
-static void vel_turn(int d)                          /* the cursor step: how hard (1..8), how long (AUTO, 1..15 steps) */
+static void vel_turn(int d)                          /* the cursor step: how hard (1..8), how long (AUTO, else steps of the pattern's grid, up to a bar less one) */
 {
-  uint8_t *a = &pat()->acc[sel][cur_step];
+  uint8_t *a = &pat()->vel[sel][cur_step];
   undo_open(1);
-  *a = SFX_ACC(clampi(SFX_ACC_VEL(*a) + d, 0, 7), SFX_ACC_LEN(*a));
+  *a = (uint8_t)clampi((*a & 7) + d, 0, 7);
 }
 static void len_turn(int d)
 {
-  uint8_t *a = &pat()->acc[sel][cur_step];
+  uint8_t *a = &pat()->len[sel][cur_step];
   undo_open(1);
-  *a = SFX_ACC(SFX_ACC_VEL(*a), clampi(SFX_ACC_LEN(*a) + d, 0, 15));
+  *a = (uint8_t)clampi(*a + d, 0, gsteps() - 1);
 }
 
 /* the selected sound's automation lane. What its target is without a point (where a new point starts), and how far it goes */
@@ -718,7 +859,7 @@ static void lanes_tidy(void)                         /* a lane without a point a
 {
   for (int l = 0; l < SFX_LANES; l++) {
     int any = 0;
-    for (int k = 0; k < SFX_PATTERNS && !any; k++) for (int i = 0; i < STEPS; i++) if (SONG.pat[k].aut[l][i]) { any = 1; break; }
+    for (int k = 0; k < SFX_PATTERNS && !any; k++) for (int i = 0; i < SFX_STEPS; i++) if (SONG.pat[k].aut[l][i]) { any = 1; break; }
     if (!any) SONG.lane[l].track = 0;
   }
 }
@@ -729,7 +870,7 @@ static void aut_put(int track, int step, int v)      /* v: 0 = no point, else va
   if (l < 0 && v) {
     for (l = 0; l < SFX_LANES && SONG.lane[l].track; l++) { }
     if (l == SFX_LANES) { say("ALL 24 LANES IN USE"); return; }
-    for (int k = 0; k < SFX_PATTERNS; k++) for (int i = 0; i < STEPS; i++) SONG.pat[k].aut[l][i] = 0;
+    for (int k = 0; k < SFX_PATTERNS; k++) for (int i = 0; i < SFX_STEPS; i++) SONG.pat[k].aut[l][i] = 0;
     SONG.lane[l].to = (uint8_t)to; SONG.lane[l].track = (uint8_t)(track + 1);
   }
   if (l < 0) return;
@@ -763,10 +904,10 @@ static void auto_toggle(int step)
 static void auto_ramp(void)                          /* a straight line from each point to the next */
 {
   int last = -1, n = 0, l = lane_of(sel, view_to[sel]);
-  for (int i = 0; l >= 0 && i < STEPS; i++) n += pat()->aut[l][i] != 0;
+  for (int i = 0; l >= 0 && i < gsteps(); i++) n += pat()->aut[l][i] != 0;
   if (n < 2) { say("SET TWO POINTS FIRST"); return; }
   undo_mark("RAMP", 0);
-  for (int i = 0; i < STEPS; i++) {
+  for (int i = 0; i < gsteps(); i++) {
     if (!pat()->aut[l][i]) continue;
     if (last >= 0) for (int k = last + 1; k < i; k++) pat()->aut[l][k] = (uint8_t)(pat()->aut[l][last] + (pat()->aut[l][i] - pat()->aut[l][last]) * (k - last) / (i - last));
     last = i;
@@ -777,7 +918,8 @@ static void auto_ramp(void)                          /* a straight line from eac
 static void set_page(int p)
 {
   if (p == PG_AUTO && page != PG_AUTO && last_to && last_sel == sel) view_to[sel] = last_to;   /* AUTO opens on the knob turned last */
-  page = p; held_step = -1; f4_held = 0; undo_close();
+  follow_end();
+  page = p; held_pad = held_step = -1; f4_held = 0; undo_close();
   if (p >= PG_SEQ && p <= PG_MASTER) kit_set(KIT_MUSIC);      /* the song's pages: its own sounds */
   if (!running && !rec && !tour_on) {                 /* where patterns are made PLAY loops one; on SONG it plays the song */
     if (p == PG_SEQ || p == PG_AUTO) mode_set(1);
@@ -800,8 +942,23 @@ static void tab_key(int tab)
 
 
 /* LEFT / RIGHT: the sound page before or after (WAVE only for a wavetable) – on SEQ, SONG and AUTO the pattern */
+/* SEQ and AUTO, SHIFT + LEFT / RIGHT: the 16 steps before / after (a pattern of 32 or 64 steps has two or four such
+   windows - fewer when the bar is short: only those with a step that plays) */
+static void window_step(int d)
+{
+  static char t[24];
+  int lim = bar_len() * pat_div(edit_pat), wins = (lim + PADS - 1) / PADS, w = cur_step / PADS;   /* the windows that hold a step of the bar */
+  if (gsteps() <= PADS) { say("1/16: ALL STEPS SHOWN"); return; }
+  if (wins == 1 && w == 0) { strcpy(t, "BAR ENDS AT STEP "); vg_itoa(lim, t + 17); say(t); return; }   /* (a short bar: all of it is shown) */
+  w = wrap(w < wins ? w : d > 0 ? wins - 1 : 0, d, wins);        /* (the cursor beyond the bar: to its first or its last window) */
+  cur_step = clampi(w * PADS + cur_step % PADS, 0, lim - 1); held_pad = held_step = -1;
+  strcpy(t, "STEPS "); vg_itoa(w * PADS + 1, t + 6); strcpy(t + strlen(t), "-"); vg_itoa(w * PADS + PADS, t + strlen(t));
+  say(t);
+}
+
 static void arrow(int d)
 {
+  if (shift && (page == PG_SEQ || page == PG_AUTO)) { window_step(d); return; }
   if (song_keys()) { pattern_step(d); return; }
   if (page >= PG_SEQ) return;
   int to = page;
@@ -823,7 +980,7 @@ static uint8_t *mix_value(int pg, int i, int *hi)
 static void param_nudge(int pg, int i, int d)
 {
   if (pg == PG_AUTO) {
-    if (i == 0) cur_step = clampi(cur_step + d, 0, STEPS - 1);
+    if (i == 0) cur_step = clampi(cur_step + d, 0, gsteps() - 1);
     if (i == 1) auto_turn(d);
     if (i == 2) view_to[sel] = (uint8_t)wrap(view_to[sel], d > 0 ? 1 : -1, SFX_AT_COUNT);
     return;
@@ -849,7 +1006,7 @@ static void param_put(int pg, int i, float u)
 {
   if (pg == PG_AUTO) {
     int to = view_to[sel];
-    if (i == 0) cur_step = clampi((int)(u * (float)STEPS), 0, STEPS - 1);
+    if (i == 0) cur_step = clampi((int)(u * (float)gsteps()), 0, gsteps() - 1);
     if (i == 1 && to) { undo_open(1); aut_put(sel, cur_step, clampi((int)(u * (float)auto_hi(to) + 0.5f), 0, auto_hi(to)) + 1); }
     if (i == 2) view_to[sel] = (uint8_t)clampi((int)(u * (float)SFX_AT_COUNT), 0, SFX_AT_COUNT - 1);
     return;
@@ -890,16 +1047,16 @@ static void encoder(int id, float turn)
     return;
   }
   if (page == PG_AUTO) {
-    if (id == VE_1) cur_step = wrap(cur_step, d, STEPS);
+    if (id == VE_1) cur_step = wrap(cur_step, d, gsteps());
     if (id == VE_2) auto_turn(d);
     if (id == VE_3) view_to[sel] = (uint8_t)wrap(view_to[sel], d > 0 ? 1 : -1, SFX_AT_COUNT);
     return;
   }
   if (page == PG_SEQ) {
-    if (id == VE_1) cur_step = wrap(cur_step, d, STEPS);
+    if (id == VE_1) cur_step = wrap(cur_step, d, gsteps());
     if (id == VE_2) note_turn(d);
     if (id == VE_3) vel_turn(d > 0 ? 1 : -1);
-    if (id == VE_4) len_turn(d > 0 ? 1 : -1);
+    if (id == VE_4) len_turn(gsteps() == PADS ? (d > 0 ? 1 : -1) : d);      /* (a finer grid has more to cross: SHIFT is 8 a click there) */
     if (id == VE_B) { SONG.scale = (uint8_t)wrap(SONG.scale, d, SFX_SCALE_COUNT); say(SCALE_NAME[SONG.scale]); }   /* (said in the top line) */
     return;
   }
@@ -908,7 +1065,7 @@ static void encoder(int id, float turn)
     if (id == VE_2) { if (SONG.arr_len) say("ARRANGEMENT IN USE"); else SONG.chain = (uint8_t)clampi(SONG.chain + d, 1, SFX_PATTERNS); }
     if (id == VE_3) intensity_set(vibe_param_get(P_INTENSITY) + (float)d * 0.02f);
     if (id == VE_4) SONG.level[sel] = (uint8_t)clampi(SONG.level[sel] + d * 2, 0, 127);
-    if (id == VE_B) { static char t[16]; SONG.len = (uint8_t)clampi(SONG.len + d, 1, STEPS); strcpy(t, "BAR: "); vg_itoa(SONG.len, t + 5); strcpy(t + strlen(t), SONG.len == 1 ? " STEP" : " STEPS"); say(t); }
+    if (id == VE_B) { static char t[16]; SONG.len = (uint8_t)clampi(SONG.len + d, 1, SFX_BAR); strcpy(t, "BAR: "); vg_itoa(SONG.len, t + 5); strcpy(t + strlen(t), "/16"); say(t); }
     return;
   }
   if (id <= VE_4) param_nudge(page, id, d);
@@ -934,7 +1091,7 @@ static void soft_sound(int f)                        /* F1-F6 on the sound pages
           { sfx_patch t = *p; int8_t n = pad_preset[sel]; *p = undo[sel]; pad_preset[sel] = undo_preset[sel]; undo[sel] = t; undo_preset[sel] = n; } say("UNDO"); break;
   case 3: keep_undo(sel); sfx_patch_random(p, &rng); pad_preset[sel] = -1; say("RANDOM"); break;
   case 4: dump_due |= 1u << sel; out_pump(); say("EXPORTED"); return;
-  case 5: bank_save(); say("SAVED"); return;
+  case 5: save_say(); return;
   }
   changed(sel);
   audition();
@@ -944,7 +1101,7 @@ static void pattern_clear(void)                      /* (one press: F2 brings it
 {
   if (!pattern_holds(edit_pat)) { say("NOTHING TO CLEAR"); return; }   /* (and what F2 holds is kept) */
   undo_mark("CLR PAT", 0);
-  for (int i = 0; i < STEPS; i++) { pat()->on[i] = 0; for (int t = 0; t < SLOTS; t++) { pat()->note[t][i] = 0; pat()->acc[t][i] = SFX_VEL_DEFAULT; } for (int l = 0; l < SFX_LANES; l++) pat()->aut[l][i] = 0; }
+  sfx_pattern_clear(pat());                          /* (its grid stays) */
   lanes_tidy(); say("PAT CLEARED - F2: UNDO");
 }
 
@@ -972,55 +1129,87 @@ static void pattern_copy(void)                       /* this pattern into the ne
   if (to < 0) { say("NO EMPTY PATTERN"); return; }
   undo_mark("COPY", 0);
   if (!(rec && running)) undo_pat = edit_pat;
-  for (int i = 0; i < STEPS; i++) { SONG.pat[to].on[i] = pat()->on[i]; for (int t = 0; t < SLOTS; t++) { SONG.pat[to].note[t][i] = pat()->note[t][i]; SONG.pat[to].acc[t][i] = pat()->acc[t][i]; } for (int l = 0; l < SFX_LANES; l++) SONG.pat[to].aut[l][i] = pat()->aut[l][i]; }
+  SONG.pat[to] = *pat();                             /* (with its grid) */
   said[7] = (char)('A' + edit_pat); said[11] = (char)('A' + to);
   pattern_pick(to); say(said);                       /* (the chain is left alone) */
 }
 
-static void fill(void)                               /* the selected sound on every 4th step, then every 2nd, every one, none */
+/* the selected sound on every quarter, then every eighth, every sixteenth - at 32 and 64 steps also every thirty-second -, none */
+static void fill(void)
 {
-  static const uint8_t EVERY[3] = { 4, 2, 1 };
-  static const char *const SAID[4] = { "EVERY 4TH STEP", "EVERY 2ND STEP", "EVERY STEP", "SOUND CLEARED" };
-  int next = 0;
+  static const char *const SAID[5] = { "EVERY 1/4", "EVERY 1/8", "EVERY 1/16", "EVERY 1/32", "SOUND CLEARED" };
+  int div = pat_div(edit_pat), n = gsteps(), lim = bar_len() * div, levels = div > 1 ? 4 : 3, next = 0;
+  int every[4] = { 4 * div, 2 * div, div, div > 1 ? div / 2 : 1 };
   undo_mark("FILL", 0);
-  for (int k = 0; k < 3; k++) {
+  for (int k = 0; k < levels; k++) {
     int same = 1;
-    for (int i = 0; i < STEPS; i++) if (((pat()->on[i] >> sel) & 1) != (i % EVERY[k] == 0 && i < SONG.len)) same = 0;
+    for (int i = 0; i < n; i++) if (((pat()->on[i] >> sel) & 1) != (i % every[k] == 0 && i < lim)) same = 0;
     if (same) next = k + 1;
   }
-  for (int i = 0; i < STEPS; i++) {
+  for (int i = 0; i < n; i++) {
     pat()->on[i] &= (uint16_t)~(1u << sel);
-    if (next < 3 && i % EVERY[next] == 0 && i < SONG.len) pat()->on[i] |= (uint16_t)(1u << sel);
+    if (next < levels && i % every[next] == 0 && i < lim) pat()->on[i] |= (uint16_t)(1u << sel);
   }
-  say(SAID[next]);
+  say(next < levels ? SAID[next] : SAID[4]);
+}
+
+/* SEQ and AUTO, SHIFT + F5 / F6: the grid of the pattern shown, a step coarser or finer. Finer moves every step to the
+   step that begins at the same moment: it sounds the same. Coarser drops what stands between the steps that stay - that
+   asks twice (the second press counts for the same pattern, the same grid and the same number of things dropped only),
+   and F2 brings it back. */
+static void grid_change(int dir)
+{
+  static const char *const UP[SFX_GRIDS] = { "", "GRID 1/32", "GRID 1/64" }, *const DOWN[SFX_GRIDS] = { "GRID 1/16 - F2: UNDO", "GRID 1/32 - F2: UNDO", "" };
+  static char ask[24]; static int ask_pat = -1, ask_to, ask_loss;
+  sfx_pattern *p = pat();
+  int to = pat_grid(edit_pat) + (dir > 0 ? 1 : -1);
+  if (to >= SFX_GRIDS) { say("FINEST: 1/64"); return; }
+  if (to < 0) { say("COARSEST: 1/16"); return; }
+  if (dir < 0) {
+    int loss = sfx_pattern_regrid_loss(p, to);
+    if (loss > 0) {
+      if (!(toast == ask && toast_on() && ask_pat == edit_pat && ask_to == to && ask_loss == loss)) {   /* (more or less to drop than it said: it says the number that is true now) */
+        strcpy(ask, "AGAIN: A DROPS "); ask[7] = (char)('A' + edit_pat); vg_itoa(loss, ask + 15);
+        ask_pat = edit_pat; ask_to = to; ask_loss = loss; say(ask); return;
+      }
+      toast_live = 0;
+    }
+  }
+  undo_mark("GRID", 0);
+  sfx_pattern_regrid(p, to);
+  if (dir < 0) lanes_tidy();
+  say(dir > 0 ? UP[to] : DOWN[to]);
+  erase_at = -1; cur_sync(); relabel();
 }
 
 static void soft_seq(int f)                          /* F1-F6 on the SEQ page */
 {
+  if (shift && f >= 4) { grid_change(f == 4 ? -1 : 1); return; }
   switch (f) {
   case 0: mode_toggle(); break;
   case 1: song_undo(); break;
   case 2: fill(); break;
   case 3: { int any = 0;                             /* (while a take runs F4 is ERASE, held: vibe_on_event) */
-          for (int i = 0; i < STEPS; i++) any |= ((pat()->on[i] >> sel) & 1) || pat()->note[sel][i] || pat()->acc[sel][i] != SFX_VEL_DEFAULT;
+          for (int i = 0; i < gsteps(); i++) any |= ((pat()->on[i] >> sel) & 1) || pat()->note[sel][i] || pat()->vel[sel][i] != SFX_VEL_DEFAULT || pat()->len[sel][i];
           if (!any) { say("NOTHING TO CLEAR"); break; } }
           undo_mark("CLEAR", 0);
-          for (int i = 0; i < STEPS; i++) { pat()->on[i] &= (uint16_t)~(1u << sel); pat()->note[sel][i] = 0; pat()->acc[sel][i] = SFX_VEL_DEFAULT; } say("CLEARED - F2: UNDO"); break;
+          for (int i = 0; i < gsteps(); i++) { pat()->on[i] &= (uint16_t)~(1u << sel); pat()->note[sel][i] = 0; pat()->vel[sel][i] = SFX_VEL_DEFAULT; pat()->len[sel][i] = 0; } say("CLEARED - F2: UNDO"); break;
   case 4: pattern_copy(); break;
-  case 5: bank_save(); say("SAVED"); break;
+  case 5: save_say(); break;
   }
 }
 
 static void soft_auto(int f)                         /* F1-F6 on the AUTO page */
 {
+  if (shift && f >= 4) { grid_change(f == 4 ? -1 : 1); return; }
   switch (f) {
   case 0: mode_toggle(); break;
   case 1: song_undo(); break;
   case 2: auto_ramp(); break;
-  case 3: { int any = 0; for (int i = 0; i < STEPS; i++) any |= aut_at(sel, i); if (!any) { say("NOTHING TO CLEAR"); break; } }
-          undo_mark("CLEAR", 0); for (int i = 0; i < STEPS; i++) aut_put(sel, i, 0); say("LANE CLEARED"); break;
+  case 3: { int any = 0; for (int i = 0; i < gsteps(); i++) any |= aut_at(sel, i); if (!any) { say("NOTHING TO CLEAR"); break; } }
+          undo_mark("CLEAR", 0); for (int i = 0; i < gsteps(); i++) aut_put(sel, i, 0); say("LANE CLEARED"); break;
   case 4: pattern_copy(); break;
-  case 5: bank_save(); say("SAVED"); break;
+  case 5: save_say(); break;
   }
 }
 
@@ -1045,7 +1234,7 @@ static void soft_song(int f)                         /* F1-F6 on the SONG page *
   case 2: pattern_clear(); break;
   case 3: if (shift) song_demo(); else song_new(); break;
   case 4: export_at = 0; say(linked ? "SENDING" : "SENDING - NO GAME SEEN"); out_pump(); break;
-  case 5: bank_save(); say("SAVED"); break;
+  case 5: save_say(); break;
   }
 }
 
@@ -1063,7 +1252,7 @@ static void soft_mix(int f)                          /* F1-F6 on the MIX and MAS
           break;
   case 3: SONG.mute = SONG.solo = 0; say("ALL ON"); break;
   case 4: seq_play(!running); break;
-  case 5: bank_save(); say("SAVED"); break;
+  case 5: save_say(); break;
   }
 }
 
@@ -1178,7 +1367,8 @@ static void tour_pump(void)                          /* from the display: the to
 #undef S
 
 /* ---- the stage: 960 x 540 – the whole instrument for the mouse. Left: the pads and the selected sound (its picture,
-        its pages, four values to drag, its keys). Right: the song – every sound a row of 16 steps, intensity, the layer. --- */
+        its pages, four values to drag, its keys). Right: the song – every sound a row of the pattern's steps (16, 32 or
+        64 in the same width), intensity, the layer. --- */
 #define SW 960
 #define SH 540
 static uint16_t stage_fb[SW * SH];
@@ -1201,7 +1391,9 @@ static const uint8_t ST_PAGE[ST_N] = { PG_OSC, PG_TIMBRE, PG_FILTER, PG_WAVE, PG
 #define SG_Y 64
 #define SG_PX 24
 #define SG_PY 22
-#define SG_W (STEPS * SG_PX)
+#define SG_W (SFX_BAR * SG_PX)
+#define GC_X 788                                    /* the pattern's grid: a click makes it finer, SHIFT or the right button coarser */
+#define GC_Y 42
 #define SI_Y 426                                    /* INTENSITY, and under it the selected sound's LAYER */
 #define SL_Y 450
 #define SF_X 712                                    /* FILL CLEAR COPY UNDO DEMO */
@@ -1225,7 +1417,7 @@ static int stage_page_follows(void) { return sound_page() || mix_page() || page 
 /* the AUTO tab turns the rows into lanes: a click or a drag in the selected sound's row puts points where the mouse is */
 static void stage_auto(int x, int y)
 {
-  int to = view_to[sel], step = clampi((x - SG_X) / SG_PX, 0, STEPS - 1);
+  int to = view_to[sel], step = clampi((x - SG_X) * gsteps() / SG_W, 0, gsteps() - 1);
   cur_step = step;
   if (!to) { say("CHOOSE A TARGET FIRST"); return; }
   undo_open(1);
@@ -1267,10 +1459,10 @@ static void stage_event(const vibe_event *e)
   } else if (inside(x, y, SP_X + 312, 304, 114, 24)) { kit_set(x < SP_X + 370 ? KIT_SFX : KIT_MUSIC); if (kit == KIT_SFX && spage >= PG_SEQ) spage = PG_OSC; }
   else if (gx >= 0 && gy >= 0 && gx < SG_W && gy < SLOTS * SG_PY && spage == PG_AUTO) {
     kit_set(KIT_MUSIC);    /* a lane: a point – SHIFT or the right button takes it away */
-    sel = gy / SG_PY; cur_step = gx / SG_PX;
+    sel = gy / SG_PY; cur_step = clampi(gx * gsteps() / SG_W, 0, gsteps() - 1);
     if (e->midi[1] & (VIBE_STAGE_MOD_SHIFT | VIBE_STAGE_MOD_RIGHT)) { undo_open(1); aut_put(sel, cur_step, 0); }
     else { stage_drag = SD_AUTO; stage_auto(x, y); }
-  } else if (gx >= 0 && gy >= 0 && gx < SG_W && gy < SLOTS * SG_PY) { kit_set(KIT_MUSIC); sel = gy / SG_PY; step_toggle(gx / SG_PX, sel); }
+  } else if (gx >= 0 && gy >= 0 && gx < SG_W && gy < SLOTS * SG_PY) { kit_set(KIT_MUSIC); sel = gy / SG_PY; step_toggle(clampi(gx * gsteps() / SG_W, 0, gsteps() - 1), sel); }
   else if (inside(x, y, SN_X, SG_Y, SG_X - SN_X, SLOTS * SG_PY)) {                         /* a row's name: that sound – SHIFT or the right button: mute */
     if (e->midi[1] & (VIBE_STAGE_MOD_SHIFT | VIBE_STAGE_MOD_RIGHT)) SONG.mute ^= (uint16_t)(1u << (gy / SG_PY));
     else { kit_set(KIT_MUSIC); stage_pad = gy / SG_PY; pad(stage_pad, 1, 0.9f); }
@@ -1288,6 +1480,7 @@ static void stage_event(const vibe_event *e)
     soft_sound((x - SP_X) / SA_PX);
     shift = was;
   } else if (inside(x, y, TM_X, TB_Y, 58, 36)) mode_toggle();
+  else if (inside(x, y, GC_X, GC_Y, 62, 14)) grid_change((e->midi[1] & (VIBE_STAGE_MOD_SHIFT | VIBE_STAGE_MOD_RIGHT)) ? -1 : 1);
   else if (inside(x, y, 190, TB_Y, 76, 36)) seq_play(!running);
   else if (inside(x, y, 272, TB_Y, 64, 36)) seq_rec(!rec);
   else if (inside(x, y, 342, TB_Y, 104, 36)) SONG.bpm = (uint16_t)clampi(SONG.bpm + (x < 394 ? -1 : 1), 40, 240);
@@ -1338,16 +1531,16 @@ static const char *const HELP_SOUND[] = {
   "MENU", "the tour (SHIFT + MENU twice: factory reset)",
 };
 static const char *const HELP_SEQ[] = {
-  "PADS", "the 16 steps. REC lit: they play the kit",
+  "PADS", "16 steps of the bar. REC lit: they play the kit",
   "SHIFT + PAD", "hear and select that pad's sound",
   "PAD + KEY", "hold a step: it plays the key's note",
   "DATA", "select a sound (a row)",
   "ENCODER 1 2", "the step in the frame, and its NOTE",
   "ENCODER 3 4", "its VELOCITY (1-8) · its LENGTH in steps",
   "A   B", "TEMPO (SHIFT: SWING) · the scale of NOTE",
-  "LEFT RIGHT", "pattern before / after, on the bar line",
+  "LEFT RIGHT", "pattern before / after · SHIFT: the steps shown",
   "F1  F2", "LOOP or SONG plays · UNDO (again: redo)",
-  "F3 F4 F5", "FILL · CLEAR · COPY to an empty pattern",
+  "F3 F4 F5", "FILL · CLEAR · COPY · SHIFT+F5 F6: grid",
   "REC + PLAY", "play it in. F4 held: ERASE. SHIFT+REC: click",
 };
 static const char *const HELP_SONG[] = {
@@ -1357,7 +1550,7 @@ static const char *const HELP_SONG[] = {
   "SHIFT+PAD 9-15 16", "take the last bar away · all (press twice)",
   "ENCODER 1 2", "PATTERN · CHAIN: A to here play in a row",
   "ENCODER 3 4", "INTENSITY (CC 14) · LAYER of the sound",
-  "A   B", "TEMPO (SHIFT: SWING) · steps in a pattern",
+  "A   B", "TEMPO (SHIFT: SWING) · the bar in 16ths",
   "F1", "what PLAY plays: LOOP a pattern, or the SONG",
   "F2 F3", "UNDO (again: redo) · CLEAR the pattern",
   "F4", "NEW empty song (SHIFT: DEMO) - press twice",
@@ -1371,9 +1564,9 @@ static const char *const HELP_AUTO[] = {
   "A POINT", "holds to the next one, or the bar's end",
   "DATA", "select a sound: its own lane",
   "SHIFT + PAD", "hear and select that pad's sound",
-  "LEFT RIGHT", "pattern before / after, on the bar line",
+  "LEFT RIGHT", "pattern before / after · SHIFT: the steps shown",
   "F1  F2", "LOOP or SONG plays · UNDO (again: redo)",
-  "F3 F4 F5", "RAMP · CLEAR the lane · COPY the pattern",
+  "F3 F4 F5", "RAMP · CLEAR · COPY · SHIFT+F5 F6: grid",
   "A", "TEMPO (SHIFT: SWING)",
 };
 static const char *const HELP_LINK[] = {
@@ -1404,8 +1597,8 @@ static void factory_reset(void)
   for (int i = 0; i < SLOTS; i++) changed(i);          /* the song's sounds, to the player */
   kit = was;
   cur_step = 0; pattern_home();
-  bank_save();
-  say("FACTORY RESET");
+  vibe_store_delete("song.bin");                     /* (what was saved is gone: also the song an older firmware kept) */
+  say(bank_save() ? "RESET - NOT SAVED" : "FACTORY RESET");
 }
 
 static const char *const HELP_MIX[] = {
@@ -1439,14 +1632,15 @@ void vibe_on_event(const vibe_event *e)
   case VIBE_EV_PAD:
     if (e->id >= SLOTS) break;
     if (page == PG_SEQ) {                            /* the pads are the steps; held, a key gives the step its note */
-      if (!e->down) { send(M_RELEASE, e->id, e->id, 0, 0); if (held_step == e->id) held_step = -1; break; }   /* (let go: whatever it began – REC or SHIFT may have gone since) */
+      if (!e->down) { send(M_RELEASE, e->id, e->id, 0, 0); if (held_pad == e->id) held_pad = held_step = -1; break; }   /* (let go: whatever it began – REC or SHIFT may have gone since) */
       if (shift) { pick(e->id, e->down); break; }                             /* SHIFT: the pad's sound – hear it, select it */
       if (rec) { pad(e->id, e->down, e->value); break; }                      /* REC lit: the pads are the kit – while it plays they are played in, as hard as they are hit */
-      step_toggle(e->id, sel); held_step = e->id;
+      { int step = cur_step / PADS * PADS + e->id;      /* (the 16 steps round the cursor) */
+        step_toggle(step, sel); held_pad = e->id; held_step = step; }
       break;
     }
     if (page == PG_SONG) { if (e->down) { if (shift) arr_edit(e->id); else if (e->id < 8) pattern_pick(e->id); else intensity_set((float)(e->id - 7) / 8.0f); } break; }
-    if (page == PG_AUTO) { if (!e->down) send(M_RELEASE, e->id, e->id, 0, 0); else if (shift) pick(e->id, 1); else auto_toggle(e->id); break; }     /* the pads: a point on / off */
+    if (page == PG_AUTO) { if (!e->down) send(M_RELEASE, e->id, e->id, 0, 0); else if (shift) pick(e->id, 1); else auto_toggle(cur_step / PADS * PADS + e->id); break; }     /* the pads: a point on / off */
     if (page == PG_MIX) { if (e->down) { sel = e->id; if (shift) SONG.solo ^= (uint16_t)(1u << sel); else SONG.mute ^= (uint16_t)(1u << sel); } break; }   /* the pads: mute, SHIFT: solo */
     pad(e->id, e->down, e->value);
     if (e->down && page == PG_WAVE && patches[sel].engine != SFX_ENGINE_WAVETABLE) set_page(PG_OSC);
@@ -1477,7 +1671,7 @@ void vibe_on_event(const vibe_event *e)
   case VIBE_EV_STAGE: stage_event(e); break;
   case VIBE_EV_ENCODER: if (e->id < VE_COUNT) encoder(e->id, e->value); break;
   case VIBE_EV_BUTTON:
-    if (e->id == VB_SHIFT) { shift = e->down; break; }
+    if (e->id == VB_SHIFT) { shift = e->down; relabel(); break; }      /* (on SEQ and AUTO, F5 and F6 say what they do with it) */
     if (e->id == VB_F4) {                              /* SEQ, REC while it plays: F4 is ERASE for as long as it is held */
       if (!e->down) f4_held = 0;
       else if (page == PG_SEQ && rec && running) { f4_held = 1; erase_at = -1; erase_pat = -1; say("ERASE: HOLD F4"); seq_poll(); break; }
@@ -1817,8 +2011,10 @@ static char *sound_title(char *t)                    /* "PAD 5  COIN" (the stage
 }
 
 /* the top line: the selected sound – and, right, the song: playing or not, its pattern and tempo, the link */
-static void header(uint32_t rgb, uint32_t step, uint32_t now)
+static void header(uint32_t rgb, uint32_t pos, uint32_t now)
 {
+  uint32_t step = pos == NO_STEP ? NO_STEP : (uint32_t)pos_step(pos);
+  int pdiv = pos_div(pos);
   char buf[16], t[16];
   int pill = page >= PG_SEQ && page <= PG_MASTER, k = 0;     /* the song's pages (their kit is MUSIC): what PLAY plays, where the kit is said elsewhere */
   vg_round(8, 5, 30, 24, 5, rgb);
@@ -1843,28 +2039,71 @@ static void header(uint32_t rgb, uint32_t step, uint32_t now)
   vg_itoa(SONG.bpm, t + k);
   vg_circle(467, 17, 4, linked ? 0x6EE7A8 : 0x48332A);
   int ix = 454 - vg_text(t, 454, 10, VG_BOLD, step != NO_STEP ? TEXT : DIM, VG_RIGHT) - 17;
-  if (rec) vg_circle((float)ix + 5.0f, 17.0f, step != NO_STEP && step % 4 == 0 && seq_frac < 0.6f ? 7.5f : 5.0f, 0xFF4040);   /* (it beats with the metronome) */
+  if (rec) vg_circle((float)ix + 5.0f, 17.0f, step != NO_STEP && ((int)step / pdiv) % 4 == 0 && ((float)((int)step % pdiv) + pos_frac(pos)) / (float)pdiv < 0.6f ? 7.5f : 5.0f, 0xFF4040);   /* (it beats with the metronome) */
   else if (step != NO_STEP) vg_tri((float)ix, 11.0f, (float)ix, 23.0f, (float)ix + 10.0f, 17.0f, 0x6EE7A8);
   else vg_rect(ix, 12, 10, 10, 0x6A5248);
 }
 
-/* ---- SEQ: the selected sound's 16 steps as the 16 pads – a row is a beat ------------------------------------------- */
+/* where the song is, for whatever draws now (the display, the stage): the step that plays, in which steps a sixteenth */
+static uint32_t dr_step = NO_STEP; static int dr_div = 1;
+static void dr_read(uint32_t pos) { dr_step = pos == NO_STEP ? NO_STEP : (uint32_t)pos_step(pos); dr_div = pos_div(pos); }
+/* step g of a grid with div steps a sixteenth is where the playhead is: at 16 steps the step itself, at 32 and 64 every
+   step of the sixteenth that plays (a single sixty-fourth is over before it can be seen) */
+static int head_at(int g, int div) { return dr_step != NO_STEP && (div == 1 && dr_div == 1 ? (int)dr_step == g : g / div == (int)dr_step / dr_div); }
+static const char *step_text(char *buf)              /* the cursor: "5" at 16 steps, "17/32" at more */
+{
+  vg_itoa(cur_step + 1, buf);
+  if (gsteps() > PADS) { strcpy(buf + strlen(buf), "/"); vg_itoa(gsteps(), buf + strlen(buf)); }
+  return buf;
+}
+static const char *len_text(int len, char *buf)      /* a length: "3" at 16 steps; at more also what it is of a whole bar: "6 = 3/32" */
+{
+  int n = gsteps(), a = len, b = n;
+  if (!len) return "AUTO";
+  vg_itoa(len, buf);
+  if (n == PADS) return buf;
+  while (b) { int t = a % b; a = b; b = t; }
+  strcpy(buf + strlen(buf), " = "); vg_itoa(len / a, buf + strlen(buf)); strcpy(buf + strlen(buf), "/"); vg_itoa(n / a, buf + strlen(buf));
+  return buf;
+}
+
+/* ---- SEQ: 16 steps of the selected sound as the 16 pads – a row is a beat at 16 steps a bar, an eighth at 32, a
+        sixteenth at 64 ---------------------------------------------------------------------------------------------- */
 static void draw_seq(uint32_t rgb, uint32_t step, uint32_t now)
 {
   char buf[16];
-  int here = now == (uint32_t)edit_pat && step != NO_STEP;
-  for (int s = 0; s < STEPS; s++) {                   /* a step is as high as it is hard, and says its note */
-    int x, y, set = (pat()->on[s] >> sel) & 1, head = here && step == (uint32_t)s, off = s >= SONG.len, note = pat()->note[sel][s];
-    int hgt = 24 + SFX_ACC_VEL(pat()->acc[sel][s]) * 4, len = SFX_ACC_LEN(pat()->acc[sel][s]);
+  int here = now == (uint32_t)edit_pat && step != NO_STEP, div = pat_div(edit_pat), lim = bar_len() * div, w = view_win();
+  for (int s = 0; s < PADS; s++) {                    /* a step is as high as it is hard, and says its note */
+    int g = w * PADS + s;
+    int x, y, set = (pat()->on[g] >> sel) & 1, head = here && head_at(g, div), off = g >= lim, note = pat()->note[sel][g];
+    int hgt = 24 + (pat()->vel[sel][g] & 7) * 4, len = pat()->len[sel][g];
     tile_at(s, &x, &y);
     vg_round(x, y, 55, 54, 7, head && !set ? 0x64463A : set ? vg_mix(BG, rgb, 0.25f) : off ? 0x1A120E : (s / 4) & 1 ? 0x2A1D17 : 0x35251D);
     if (set) vg_round(x, y + 54 - hgt, 55, hgt, 7, head ? 0xFFFFFF : rgb);
     if (set && note) vg_text(note_text(note, buf), x + 27, y + 33, VG_BOLD, BG, VG_CENTER);
     else if (set) vg_circle((float)x + 27.0f, (float)y + 41.0f, 4.0f, BG);
-    else if (!off) vg_text(vg_itoa(s + 1, buf), x + 27, y + 20, VG_SMALL, 0x6A5248, VG_CENTER);
+    else if (!off) vg_text(vg_itoa(g + 1, buf), x + 27, y + 20, VG_SMALL, div > 1 && g % div == 0 ? DIM : 0x6A5248, VG_CENTER);   /* (a finer grid: the steps that begin a sixteenth stand out) */
     if (set && len) { buf[0] = '>'; vg_itoa(len, buf + 1); vg_text(buf, x + 51, y + 2, VG_SMALL, hgt > 46 ? BG : TEXT, VG_RIGHT); }   /* (it holds this many steps) */
-    if (s == cur_step) vg_frame(x - 2, y - 2, 59, 58, 2, 0xFFFFFF);
+    if (g == cur_step) vg_frame(x - 2, y - 2, 59, 58, 2, 0xFFFFFF);
   }
+}
+
+/* SEQ and AUTO at 32 or 64 steps, in the footer's first line: the whole bar, a column a step - the selected sound's steps
+   (AUTO: its lane's points), a line at every beat, a frame round the 16 steps the pads show, the playhead, a mark under
+   the cursor's step; and the numbers of the 16 beside it */
+static void bar_strip(uint32_t rgb, uint32_t step, uint32_t now, int points)
+{
+  char t[16];
+  int div = pat_div(edit_pat), n = gsteps(), px = 128 / n, x0 = 262, y0 = CY + 192, w = view_win(), lim = bar_len() * div;
+  vg_rect(x0, y0, 128, 12, 0x1A120E);
+  vg_rect(x0, y0, lim * px, 12, 0x2A1D17);            /* (the bar: what lies beyond it stays dark) */
+  for (int b = 1; b < 4; b++) vg_rect(x0 + b * 32, y0, 1, 12, LINE);
+  for (int i = 0; i < lim; i++) if (points ? aut_at(sel, i) : (pat()->on[i] >> sel) & 1) vg_rect(x0 + i * px, y0 + 2, px > 2 ? px - 1 : px, 8, rgb);
+  if (step != NO_STEP && now == (uint32_t)edit_pat) vg_rect(x0 + clampi((int)dr_step * div / dr_div, 0, n - 1) * px, y0, px, 12, 0xFFFFFF);
+  vg_frame(x0 + w * PADS * px - 1, y0 - 1, PADS * px + 2, 14, 1, 0xFFFFFF);
+  vg_rect(x0 + cur_step * px, y0 + 14, px, 2, rgb);   /* under it: the cursor's step (what STEP names) - during a take it may lie outside the 16 shown */
+  vg_itoa(w * PADS + 1, t); strcpy(t + strlen(t), "-"); vg_itoa(w * PADS + PADS, t + strlen(t)); strcpy(t + strlen(t), "/"); vg_itoa(n, t + strlen(t));
+  vg_text(t, 398, CY + 191, VG_SMALL, TEXT, VG_LEFT);
 }
 
 /* ---- SONG: pads 1-8 are the patterns, pads 9-16 the intensity – as on the device -------------------------------------- */
@@ -1880,11 +2119,14 @@ static void draw_song(uint32_t step, uint32_t now, int heat)
       char letter[2] = { (char)('A' + s), 0 };
       vg_round(x, y, 55, 54, 7, bg);
       vg_text(letter, x + 7, y + 3, VG_BIG, fg, VG_LEFT);
-      for (int i = 0; i < STEPS; i++) {              /* what is in it: how many sounds on each step */
-        int n = 0;
-        for (uint16_t m = SONG.pat[s].on[i]; m; m &= (uint16_t)(m - 1)) n++;
+      int div = pat_div(s);
+      for (int i = 0; i < SFX_BAR; i++) {            /* what is in it: how many sounds in each sixteenth */
+        int n = 0; uint16_t m = 0;
+        for (int j = 0; j < div; j++) m |= SONG.pat[s].on[i * div + j];
+        for (; m; m &= (uint16_t)(m - 1)) n++;
         if (n) vg_rect(x + 4 + i * 3, y + 50 - (n > 9 ? 20 : 2 + n * 2), 2, n > 9 ? 20 : 2 + n * 2, vg_mix(bg, fg, 0.7f));
       }
+      if (div > 1) vg_text(div == 2 ? "32" : "64", x + 51, y + 3, VG_SMALL, vg_mix(bg, fg, 0.8f), VG_RIGHT);   /* a finer grid: its steps a bar */
     } else {
       int lit = heat >= (s - 7) * 127 / 8;
       vg_round(x, y, 55, 54, 7, lit ? 0xFF5A36 : 0x2E1A12);
@@ -1902,7 +2144,7 @@ static void draw_song(uint32_t step, uint32_t now, int heat)
 
 /* SEQ and AUTO, under the column: the eight patterns – which plays, which is shown, which waits for the bar line, which
    hold something – and a word beside them */
-static void strip(uint32_t step, uint32_t now, const char *hint)
+static void strip(uint32_t step, uint32_t now, const char *hint, uint32_t hint_rgb)
 {
   for (int k = 0; k < SFX_PATTERNS; k++) {
     char letter[2] = { (char)('A' + k), 0 };
@@ -1910,7 +2152,7 @@ static void strip(uint32_t step, uint32_t now, const char *hint)
     vg_round(x, y, 12, 17, 3, next ? 0xFFD23F : plays ? 0xFFFFFF : mine ? 0x36C5FF : holds ? 0x3A2A22 : 0x1A120E);
     vg_text(letter, x + 6, y + 1, VG_SMALL, next || plays || mine ? BG : holds ? TEXT : 0x6A5248, VG_CENTER);
   }
-  vg_text(hint, 376, CY + 209, VG_SMALL, DIM, VG_LEFT);
+  vg_text(hint, 376, CY + 209, VG_SMALL, hint_rgb, VG_LEFT);
 }
 
 /* ---- LINK: what the game sends ----------------------------------------------------------------------------------- */
@@ -1965,13 +2207,16 @@ static const char *auto_text(int to, int track, int v, char *buf)
   return param_text(to - SFX_AT_PATCH, &e, buf);
 }
 
-/* ---- AUTO: the selected sound's lane as the 16 pads – a point holds until the next one --------------------------------- */
+/* ---- AUTO: the selected sound's lane as the 16 pads (16 steps of it) – a point holds until the next one ----------------- */
 static void draw_auto(uint32_t rgb, uint32_t step, uint32_t now)
 {
   char buf[16];
   int here = now == (uint32_t)edit_pat && step != NO_STEP, to = view_to[sel], hi = auto_hi(to), last = 0;
-  for (int s = 0; s < STEPS; s++) {
-    int x, y, a = aut_at(sel, s), off = s >= SONG.len, head = here && step == (uint32_t)s;
+  int div = pat_div(edit_pat), lim = bar_len() * div, w = view_win();
+  for (int g = 0; g < w * PADS && g < lim; g++) if (aut_at(sel, g)) last = aut_at(sel, g);   /* (what holds from the steps before the ones shown) */
+  for (int s = 0; s < PADS; s++) {
+    int g = w * PADS + s;
+    int x, y, a = aut_at(sel, g), off = g >= lim, head = here && head_at(g, div);
     tile_at(s, &x, &y);
     vg_round(x, y, 55, 54, 7, off ? 0x1A120E : head ? 0x563A2E : (s / 4) & 1 ? 0x2A1D17 : 0x35251D);
     if (a) last = a;
@@ -1980,9 +2225,9 @@ static void draw_auto(uint32_t rgb, uint32_t step, uint32_t now)
       vg_round(x, y + 54 - hgt, 55, hgt, 7, a ? rgb : vg_mix(BG, rgb, 0.30f));
       if (a) vg_rect(x + 6, y + 54 - hgt + 3, 43, 3, 0xFFFFFF);
     }
-    vg_text(vg_itoa(s + 1, buf), x + 5, y + 2, VG_SMALL, to && last && last - 1 > hi * 3 / 4 ? BG : 0x6A5248, VG_LEFT);
-    if ((pat()->on[s] >> sel) & 1) vg_circle((float)x + 46.0f, (float)y + 9.0f, 3.5f, head ? 0xFFFFFF : TEXT);   /* the sound plays here */
-    if (s == cur_step) vg_frame(x - 2, y - 2, 59, 58, 2, 0xFFFFFF);
+    vg_text(vg_itoa(g + 1, buf), x + 5, y + 2, VG_SMALL, to && last && last - 1 > hi * 3 / 4 ? BG : div > 1 && g % div == 0 ? DIM : 0x6A5248, VG_LEFT);
+    if ((pat()->on[g] >> sel) & 1) vg_circle((float)x + 46.0f, (float)y + 9.0f, 3.5f, head ? 0xFFFFFF : TEXT);   /* the sound plays here */
+    if (g == cur_step) vg_frame(x - 2, y - 2, 59, 58, 2, 0xFFFFFF);
   }
 }
 
@@ -2054,10 +2299,13 @@ void vibe_on_draw(uint16_t *fb)
     return;
   }
   const sfx_patch *p = &patches[sel];
-  uint32_t rgb = ENGINE_RGB[p->engine], on = play_k[kit], step = seq_step, now = seq_pattern;
+  uint32_t rgb = ENGINE_RGB[p->engine], on = play_k[kit], pos = seq_pos, now = seq_pattern;
+  dr_read(pos);
+  uint32_t step = dr_step;
+  int div = pat_div(edit_pat), lim = bar_len() * div, win = view_win();
   int seq = page == PG_SEQ, song = page == PG_SONG, mix = page == PG_MIX, aut = page == PG_AUTO, heat = (int)(vibe_param_get(P_INTENSITY) * 127.0f + 0.5f), wt = p->engine == SFX_ENGINE_WAVETABLE;
 
-  header(rgb, step, now);
+  header(rgb, pos, now);
 
   {                                                   /* where you are: the page's name – and K1-K6 as six marks, with a dot for each page of the key you are on */
     static const char *const TITLE[PG_COUNT] = { "SOUND   OSC", "SOUND   TONE", "SOUND   FILTER", "SOUND   WAVE", "ENVELOPE", "LFO", "EFFECT SENDS",
@@ -2070,9 +2318,10 @@ void vibe_on_draw(uint16_t *fb)
       char t[40] = "PATTERN  ";
       int other = step != NO_STEP && now != (uint32_t)edit_pat;               /* what is shown is not what plays: say both */
       if (other) { strcpy(t, "EDIT B - PLAYS A"); t[5] = (char)('A' + edit_pat); t[15] = (char)('A' + now % SFX_PATTERNS); } else t[8] = (char)('A' + edit_pat);
+      strcpy(t + strlen(t), "  "); strcpy(t + strlen(t), GRID_NAME[pat_grid(edit_pat)]);      /* … and its grid: the steps it cuts the bar in */
       tw += vg_text(t, 26 + tw, 36, VG_BOLD, other ? 0xFF8A3C : TEXT, VG_LEFT);
       if (aut) { const char *n = auto_name(view_to[sel], sel); if (40 + tw + vg_text_width(n, VG_BOLD) < LOC_X - 8) vg_text(n, 40 + tw, 36, VG_BOLD, view_to[sel] ? TEXT : DIM, VG_LEFT); }
-      else if (seq && !layer_on(sel)) vg_text("layer off", 40 + tw, 36, VG_SMALL, DIM, VG_LEFT);
+      else if (seq && !layer_on(sel) && 40 + tw + vg_text_width("layer off", VG_SMALL) < LOC_X - 8) vg_text("layer off", 40 + tw, 36, VG_SMALL, DIM, VG_LEFT);
     }
     for (int i = 0; i < TAB_COUNT; i++) vg_round(LOC_X + i * 18, 37, 12, 9, 2, i == tab ? rgb : LINE);
     for (int i = 0; pages > 1 && i < pages; i++) vg_rect(LOC_X + tab * 18 + 6 - pages * 2 + i * 4, 49, 3, 3, i == at ? TEXT : DIM);
@@ -2080,24 +2329,26 @@ void vibe_on_draw(uint16_t *fb)
 
   /* the 16 pads as they are on this page: sounds, the selected sound's steps, or patterns and intensity */
   for (int s = 0; s < SLOTS; s++) {
-    int state, frame = 0;
+    int state, frame = 0, g = win * PADS + s, strong = 0;      /* g: the step this pad stands for on SEQ and AUTO */
     uint32_t base;                                   /* state: 0 off, 1 dim, 2 set, 3 bright */
     if (seq && !rec) {                               /* (REC lit: the pads are the kit, and look it – below) */
-      int set = (pat()->on[s] >> sel) & 1, head = step == (uint32_t)s && now == (uint32_t)edit_pat;
-      base = rgb; state = head ? 3 : set ? 2 : s >= SONG.len ? 0 : 1;
+      int set = (pat()->on[g] >> sel) & 1, head = now == (uint32_t)edit_pat && head_at(g, div);
+      base = rgb; state = head ? 3 : set ? 2 : g >= lim ? 0 : 1;
+      strong = state == 1 && div > 1 && g % div == 0;                           /* a finer grid: the steps that begin a sixteenth are lit a little more */
     } else if (song) {
       if (s < 8) { base = 0x36C5FF; state = (uint32_t)s == now && step != NO_STEP ? 3 : s == queued ? (BLINK ? 2 : 1) : s == edit_pat ? 2 : s < SONG.chain ? 1 : 0; }
       else { base = 0xFF5A36; state = heat >= (s - 7) * 127 / 8 ? 2 : 1; }
     } else if (aut) {
-      base = rgb; state = step == (uint32_t)s && now == (uint32_t)edit_pat ? 3 : aut_at(sel, s) ? 2 : s >= SONG.len ? 0 : 1;
+      base = rgb; state = now == (uint32_t)edit_pat && head_at(g, div) ? 3 : aut_at(sel, g) ? 2 : g >= lim ? 0 : 1;
+      strong = state == 1 && div > 1 && g % div == 0;
     } else if (mix) {
       base = ENGINE_RGB[patches[s].engine]; state = silent(s) ? 1 : (on >> s) & 1 ? 3 : 2;
     } else {
       base = ENGINE_RGB[patches[s].engine]; state = (on >> s) & 1 ? 3 : s == sel ? 2 : 1; frame = s == sel;
     }
     (void)frame;                                     /* (the pads themselves show it: their lights) */
-    uint32_t led = (base & 0xFFFFFF) | (uint32_t)(state + 4 * (seq + 2 * song + 3 * mix + 4 * aut + 20 * (seq && rec))) << 24;
-    if (led != led_cache[s]) { led_cache[s] = led; vibe_led_pad(s, state == 3 ? 0xFFFFFF : base, state == 3 ? 1.0f : state == 2 ? 0.75f : state == 1 ? 0.12f : 0.0f); }
+    uint32_t led = (base & 0xFFFFFF) | (uint32_t)(state + 4 * (seq + 2 * song + 3 * mix + 4 * aut + 20 * (seq && rec)) + 100 * strong) << 24;
+    if (led != led_cache[s]) { led_cache[s] = led; vibe_led_pad(s, state == 3 ? 0xFFFFFF : base, state == 3 ? 1.0f : state == 2 ? 0.75f : state == 1 ? (strong ? 0.30f : 0.12f) : 0.0f); }
   }
 
   /* the page itself, and the four values over encoders 1-4 */
@@ -2106,13 +2357,14 @@ void vibe_on_draw(uint16_t *fb)
   if (aut) {
     int to = view_to[sel], a = aut_at(sel, cur_step);
     draw_auto(rgb, step, now);
-    row(0, "STEP", vg_itoa(cur_step + 1, buf), (float)(cur_step + 1) / (float)STEPS, 0, rgb);
+    row(0, "STEP", step_text(buf), (float)(cur_step + 1) / (float)gsteps(), 0, rgb);
     row(1, "VALUE", a && to ? auto_text(to, sel, a - 1, buf) : "--", a && to ? (float)(a - 1) / (float)auto_hi(to) : 0.0f, 0, rgb);
     row(2, "TARGET", auto_name(to, sel), (float)to / (float)(SFX_AT_COUNT - 1), 0, to ? TEXT : DIM);
     if (to && lane_of(sel, to) >= 0) vg_circle(456.0f, (float)(CY + 2 * 47 + 12), 4.0f, 0xFF8A3C);             /* this knob has a lane */
+    if (to && div > 1) bar_strip(rgb, step, now, 1);
+    else footer(to ? "PADS: A POINT ON / OFF" : "TURN TARGET FIRST", to ? TEXT : 0xFF8A3C, "");
     vg_itoa(lanes_used(), buf); strcpy(buf + strlen(buf), "/24 lanes");
-    footer(to ? "PADS: A POINT ON / OFF" : "TURN TARGET FIRST", to ? TEXT : 0xFF8A3C, "");
-    strip(step, now, buf);
+    strip(step, now, buf, DIM);
   } else if (mix) {
     draw_mix();
     for (int i = 0; i < 4; i++) {
@@ -2136,15 +2388,18 @@ void vibe_on_draw(uint16_t *fb)
       row(i, n, vg_itoa(cc_out[i], buf), (float)cc_out[i] / 127.0f, 0, 0x6EE7A8);
     }
   } else if (seq) {
-    int note = pat()->note[sel][cur_step], acc = pat()->acc[sel][cur_step];
+    int note = pat()->note[sel][cur_step], vel = pat()->vel[sel][cur_step] & 7, len = pat()->len[sel][cur_step];
     draw_seq(rgb, step, now);
-    row(0, "STEP", vg_itoa(cur_step + 1, buf), (float)(cur_step + 1) / (float)STEPS, 0, rgb);
+    row(0, "STEP", step_text(buf), (float)(cur_step + 1) / (float)gsteps(), 0, rgb);
     row(1, "NOTE", note_text(note, buf), note ? (float)(note - 24) / 84.0f : 0.0f, 0, rgb);
-    row(2, "VELOCITY", vg_itoa(SFX_ACC_VEL(acc) + 1, buf), (float)(SFX_ACC_VEL(acc) + 1) / 8.0f, 0, rgb);
-    row(3, "LENGTH", SFX_ACC_LEN(acc) ? vg_itoa(SFX_ACC_LEN(acc), buf) : "AUTO", (float)SFX_ACC_LEN(acc) / 15.0f, 0, rgb);
-    if (rec) footer(running ? "REC: PLAY IT IN - F4 ERASE" : "REC READY: PRESS PLAY", 0xFF4040, "");   /* played in live: each hit lands on the step it is nearest */
-    else footer(layer_on(sel) ? "PADS: THE 16 STEPS" : "ITS LAYER IS OFF NOW", layer_on(sel) ? TEXT : 0xFF8A3C, "");
-    strip(step, now, rec ? "REC off: steps" : SCALE_NAME[SONG.scale % SFX_SCALE_COUNT]);
+    row(2, "VELOCITY", vg_itoa(vel + 1, buf), (float)(vel + 1) / 8.0f, 0, rgb);
+    row(3, "LENGTH", len_text(len, buf), (float)len / (float)(gsteps() - 1), 0, rgb);
+    if (rec && div > 1) bar_strip(rgb, step, now, 0); /* a take at 32 or 64 steps: the 16 steps shown go with the bar, and the strip says which they are */
+    else if (rec) footer(running ? "REC: PLAY IT IN - F4 ERASE" : "REC READY: PRESS PLAY", 0xFF4040, "");   /* played in live: each hit lands on the step it is nearest */
+    else if (!layer_on(sel)) footer("ITS LAYER IS OFF NOW", 0xFF8A3C, "");
+    else if (div > 1) bar_strip(rgb, step, now, 0);   /* 32 or 64 steps: where the 16 shown are in the bar */
+    else footer("PADS: THE 16 STEPS", TEXT, "");
+    strip(step, now, rec ? div > 1 ? running ? "REC: F4 ERASE" : "REC: PRESS PLAY" : "REC off: steps" : SCALE_NAME[SONG.scale % SFX_SCALE_COUNT], rec && div > 1 ? 0xFF4040 : DIM);
   } else if (song) {
     char chain[4] = "A-A";
     draw_song(step, now, heat);
@@ -2211,10 +2466,13 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
   char buf[24], t[64];
   (void)fb; (void)w; (void)h;
   const sfx_patch *p = &patches[sel];
-  uint32_t rgb = ENGINE_RGB[p->engine], on = play_k[kit], step = seq_step, now = seq_pattern;
+  uint32_t rgb = ENGINE_RGB[p->engine], on = play_k[kit], now = seq_pattern;
+  cur_sync(); dr_read(seq_pos);
+  uint32_t step = dr_step;
   int heat = (int)(vibe_param_get(P_INTENSITY) * 127.0f + 0.5f), here = now == (uint32_t)edit_pat && step != NO_STEP, wt = p->engine == SFX_ENGINE_WAVETABLE;
+  int div = pat_div(edit_pat), cells = gsteps(), lim = bar_len() * div, pitch = SG_PX / div, cw = pitch - 2;   /* the rows: all the pattern's steps in the same width */
   uint16_t used = 0;
-  for (int k = 0; k < SFX_PATTERNS; k++) for (int i = 0; i < STEPS; i++) used |= SONG.pat[k].on[i];
+  for (int k = 0; k < SFX_PATTERNS; k++) for (int i = 0; i < SFX_STEPS; i++) used |= SONG.pat[k].on[i];
   if (stage_page_follows()) spage = page;             /* the device's page, while it is one of these */
   if (kit == KIT_SFX && spage >= PG_SEQ) spage = PG_OSC;
   int lanes = spage == PG_AUTO;                       /* the AUTO tab: the rows are the sounds' automation lanes */
@@ -2245,6 +2503,8 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
   }
   vg_circle(800.0f, 32.0f, 5.0f, linked ? 0x6EE7A8 : 0x48332A);
   vg_text("LINK", 810, 25, VG_SMALL, linked ? 0x6EE7A8 : 0x6A5248, VG_LEFT);
+  strcpy(t, "GRID "); strcpy(t + 5, GRID_NAME[pat_grid(edit_pat)]);      /* the grid of the pattern shown */
+  stage_button(GC_X, GC_Y, 62, 14, t, VG_SMALL, div > 1 ? 0x36C5FF : 0x36241C, div > 1 ? BG : TEXT);
   stage_button(856, TB_Y, 80, 36, "TOUR", VG_BIG, tour_on ? 0x36C5FF : 0x36241C, tour_on ? BG : TEXT);
 
   /* the pads */
@@ -2273,7 +2533,7 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
     int k = spage < PG_SEQ ? PAGE_PARAMS[spage][i] : -1;
     if (spage == PG_AUTO) {
       int to = view_to[sel], a = aut_at(sel, cur_step);
-      if (i == 0) stage_value(i, "STEP", vg_itoa(cur_step + 1, buf), ((float)cur_step + 0.5f) / (float)STEPS, 0, rgb);
+      if (i == 0) stage_value(i, "STEP", step_text(buf), ((float)cur_step + 0.5f) / (float)cells, 0, rgb);
       else if (i == 1) stage_value(i, "VALUE", a && to ? auto_text(to, sel, a - 1, buf) : "--", a && to ? (float)(a - 1) / (float)auto_hi(to) : 0.0f, 0, rgb);
       else if (i == 2) stage_value(i, "TARGET", auto_name(to, sel), ((float)to + 0.5f) / (float)SFX_AT_COUNT, 0, rgb);
       else stage_value(i, "", "", -1.0f, 0, rgb);
@@ -2299,34 +2559,39 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
     if (silent(s)) { vg_rect(SN_X + 3, y + 10, SG_X - SN_X - 12, 1, s == sel ? BG : 0x7A6055); layer = 0; }      /* muted: struck out, its steps dim */
     if (lanes) {                                      /* its lane: a point holds until the next one; the dots are its steps */
       int to = view_to[s], hi = auto_hi(to), last = 0;
-      for (int i = 0; i < STEPS; i++) {
-        int x = SG_X + i * SG_PX, a = aut_at(s, i), head = here && step == (uint32_t)i, off = i >= SONG.len;
-        vg_round(x, y, 22, 20, 3, head ? 0x5F4134 : off ? 0x1C130F : s == sel ? 0x503328 : (i / 4) & 1 ? 0x2B1D17 : 0x38261E);
+      for (int i = 0; i < cells; i++) {
+        int x = SG_X + i * pitch, a = aut_at(s, i), head = here && head_at(i, div), off = i >= lim;
+        uint32_t cell = head ? 0x5F4134 : off ? 0x1C130F : s == sel ? 0x503328 : (i / (4 * div)) & 1 ? 0x2B1D17 : 0x38261E;
+        if (div == 1) vg_round(x, y, cw, 20, 3, cell); else vg_rect(x, y, cw, 20, cell);
         if (a) last = a;
         if (to && last && !off) {
           int hgt = 2 + (last - 1 > hi ? hi : last - 1) * 18 / hi;
-          vg_rect(x, y + 20 - hgt, 22, hgt, a ? c : vg_mix(BG, c, 0.40f));
-          if (a) vg_rect(x, y + 20 - hgt, 22, 2, 0xFFFFFF);
+          vg_rect(x, y + 20 - hgt, cw, hgt, a ? c : vg_mix(BG, c, 0.40f));
+          if (a) vg_rect(x, y + 20 - hgt, cw, 2, 0xFFFFFF);
         }
-        if ((pat()->on[i] >> s) & 1) vg_rect(x + 9, y + 1, 4, 3, to && last ? BG : vg_mix(BG, c, 0.7f));
-        if (s == sel && i == cur_step) vg_frame(x - 2, y - 2, 26, 24, 2, 0xFFFFFF);
+        if ((pat()->on[i] >> s) & 1) vg_rect(x + (div == 1 ? 9 : cw / 2 - 1), y + 1, div == 1 ? 4 : 2, 3, to && last ? BG : vg_mix(BG, c, 0.7f));
+        if (s == sel && i == cur_step) vg_frame(x - 2, y - 2, cw + 4, 24, 2, 0xFFFFFF);
       }
       continue;
     }
-    for (int i = 0; i < STEPS; i++) {
-      int x = SG_X + i * SG_PX, set = (pat()->on[i] >> s) & 1, head = here && step == (uint32_t)i, off = i >= SONG.len, note = pat()->note[s][i];
-      uint32_t cell = set ? (head && layer ? 0xFFFFFF : layer ? c : vg_mix(BG, c, 0.35f)) : head ? 0x5F4134 : off ? 0x1C130F : (i / 4) & 1 ? 0x2B1D17 : 0x38261E;
-      int hgt = 6 + SFX_ACC_VEL(pat()->acc[s][i]) * 2, len = SFX_ACC_LEN(pat()->acc[s][i]);
-      if (!set) vg_round(x, y, 22, 20, 3, s == sel && !head && !off ? vg_mix(cell, 0xFFFFFF, 0.08f) : cell);
-      else { vg_round(x, y, 22, 20, 3, vg_mix(BG, cell, 0.30f)); vg_round(x, y + 20 - hgt, 22, hgt, 3, cell); }   /* as high as it is hard */
-      if (set && note) vg_text(note_text(note, buf), x + 11, y + 3, VG_SMALL, layer ? BG : TEXT, VG_CENTER);
-      (void)len;
-      if (s == sel && i == cur_step) vg_frame(x - 2, y - 2, 26, 24, 2, 0xFFFFFF);
+    for (int i = 0; i < cells; i++) {
+      int x = SG_X + i * pitch, set = (pat()->on[i] >> s) & 1, head = here && head_at(i, div), off = i >= lim, note = pat()->note[s][i];
+      uint32_t cell = set ? (head && layer ? 0xFFFFFF : layer ? c : vg_mix(BG, c, 0.35f)) : head ? 0x5F4134 : off ? 0x1C130F : (i / (4 * div)) & 1 ? 0x2B1D17 : 0x38261E;
+      int hgt = 6 + (pat()->vel[s][i] & 7) * 2;
+      if (div == 1) {
+        if (!set) vg_round(x, y, cw, 20, 3, s == sel && !head && !off ? vg_mix(cell, 0xFFFFFF, 0.08f) : cell);
+        else { vg_round(x, y, cw, 20, 3, vg_mix(BG, cell, 0.30f)); vg_round(x, y + 20 - hgt, cw, hgt, 3, cell); }   /* as high as it is hard */
+        if (set && note) vg_text(note_text(note, buf), x + 11, y + 3, VG_SMALL, layer ? BG : TEXT, VG_CENTER);      /* (the notes are written at 16 steps only: a finer cell has no room) */
+      } else {
+        if (!set) vg_rect(x, y, cw, 20, s == sel && !head && !off ? vg_mix(cell, 0xFFFFFF, 0.08f) : cell);
+        else { vg_rect(x, y, cw, 20, vg_mix(BG, cell, 0.30f)); vg_rect(x, y + 20 - hgt, cw, hgt, cell); }
+      }
     }
-    for (int i = 0; i < STEPS; i++) {                 /* a step with a length: a line as far as it holds */
-      int len = SFX_ACC_LEN(pat()->acc[s][i]);
-      if (((pat()->on[i] >> s) & 1) && len > 1) vg_rect(SG_X + i * SG_PX + 22, y + 16, (i + len > STEPS ? STEPS - i : len) * SG_PX - 24, 3, layer ? 0xFFFFFF : 0x7A6055);
+    for (int i = 0; i < cells; i++) {                 /* a step with a length: a line as far as it holds */
+      int len = pat()->len[s][i];
+      if (((pat()->on[i] >> s) & 1) && len > 1) vg_rect(SG_X + i * pitch + cw, y + 16, (i + len > cells ? cells - i : len) * pitch - pitch, 3, layer ? 0xFFFFFF : 0x7A6055);
     }
+    if (s == sel && cur_step < cells) vg_frame(SG_X + cur_step * pitch - 2, y - 2, cw + 4, 24, 2, 0xFFFFFF);
   }
 
   /* INTENSITY with every sound's mark over it, and the selected sound's own mark: its LAYER */

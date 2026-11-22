@@ -57,7 +57,21 @@ node "$SDK/tools/wasmtest.mjs" "$ROOT/build/sfx-forge.wasm" "$ROOT/tests/undo.js
 node "$ROOT/tests/check-undo.mjs" "$ROOT/out/undo" "$ROOT/unity/Demo/Assets/SfxDemo/DemoSong.bytes"
 node "$SDK/tools/wasmtest.mjs" "$ROOT/build/sfx-forge.wasm" "$ROOT/tests/retake.json" "$ROOT/out/retake"
 node "$ROOT/tests/check-retake.mjs" "$ROOT/out/retake" "$ROOT/unity/Demo/Assets/SfxDemo/DemoSong.bytes"
+# a pattern's grid (1.6.0): 16, 32 or 64 steps, the 16 the pads show, FILL at a finer grid; a finer grid sounds the same, a
+# coarser one asks and F2 brings it back; a take at 64 steps keeps the player's timing
+mkdir -p "$ROOT/out/grid" "$ROOT/out/regrid" "$ROOT/out/take64"
+node "$SDK/tools/wasmtest.mjs" "$ROOT/build/sfx-forge.wasm" "$ROOT/tests/grid.json" "$ROOT/out/grid"
+node "$ROOT/tests/check-grid.mjs" "$ROOT/out/grid" "$ROOT/unity/Demo/Assets/SfxDemo/DemoSong.bytes"
+node "$SDK/tools/wasmtest.mjs" "$ROOT/build/sfx-forge.wasm" "$ROOT/tests/regrid.json" "$ROOT/out/regrid"
+node "$ROOT/tests/check-regrid.mjs" "$ROOT/out/regrid" "$ROOT/unity/Demo/Assets/SfxDemo/DemoSong.bytes"
+node "$SDK/tools/wasmtest.mjs" "$ROOT/build/sfx-forge.wasm" "$ROOT/tests/take64.json" "$ROOT/out/take64"
+node "$ROOT/tests/check-take64.mjs" "$ROOT/out/take64" "$ROOT/unity/Demo/Assets/SfxDemo/DemoSong.bytes"
+# (the three scenes are written by tests/make-grid-scenes.mjs.) The question that names what it drops, and the windows of a short bar
+node "$ROOT/tests/check-grid-keys.mjs" "$ROOT/build/sfx-forge.wasm"
 # the factory sounds and song as SEND gives them: still the bytes the Unity demo's song asset holds
 node "$SDK/tools/wasmtest.mjs" "$ROOT/build/sfx-forge.wasm" "$ROOT/tests/song-export.json" "$ROOT/out/song"
 node "$ROOT/tests/check-song-export.mjs" "$ROOT/out/song" "$ROOT/unity/Demo/Assets/SfxDemo/DemoSong.bytes"
 node "$ROOT/tests/check-identity.mjs" "$ROOT/build/sfx-forge.wasm" "$ROOT/sfx-forge"
+# the song on the wire (both shapes, the longest song) and in the device's store (song6.bin, and the song.bin of before)
+node "$ROOT/tests/check-wire.mjs" "$ROOT/build/sfx-forge.wasm" "$ROOT/tests/data/DemoSong-format5.bytes" "$ROOT/unity/Demo/Assets/SfxDemo/DemoSong.bytes"
+node "$ROOT/tests/check-store.mjs" "$ROOT/build/sfx-forge.wasm" "$ROOT/tests/data/DemoSong-format5.bytes" "$ROOT/unity/Demo/Assets/SfxDemo/DemoSong.bytes"

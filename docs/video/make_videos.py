@@ -412,6 +412,14 @@ def tour():
     v.say("THE SEQUENCER", "F2 UNDO takes the last edits back - here the bass line. F2 again brings them back.")
     v.btn("F2", "F2  UNDO", gap=2.6)
     v.btn("F2", "F2  again: REDO", gap=3.0)
+    v.say("THE SEQUENCER", "SHIFT + F6: a finer grid for this pattern - 1/32; pressed again, 1/64. SHIFT + LEFT and RIGHT show its other steps, sixteen at a time. A hi-hat roll.")
+    v.shift_pad(13, "SHIFT + PAD 13  select HI-HAT")
+    v.shift_btn("F6", "SHIFT + F6  grid 1/32", gap=1.8)
+    v.shift_btn("LEFT", "SHIFT + LEFT  steps 1-16", gap=1.2)    # (the frame was on step 14 of 16, so it showed the second half)
+    v.shift_btn("RIGHT", "SHIFT + RIGHT  steps 17-32", gap=1.2)
+    for n in (10, 11, 12, 14, 15, 16):
+        v.pad(n, "PAD %d  step %d" % (n, 16 + n), gap=0.4)
+    v.wait(3.4)
     v.btn("STOP", "STOP", gap=0.6)
 
     v.say("THE SONG", "K5 again: the song. SONG in the top line: PLAY plays the arrangement, the patterns in order. F1 changes LOOP and SONG.")
@@ -586,6 +594,16 @@ def song():
     v.pad(15, "PAD 15  step off", gap=1.0)
     v.pad_key(14, 31, gap=2.5)
 
+    v.say("10  A FINER GRID", "Each pattern has its own grid. SHIFT + F6 makes B's finer: 1/32, thirty-two steps in the bar. Every step keeps its moment; it sounds as before.")
+    v.shift_pad(13, "SHIFT + PAD 13  select HI-HAT", gap=1.4)
+    v.shift_btn("F6", "SHIFT + F6  grid 1/32", gap=4.0)
+    v.say("10  A FINER GRID", "The pads are sixteen steps at a time: SHIFT + LEFT and RIGHT show the bar's other half. In steps 17 to 32, five more make the last beat a hi-hat roll.")
+    v.shift_btn("LEFT", "SHIFT + LEFT  steps 1-16", gap=2.0)    # (the frame was on step 14 of 16, so it showed the second half)
+    v.shift_btn("RIGHT", "SHIFT + RIGHT  steps 17-32", gap=2.0)
+    for n in (10, 11, 12, 14, 16):                    # (the hat was on steps 25, 29 and 31 of the 32: now on every one from 25)
+        v.pad(n, "PAD %d  step %d" % (n, 16 + n), gap=0.7)
+    v.wait(5.0)
+
     v.say("11  LEFT AND RIGHT", "LEFT and RIGHT choose the pattern. While it plays the change waits for the bar line: B>A in the top line.")
     after_bar_line()
     v.btn("LEFT", "LEFT  pattern A", gap=0.1)
@@ -613,7 +631,7 @@ def song():
     v.shift_btn("F4", "SHIFT + F4  again: yes", gap=4.5)
 
     v.say("14  LAYERS", "Each instrument has a LAYER mark. Knob 4 sets it for the selected sound - here the brass.")
-    v.turn("DATA", -1, "DATA  select BRASS", 0.4, after=0.8)
+    v.turn("DATA", -7, "DATA  select BRASS", 0.6, after=0.6)    # (the hi-hat was selected, sound 13, from the finer grid: brass is 6)
     v.turn("4", -20, "KNOB 4  LAYER", 1.2)
     v.turn("4", 20, "KNOB 4  LAYER", 1.2, after=0.8)
     v.say("14  LAYERS", "INTENSITY at zero: only the kick. A game raises it and the band comes in.")

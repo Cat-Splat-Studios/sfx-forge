@@ -21,7 +21,7 @@ const OUT = path.resolve(process.argv[2] || path.join(ROOT, 'out', 'doc'));
 const BUTTON = { F1: 0, F2: 1, F3: 2, F4: 3, F5: 4, F6: 5, SHIFT: 6, K1: 10, K2: 11, K3: 12, K4: 13, K5: 14, K6: 15,
                  RETURN: 16, HOME: 17, LEFT: 18, MENU: 19, RIGHT: 20, REC: 21, STOP: 22, PLAY: 23 };
 const ENCODER = { 1: 0, 2: 1, 3: 2, 4: 3, A: 4, B: 5, DATA: 6 };
-const BAR = 2.0, STEP = BAR / 16;                    // the factory song: 120 BPM, 16 steps a bar
+const BAR = 2.0, STEP = BAR / 16;                    // the factory song: 120 BPM, 16 sixteenths a bar
 
 class Scene {
   constructor(name) { this.name = name; this.t = 0.1; this.steps = []; this.stages = 0; }
@@ -105,6 +105,30 @@ scene('mix').btn('K4').btn('K4').pad(9).turn('DATA', -2).btn('PLAY')
 
 // ---- the SONG page while the arrangement plays its second bar -------------------------------------------------------------------
 scene('song').btn('K5').btn('K5').turn('DATA', 6).at(1.0).btn('PLAY').at(1.0 + BAR + 0.8).shot('song');
+
+// ---- a finer grid: hats on the eighths, 1/32, the second 16 steps and a roll in them, 1/64, the question on the way back -------
+{ const s = scene('grid').btn('K5');
+  for (let k = 0; k < 6; k++) s.btn('RIGHT', 0.08);  // G, the first empty pattern
+  s.turn('DATA', 2).btn('F3', 0.3)                   // the kick on every quarter
+    .turn('DATA', 10).btn('F3', 0.3).btn('F3', 0.3)  // the hi-hat on every eighth
+    .shift('F6').wait(0.3).shot('grid-1').wait(2.6)  // SHIFT + F6: GRID 1/32. The pads are steps 1-16 of 32
+    .shift('RIGHT');                                 // SHIFT + RIGHT: steps 17-32
+  for (const p of [10, 11, 12, 14, 15, 16]) s.pad(p, 0.1);   // the last beat, every thirty-second: a roll
+  s.wait(0.2).shot('grid-2').wait(2.6).stage('grid-stage')
+    .shift('F6').wait(0.3).shot('grid-3').wait(2.6)  // 1/64: the roll is every other step of 49-64
+    .shift('F5').wait(2.6)                           // back to 1/32: nothing stands between, nothing to ask
+    .shift('F5').wait(0.3).shot('grid-4')            // to 1/16: four steps of the roll would go. It asks
+    .shift('F5', 0.4).btn('F2').wait(2.6)            // again: done. F2: the roll is back, at 1/32
+    .btn('K5').wait(0.2).shot('grid-song'); }        // SONG: G has 32 in its corner
+
+// ---- a take at 1/64: the tiles go with the bar, the bar strip stays, the hint is red --------------------------------------------
+{ const s = scene('grid-take').btn('K5');
+  for (let k = 0; k < 6; k++) s.btn('RIGHT', 0.08);
+  s.turn('DATA', 1).shift('F6').shift('F6').btn('REC');       // the snare, 1/64, REC
+  const t0 = 3.0, S64 = BAR / 64;
+  s.at(t0).btn('PLAY');
+  for (const g of [16, 19, 22, 24, 26, 27, 28, 29, 30, 31]) s.at(t0 + g * S64 + 0.004).pad(2, 0.02, 0.5 + (g - 16) * 0.03);   // a roll into the third beat
+  s.at(t0 + BAR + 27 * S64 + 0.01).shot('grid-take'); }
 
 // ---- the display, with the SDK's wasmtest ---------------------------------------------------------------------------------------
 fs.mkdirSync(path.join(OUT, 'scripts'), { recursive: true });

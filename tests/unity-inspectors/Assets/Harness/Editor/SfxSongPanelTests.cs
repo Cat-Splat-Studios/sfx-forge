@@ -12,10 +12,17 @@ namespace Inspector.Harness
     /// <summary>
     /// The song's Inspector without a window: every number it shows against the demo song's data (the firmware's own demo
     /// song: 120 BPM, 16 steps, swing 20, the arrangement A B A B C D C D E E A B C D C F), and the five numbers it can change.
+    /// Every test runs twice: on the song as firmware 1.6.0 sends it (packed format 6) and on the same song as 1.5.0 sent
+    /// it (format 5, 7699 bytes) - the Inspector says the same of both.
     /// </summary>
+    [TestFixture(DemoPath)]
+    [TestFixture(Demo5Path)]
     public class SfxSongPanelTests
     {
-        const string DemoPath = "Assets/Data/DemoSong.asset";
+        public const string DemoPath = "Assets/Data/DemoSong.asset", Demo5Path = "Assets/Data/DemoSong-format5.asset";
+        readonly string path;
+        public SfxSongPanelTests(string path) { this.path = path; }
+        bool Six => path == DemoPath;
         static readonly int[] Layers = { 0, 50, 0, 0, 0, 90, 35, 72, 0, 0, 0, 0, 20, 100, 60, 60 };
         static readonly int[] Volumes = { 100, 100, 68, 100, 100, 54, 52, 24, 100, 100, 100, 100, 50, 56, 52, 46 };
         static readonly int[] Pans = { 64, 64, 64, 64, 64, 48, 64, 76, 64, 64, 64, 64, 84, 36, 70, 64 };
@@ -24,10 +31,15 @@ namespace Inspector.Harness
 
         SfxSong song;
 
-        public static SfxSong Demo()
+        /// <summary>The demo song as firmware 1.6.0 sends it: packed format 6.</summary>
+        public static SfxSong Demo() => Load(DemoPath);
+        /// <summary>The same song as firmware 1.5.0 sent it: packed format 5, in an asset from before the asset kept its format.</summary>
+        public static SfxSong Demo5() => Load(Demo5Path);
+
+        static SfxSong Load(string from)
         {
-            var asset = AssetDatabase.LoadAssetAtPath<SfxSong>(DemoPath);
-            Assert.IsNotNull(asset, DemoPath);
+            var asset = AssetDatabase.LoadAssetAtPath<SfxSong>(from);
+            Assert.IsNotNull(asset, from);
             var copy = Object.Instantiate(asset);              // (the tests change it: never the asset itself)
             copy.name = "DemoSong";
             return copy;
@@ -40,13 +52,16 @@ namespace Inspector.Harness
             return panel;
         }
 
-        [SetUp] public void SetUp() => song = Demo();
+        [SetUp] public void SetUp() => song = Load(path);
         [TearDown] public void TearDown() => Object.DestroyImmediate(song);
 
         [Test]
         public void TheSongReadsAsItsDataSays()
         {
             Assert.IsTrue(song.IsValid);
+            Assert.AreEqual(Six ? 6 : 5, song.PackedFormat); Assert.AreEqual(Six ? 2487 : 7699, song.data.Length);
+            Assert.IsFalse(song.HasFinerGrid);
+            for (int p = 0; p < 8; p++) { Assert.AreEqual(16, song.Grid(p)); Assert.AreEqual(1, song.StepsPerSixteenth(p)); Assert.AreEqual(16, song.GridSteps(p)); }
             Assert.AreEqual(120, song.Bpm);
             Assert.AreEqual(16, song.StepsPerPattern);
             Assert.AreEqual(20, song.Swing);
@@ -91,7 +106,9 @@ namespace Inspector.Harness
         [Test]
         public void OlderFormsOfASongReadTheSame()
         {
-            byte[] v5 = song.data;
+            var five = Demo5();                                 // (the forms before this one are made of the format-5 bytes, whose rows stand at fixed places)
+            byte[] v5 = five.data;
+            Object.DestroyImmediate(five);
             const int Head5 = 147, Block5 = 35;
 
             var v3 = new List<byte>(v5.Take(66)); v3[0] = 3;
@@ -162,13 +179,13 @@ namespace Inspector.Harness
             Assert.AreEqual("ABABCDCDEEABCDCF", panel.ArrangementText);
             StringAssert.StartsWith("ARRANGEMENT   16 bars", panel.ArrangementCaption);
             Assert.AreEqual(0, panel.Pattern, "it opens on the arrangement's first pattern");
-            Assert.AreEqual("SONG | PATTERN A | scale MINOR", panel.TitleText);
+            Assert.AreEqual("SONG | PATTERN A  1/16 | scale MINOR", panel.TitleText);
             // the title follows the page, as the device's: MIXER, MASTER EFFECTS, AUTOMATION PATTERN A (docs/img/page-mix.png, page-master.png, page-auto.png)
             panel.Page = SfxSongPanel.PageMix; Assert.AreEqual("MIXER", panel.TitleText);
             panel.Page = SfxSongPanel.PageMaster; Assert.AreEqual("MASTER EFFECTS", panel.TitleText);
-            panel.Page = SfxSongPanel.PageAuto; panel.Pattern = 5; Assert.AreEqual("AUTOMATION | PATTERN F", panel.TitleText);
+            panel.Page = SfxSongPanel.PageAuto; panel.Pattern = 5; Assert.AreEqual("AUTOMATION | PATTERN F  1/16", panel.TitleText);
             panel.Pattern = 0; panel.Page = SfxSongPanel.PageSteps;
-            Assert.AreEqual("SONG | PATTERN A | scale MINOR", panel.TitleText);
+            Assert.AreEqual("SONG | PATTERN A  1/16 | scale MINOR", panel.TitleText);
 
             panel.Sound = 6;                                    // FM BASS: docs/img/page-song.png says LAYER 28%, page-mix.png VOLUME 52, PAN C
             Assert.AreEqual("28%", panel.SoundTile(SfxSongPanel.TileLayer).ValueText);
@@ -231,7 +248,7 @@ namespace Inspector.Harness
             var panel = Panel(song);
             panel.Page = SfxSongPanel.PageAuto;
             Assert.AreEqual(2, panel.LaneCount);
-            Assert.AreEqual(16, SfxSong.MaxSteps);
+            Assert.AreEqual(16, SfxSong.MaxSteps); Assert.AreEqual(64, SfxSong.MaxGridSteps);
             panel.Page = SfxSongPanel.PageSteps;
         }
 
@@ -265,6 +282,9 @@ namespace Inspector.Harness
             for (int p = 0; p < 8; p++)
             {
                 panel.Pattern = p;
+                Assert.AreEqual("PATTERN " + (char)('A' + p) + "  1/16", panel.PatternTitle);
+                Assert.AreEqual("", panel.PatternTileAt(p).GridText, "a pattern of 16 steps has nothing in its tile's corner");
+                for (int s = 0; s < 16; s++) Assert.AreEqual(16, panel.RowCount(s));
                 for (int s = 0; s < 16; s++) for (int i = 0; i < 16; i++)
                 {
                     Assert.AreEqual(song.StepOn(p, s, i), panel.Row(s).Level[i] > 0f, $"{p} {s} {i}");
@@ -284,7 +304,9 @@ namespace Inspector.Harness
             Assert.AreEqual("27%", panel.Heat.Text);
             panel.Intensity = 35;
             Assert.IsFalse(panel.Row(6).Dimmed, "FM BASS comes in at 35 of 127: 28%");
-            Assert.AreEqual(song.data, Demo().data, "looking changes nothing");
+            var untouched = Load(path);
+            Assert.AreEqual(song.data, untouched.data, "looking changes nothing");
+            Object.DestroyImmediate(untouched);
             panel.Intensity = 127;
         }
 
@@ -393,17 +415,22 @@ namespace Inspector.Harness
         [Test]
         public void ASongAssetFromANewerVersionSaysSoAndStillShows()
         {
-            Assert.AreEqual(1, song.Format); Assert.IsFalse(song.IsFromNewerVersion); Assert.IsFalse(song.IsNewer);
+            // a song asset counts its own format: 1 with a packed song up to format 5, 2 with one of format 6 - both are this version's
+            Assert.AreEqual(2, SfxSong.CurrentFormat);
+            Assert.AreEqual(Six ? 2 : 1, song.Format); Assert.IsFalse(song.IsFromNewerVersion); Assert.IsFalse(song.IsNewer);
             var panel = Panel(song);
             Assert.IsFalse(panel.NewerBanner.Shown);
-
             SfxPresetPanelTests.FromFormat(song, 2);
-            Assert.AreEqual(2, song.Format); Assert.IsTrue(song.IsFromNewerVersion);
+            Assert.AreEqual(2, song.Format); Assert.IsFalse(song.IsFromNewerVersion, "asset format 2 is this version's, whatever song it holds");
+            Assert.IsFalse(Panel(song).NewerBanner.Shown);
+
+            SfxPresetPanelTests.FromFormat(song, 3);
+            Assert.AreEqual(3, song.Format); Assert.IsTrue(song.IsFromNewerVersion);
             panel = Panel(song);
             Assert.IsTrue(panel.ShowsSong, "the song this version reads of it shows");
             Assert.IsTrue(panel.NewerBanner.Shown);
             Assert.AreEqual("FROM A NEWER SFX FORGE", panel.NewerBanner.Bold);
-            StringAssert.Contains("asset format 2", panel.NewerBanner.Small);
+            StringAssert.Contains("asset format 3, this version knows 2", panel.NewerBanner.Small);
             StringAssert.Contains("Saving it here loses", panel.NewerBanner.Small);
             Assert.AreEqual("120 BPM", panel.SongTile(SfxSongPanel.TileTempo).ValueText);
             Assert.AreEqual("", panel.MessageText);
@@ -413,14 +440,14 @@ namespace Inspector.Harness
         public void APackedSongOfAHigherFormatIsANewerSongNotNoSong()
         {
             byte[] later = (byte[])song.data.Clone();
-            later[0] = 6;
+            later[0] = 7;
             song.Set(song.sounds, later);
-            Assert.IsTrue(song.IsNewer); Assert.IsFalse(song.IsValid);
+            Assert.IsTrue(song.IsNewer); Assert.IsFalse(song.IsValid); Assert.AreEqual(0, song.PackedFormat);
             Assert.AreEqual(0, song.Bpm, "nothing of it is read");
             var panel = Panel(song);
             Assert.IsFalse(panel.ShowsSong);
             StringAssert.StartsWith("A NEWER SONG | ", panel.MessageText);
-            StringAssert.Contains("format 6, this version of SFX Forge knows up to 5", panel.MessageText);
+            StringAssert.Contains("format 7, this version of SFX Forge knows up to 6", panel.MessageText);
             Assert.IsFalse(panel.NewerBanner.Shown, "the asset itself is of this version");
             Assert.IsNull(SfxSongPanel.RenderBar(song, 0, 1f), "and nothing of it plays");
 
@@ -444,14 +471,26 @@ namespace Inspector.Harness
             song.Set(song.sounds, new byte[] { 0x40 });
             Assert.IsFalse(song.IsNewer);
             StringAssert.StartsWith("NO SONG YET | ", Panel(song).MessageText);
-            byte[] short6 = new byte[SfxProtocol.SongBytes - 1]; short6[0] = 6;
-            song.Set(song.sounds, short6);
+            // the shortest song there is has 211 bytes (format 6: its head and eight empty patterns): a higher number on
+            // that many bytes is a newer song, on one byte fewer a cut-off one
+            byte[] short7 = new byte[SfxProtocol.SongBytesMin - 1]; short7[0] = 7;
+            song.Set(song.sounds, short7);
             Assert.IsFalse(song.IsNewer);
+            StringAssert.StartsWith("NO SONG YET | ", Panel(song).MessageText);
+            byte[] least7 = new byte[SfxProtocol.SongBytesMin]; least7[0] = 7;
+            Assert.AreEqual(211, least7.Length);
+            song.Set(song.sounds, least7);
+            Assert.IsTrue(song.IsNewer);
+            StringAssert.StartsWith("A NEWER SONG | ", Panel(song).MessageText);
+            // this version's own number is never "newer": a format-6 song that is cut off, or has bytes too many, is no song
+            byte[] cut6 = new byte[SfxProtocol.SongBytesMin + 5]; cut6[0] = 6;
+            song.Set(song.sounds, cut6);
+            Assert.IsFalse(song.IsNewer); Assert.IsFalse(song.IsValid);
             StringAssert.StartsWith("NO SONG YET | ", Panel(song).MessageText);
 
             // and the asset being newer as well: both are said
             song.Set(song.sounds, later);
-            SfxPresetPanelTests.FromFormat(song, 2);
+            SfxPresetPanelTests.FromFormat(song, 3);
             panel = Panel(song);
             Assert.IsTrue(panel.NewerBanner.Shown);
             StringAssert.StartsWith("A NEWER SONG | ", panel.MessageText);
@@ -463,17 +502,17 @@ namespace Inspector.Harness
             var other = Demo();
             var both = Panel(song, other);
             Assert.IsFalse(both.NewerBanner.Shown, "two songs of this version: no banner");
-            SfxPresetPanelTests.FromFormat(other, 2);
+            SfxPresetPanelTests.FromFormat(other, 3);
             both = Panel(song, other);
             Assert.IsFalse(both.ShowsSong);
             StringAssert.StartsWith("SELECT ONE SONG | ", both.MessageText);
             Assert.IsTrue(both.NewerBanner.Shown);
             Assert.AreEqual("ONE OF THESE 2 SONGS IS FROM A NEWER SFX FORGE", both.NewerBanner.Bold);
-            StringAssert.Contains("asset format 2", both.NewerBanner.Small);
-            SfxPresetPanelTests.FromFormat(song, 3);
+            StringAssert.Contains("asset format 3", both.NewerBanner.Small);
+            SfxPresetPanelTests.FromFormat(song, 4);
             both = Panel(song, other);
             Assert.AreEqual("2 OF THESE 2 SONGS ARE FROM A NEWER SFX FORGE", both.NewerBanner.Bold);
-            StringAssert.Contains("asset format 3", both.NewerBanner.Small, "the highest of them");
+            StringAssert.Contains("asset format 4", both.NewerBanner.Small, "the highest of them");
             Object.DestroyImmediate(other);
         }
 

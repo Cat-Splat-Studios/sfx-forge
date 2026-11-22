@@ -175,8 +175,8 @@ def read_song():
     """DemoSong.bytes: 16 patches of 28 bytes, then the packed song (unity/com.catsplat.sfxforge/Runtime/SfxSong.cs)."""
     raw = open(SONG, "rb").read()
     song = raw[16 * 28:]
-    arr = len(song) - 1
-    # the arrangement sits near the end; SfxSong finds it as data[Arr]. Format 5 is 7699 bytes: 1 length byte + 64 bars before the mix
+    # the head is the same in every format since the mixer: byte 1 the bar in sixteenths, 2 and 3 the tempo, 6 the chain, 7.. the
+    # 16 layer marks. Format 6 (firmware 1.6.0) has no fixed length: the factory song is 2487 bytes (7699 in format 5)
     layers = [song[7 + i] / 127.0 for i in range(16)]
     return {"bpm": song[2] << 7 | song[3], "steps": song[1], "chain": song[6], "layers": layers, "bytes": len(song)}
 
@@ -590,7 +590,7 @@ def cues():
             c.line([(xa, y - 5), (xa, y - 10), (xb, y - 10), (xb, y - 5)], colour, 2)
             right = xb > x0 + 16 * w - 60
             c.text(xb if right else xa, y - 28, text, 12, colour, True, "ra" if right else "la")
-    c.text(24, H - 28, "A bar is 2 seconds (120 BPM, 16 steps). The numbers under the bars are the arrangement's bars. Rows 2 to 4 follow the engine's rules (core/sfx_song.h).",
+    c.text(24, H - 28, "A bar is 2 seconds (120 BPM, 16 sixteenths). The numbers under the bars are the arrangement's bars. Rows 2 to 4 follow the engine's rules (core/sfx_song.h).",
            13, DIM)
     c.save("unity-cues")
 
@@ -624,7 +624,7 @@ def link():
 
     y = lane(84, "DEVICE  →  UNITY", EMBER, [
         ("F5 EXPORT on a sound page", "a patch, SysEx", "PatchReceived  →  an SfxPreset"),
-        ("F5 SEND on the SONG page", "16 patches + the song in 39 pieces", "SongReceived  →  an SfxSong"),
+        ("F5 SEND on the SONG page", "16 patches + the song in pieces", "SongReceived  →  an SfxSong"),
         ("the pads", "notes 36 – 51", "PadDown  ·  SfxForgeLink.onPad"),
         ("LINK page: encoders 1 – 4, A, B", "CC 20 – 25", "EncoderChanged  ·  SfxEncoderBinding")], True)
     tw = c.tw("receiving in Unity: not tested on hardware", 13, True) + 20
@@ -970,6 +970,7 @@ INSPECTOR_SHOTS = [
     ("unity-inspector-sound-env", "sound-env-640"),         # page ENV of a held sound, with HOLD (the showcase's RollHum)
     ("unity-inspector-sound-narrow", "sound-tone-340"),     # page TONE at 340 pixels: the soft keys wrap
     ("unity-inspector-song", "song-640"),                   # the song inspector, page STEPS (the demo song)
+    ("unity-inspector-song-fine", "song-32-640"),           # the same page of a song with finer patterns: B at 32 steps, C and F at 64
     ("unity-inspector-song-mix", "song-mix-640"),           # page MIX
     ("unity-inspector-song-auto", "song-auto-640"),         # page AUTO, pattern F
     ("unity-inspector-window", "window-700"),               # Window > SFX Forge, shown a filled-in model
