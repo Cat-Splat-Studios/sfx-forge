@@ -113,7 +113,7 @@ When it is right:
 - Every check prints `  ok    …` lines. A failure prints `  FAIL  …` and the run stops there.
 - `sha256sum build/sfx-forge.wasm` gives the same hash before and after a change that only moves text. This is how
   the readability pass was proved. With the SDK in `.tools` at the time of writing the hash of 1.6.0 was
-  `212e82a4…4505`.
+  `9f777350…4bb4`.
 
 Each check is a scene `tests/<name>.json` played by the SDK's `wasmtest` into `out/<name>`, then judged by
 `tests/check-<name>.mjs`. A check says at its top what it proves and how to run it alone. Five checks have no scene:
@@ -137,7 +137,7 @@ dotnet run -c Release --project tests/dotnet -- .      # after sh build.sh. Abou
 ```
 
 It compiles `Runtime/Core/*.cs` with the tests and loads the committed `sfxforge.dll`. It reads `out/midi.json` and
-`out/audio.wav`, which `sh build.sh` wrote, so run that first. When it is right: 204 lines `  ok    …`, and the last
+`out/audio.wav`, which `sh build.sh` wrote, so run that first. When it is right: 205 lines `  ok    …`, and the last
 line is `PASSED` (a failure: `FAILED (n)`, exit code 1). `Program.cs` says which file holds which section.
 
 ### The two-thread test alone
@@ -539,8 +539,8 @@ and an old song must play the same samples. Only the newest format is written.
    `PLACES`). It writes the asset format 2: change that in the script if `CurrentFormat` changed.
 9. Tests and scripts:
    - `tests/song-read.mjs`: `model()` and the sizes at its top. The third reader of the layout.
-   - `docs/video/make_unity_videos.py`, `song_notes()`: a fourth reader, for the videos only. **It still reads
-     format 5 only and stops on today's `DemoSong.bytes`** (below, "Never tested").
+   - `docs/video/make_unity_videos.py`, `song_notes()`: a fourth reader, for the videos only (it reads
+     format 6 and nothing older).
    - `tests/check-song-export.mjs`, `check-identity.mjs`, `check.mjs`: the song's size, its pieces, the format
      byte (2487 bytes, 11 pieces, 6 today).
    - `tests/check-wire.mjs`, `check-store.mjs`: a part for the format-6 fixture, as there is one for format 5.
@@ -667,7 +667,7 @@ What it demands, and stops with a named error when it is missing:
   machine, the owner's name only inside the GitHub address.
 - Every relative link in every Markdown file resolves.
 
-The numbers in its front-page texts (204 checks, 169 tests, 20 firmware checks) are prose in the script. Update
+The numbers in its front-page texts (205 checks, 169 tests, 20 firmware checks) are prose in the script. Update
 them when a count changes.
 
 ---
@@ -735,13 +735,6 @@ normal test run instead of a hash to prove it:
     `? :` chain, compiled to other code in several places (`on_draw`'s `at` and its soft keys' colours,
     `sfx__head_ok`, `auto_turn`). There the expression stands as it was, one arm a line, with a comment.
 
-**A real defect, found by reading and left alone because a fix changes what the code does:** `sfx_song_unpack`
-does not write `s->arr[]` for a song of format 1, 2 or 3 (those have no arrangement). `arr_len` is 0, so nothing
-plays it. But `sfxn_song_convert` (`native/sfx_native.c`) unpacks into memory it did not clear and packs again, so
-bytes 67 to 98 of what it returns for such a song are whatever stood there: the output is not the same from run to
-run. The fix is one loop beside `s->arr_len = 0;` that sets the 32 bytes to 0, then `sh native/build.sh` and the
-tests.
-
 In C# and the scripts:
 
 - `Tests.Music` (about 1,100 lines) and `Tests.Identity` (about 840) in `tests/dotnet` are each one function with
@@ -767,12 +760,8 @@ In C# and the scripts:
 
 - **The hardware and the plugin.** Everything ran in the SDK's `wasmtest`, on `tests/host.mjs`, or in the SDK's
   emulator. Nobody has held a VIBE with this firmware.
-- **`docs/video/make_unity_videos.py` does not run on this repository.** Its `song_notes()` reads a format-5 song
-  and stops at import with "DemoSong.bytes is not a song of format 5": the demo song has been format 6 since
-  firmware 1.6.0. The Unity videos in `videos/` were made before that. `make_link_video.py` writes "7,699 bytes"
-  into a caption, which was the format-5 song's size. Neither was changed: no take exists to run them on.
-- **`tools/make_unity_package.py` after the readability pass.** It was not run (it writes the package repository).
-  Its changes are comments, the order of two functions, and one lookup of the videos by name instead of by place.
+- **The video scripts after their last changes.** `make_unity_videos.py` reads the format-6 demo song now, and
+  `make_link_video.py` takes the song's size from the take; the committed videos were not made again with them.
 - **Two real flows inside the firmware.** Only `song_way.h` was run on two threads. The queue and the `volatile`
   values are correct by reading.
 - **A pattern at 1/32 or 1/64 over a MIDI port.** The link tests used songs of sixteenths.
@@ -799,8 +788,7 @@ In C# and the scripts:
 - **Echo and twins on the wire.** The receiver's rules for a song's pieces (`song_piece`, and
   `SfxSongTransfer.cs` with the same rules) are subtle: a late twin of the last song must not start a new one.
   Change one side and you must change the other; `check-wire.mjs` and `tests/dotnet` (`Music`) hold the cases.
-- **Three readers of the song layout** (C, C#, JavaScript), a fourth in `docs/video/make_unity_videos.py` that is
-  behind, and two copies of the protocol's numbers.
+- **Three readers of the song layout** (C, C#, JavaScript), a fourth in `docs/video/make_unity_videos.py`, and two copies of the protocol's numbers.
 - **`build.sh` writes into the SDK's folder** for the length of a build and removes it. A build that is killed
   leaves `sfx-forge/` and `core/` there; the next run removes them first.
 - **`sh build.sh` must run before `tests/dotnet`**, and the .NET tests use the committed DLL: after a change in

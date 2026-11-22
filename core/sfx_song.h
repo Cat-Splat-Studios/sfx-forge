@@ -643,10 +643,7 @@ static inline int sfx_song_unpack(sfx_song *s, const uint8_t *in, int n) {
     }
   }
 
-  /* ---- the head. First an empty song with the mixer of a new one: what an old format lacks stays so.
-     (One thing is NOT made empty: s->arr[] of a format 1 to 3, which has no arrangement. arr_len is 0, so nothing
-     plays it - but the 32 bytes are whatever *s held before, and sfx_song_pack writes them out. See
-     docs/MAINTAINING.md, "Known rough places".) ---- */
+  /* ---- the head. First an empty song with the mixer of a new one: what an old format lacks stays so. ---- */
   const uint8_t *src = in + 7;
   /* format 4: what each sound's one lane moved */
   uint8_t v4_target[SFX_TRACKS];
@@ -667,7 +664,11 @@ static inline int sfx_song_unpack(sfx_song *s, const uint8_t *in, int n) {
     sfx_pattern_clear(&s->pat[p]);
     s->pat[p].grid = 0;
   }
+  /* no arrangement: a format 1 to 3 has none, and sfx_song_pack writes all 32 bars whatever arr_len says */
   s->arr_len = 0;
+  for (int i = 0; i < SFX_ARR_MAX; i++) {
+    s->arr[i] = 0;
+  }
   sfx_song_mix_init(s);
 
   /* from format 2: the mixer */

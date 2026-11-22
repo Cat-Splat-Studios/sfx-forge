@@ -102,6 +102,16 @@ static partial class Tests
                 + "again changes no byte:"
                 + said
         );
+
+        // formats 1 to 3 have no arrangement: as format 6 its length and its 32 bars are 0, whatever stood in memory
+        Ok(
+            new[] { v1, v2, v3 }.All(old =>
+            {
+                byte[] six = SfxNative.SongConvert(old);
+                return six != null && six.Skip(66).Take(33).All(b => b == 0);
+            }),
+            "formats 1 to 3 as format 6 have an empty arrangement: bytes 66 to 98 are 0"
+        );
         Ok(
             RenderHash(fixSounds, v4, 0, false, 1f, 16) == wantHash[0],
             "the fixture as format 4 (its two lanes as the lanes of their sounds) plays the samples of the "

@@ -101,23 +101,45 @@ def mono(size, bold=False):
 
 # ---- the song: which instrument has notes in which pattern ---------------------------------------------------------
 def song_notes():
-    """For each of the eight patterns, the set of instruments (0..15) with at least one note in it."""
+    """For each of the eight patterns, the set of instruments (0..15) with at least one step on in it.
+
+    Reads the packed song of format 6 (core/sfx_song.h, "FORMAT 6"): a head of 147 bytes, then eight pattern
+    blocks. A block names its grid, the sounds with a row and the lanes with a row; only those rows follow.
+    """
     patches = 16 * 28
     tracks = 16
-    steps = 16
     patterns = 8
     lanes = 24
-    arr_max = 32
-    masters = 8
+    head = 147
+    # a grid's steps a bar, and the bytes its step bits take (7 bits a byte)
+    grid_steps = [16, 32, 64]
+    grid_bit_bytes = [3, 5, 10]
     song = open(SONG, "rb").read()[patches:]
-    head = 7 + tracks * 3 + 3 + masters + 1 + arr_max + lanes * 2  # SFX_SONG_HEAD
-    each = 3 + 2 * steps  # a track of a pattern: its steps, notes, accents
-    if song[0] != 5 or len(song) != head + patterns * tracks * each + patterns * lanes * steps:
-        sys.exit("DemoSong.bytes is not a song of format 5: song_notes() must follow core/sfx_song.h")
-    return [
-        {t for t in range(tracks) if any(song[head + (p * tracks + t) * each + b] for b in range(3))}
-        for p in range(patterns)
-    ]
+    wrong = "DemoSong.bytes is not a song of format 6: song_notes() must follow core/sfx_song.h"
+    if len(song) < head + patterns * 8 or song[0] != 6:
+        sys.exit(wrong)
+    notes = []
+    at = head
+    for _ in range(patterns):
+        if at + 8 > len(song) or song[at] > 2:
+            sys.exit(wrong)
+        steps = grid_steps[song[at]]
+        bit_bytes = grid_bit_bytes[song[at]]
+        row_mask = song[at + 1] | song[at + 2] << 7 | song[at + 3] << 14
+        lane_mask = song[at + 4] | song[at + 5] << 7 | song[at + 6] << 14 | song[at + 7] << 21
+        at += 8
+        playing = set()
+        for t in range(tracks):
+            if row_mask >> t & 1:
+                # a row may hold notes or lengths with no step on: only a step that is on is a note
+                if any(song[at : at + bit_bytes]):
+                    playing.add(t)
+                at += bit_bytes + 3 * steps
+        at += steps * sum(lane_mask >> lane & 1 for lane in range(lanes))
+        notes.append(playing)
+    if at != len(song):
+        sys.exit(wrong)
+    return notes
 
 
 NOTES = song_notes()

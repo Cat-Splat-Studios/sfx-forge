@@ -84,6 +84,8 @@ def captions(events, frames):
     run = first("game to device", "SOFT START")
     song_words = next(e["what"] for e in events if e["direction"] == "device to game" and "the song" in e["what"])
     messages = song_words.split(" in ")[1].split(" messages")[0]
+    # the song's size is the take's own: 7699 bytes from firmware 1.5.0, another number from a later one
+    song_bytes = "{:,}".format(int(song_words.split("the song: ")[1].split(" bytes")[0]))
     patch_words = next(e["what"] for e in events if e["direction"] == "device to game" and "a patch" in e["what"])
     pad = patch_words.split("pad ")[1].split(",")[0]
     out = [
@@ -103,8 +105,8 @@ def captions(events, frames):
         (
             song,
             "THE SONG ARRIVES",
-            "All of it is in Unity: 7,699 bytes in %s messages. The game's music player has the device's song from "
-            "here." % messages,
+            "All of it is in Unity: %s bytes in %s messages. The game's music player has the device's song from "
+            "here." % (song_bytes, messages),
         ),
         (export, "A SOUND, CHANGED", "On the device a sound is mutated, then EXPORT is pressed."),
         (

@@ -403,7 +403,7 @@ device. Tested in `tests/dotnet` (a format-5 song renders bit for bit as before;
 same samples; both shapes of the song message) and by eight EditMode tests of the song's Inspector. Nobody has
 listened to a finer pattern in Unity, and the demo song and the showcase use sixteenths only.
 
-The numbers, as last run: `sh build.sh` 22 suites, all passing; `tests/dotnet` 204 checks, all passing with the
+The numbers, as last run: `sh build.sh` 22 suites, all passing; `tests/dotnet` 205 checks, all passing with the
 package's own `sfxforge.dll`; `tests/unity-inspectors` 169 of 169 EditMode tests; the demo project, headless on a
 copy, the showcase's 32 editor checks and 41 Play mode tests, of which 26 passed and 15 were skipped (the takes that
 need a device or the emulator or that record, and only run when asked for by name). The showcase's standalone build
