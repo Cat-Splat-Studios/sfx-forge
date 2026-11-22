@@ -761,7 +761,7 @@ In C# and the scripts:
 - **The hardware and the plugin.** Everything ran in the SDK's `wasmtest`, on `tests/host.mjs`, or in the SDK's
   emulator. Nobody has held a VIBE with this firmware.
 - **The two device videos after the readability pass.** `make_videos.py` was reformatted and not run again. The
-  Unity and link videos were made again; the link video's take is still the one recorded on firmware 1.5.0.
+  Unity and link videos were made again, the link video from a take recorded on firmware 1.6.0.
 - **Two real flows inside the firmware.** Only `song_way.h` was run on two threads. The queue and the `volatile`
   values are correct by reading.
 - **A pattern at 1/32 or 1/64 over a MIDI port.** The link tests used songs of sixteenths.
