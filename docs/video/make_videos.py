@@ -5,7 +5,8 @@
 A video is a script of key presses with captions (below). The script is played to the firmware by the SDK's wasmtest,
 which renders the display 30 times a second and the sound; this file lays each frame out – the device with the
 firmware's display on its screen and the control in use lit, the display again larger, the caption – and ffmpeg joins
-pictures and sound. Results: out/video/*.mp4.
+pictures and sound. Results: videos/*.mp4, the folder of the finished videos, which is committed. What is made on the
+way (the script of key presses, the firmware's pictures and sound) goes to out/video/<name>/, which git ignores.
 
 device.png is the device as the VIBE FM SDK's emulator draws it (github.com/Vibe-FM-SDK/vibe-fm-sdk, Apache-2.0),
 captured from the emulator at its own size, 1600 x 860. Without that file a plain drawing of the controls is used.
@@ -19,6 +20,7 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 SDK = os.environ.get("VIBE_SDK", os.path.join(ROOT, ".tools", "vibe-fm-sdk"))
 WASM = os.path.join(ROOT, "build", "sfx-forge.wasm")
+VIDEOS = os.path.join(ROOT, "videos")                # the finished videos, committed; everything made on the way stays in out/
 FPS = 30
 W, H = 1920, 1080
 BG, PANEL, LINE, TEXT, DIM, EMBER = "#0E0B09", "#1B1613", "#3A2E26", "#F4EBDD", "#A08E7E", "#FF8A3C"
@@ -290,7 +292,8 @@ def render(take, tail=1.5):
     else:
         d.rounded_rectangle([52, 142, 1268, 958], 14, fill=PANEL, outline=LINE, width=2)
     big, cap, now, hint = font(54), font(40, False), font(40), font(22, False)
-    mp4 = os.path.join(ROOT, "out", "video", take.name + ".mp4")
+    os.makedirs(VIDEOS, exist_ok=True)
+    mp4 = os.path.join(VIDEOS, take.name + ".mp4")
     ff = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "%dx%d" % (W, H), "-r", str(FPS), "-i", "-",
                            "-ss", "%.3f" % (first / FPS), "-i", os.path.join(out, "audio.wav"),
                            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20", "-preset", "veryfast", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", mp4],

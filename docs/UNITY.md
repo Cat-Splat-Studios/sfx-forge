@@ -23,13 +23,13 @@ package `unity/com.catsplat.sfxforge` and the example game built with it.
 | look something up | [10. API at a glance](#10-api-at-a-glance) |
 | make, vary, level, bake and share sounds in the editor | [11. Tools for designing sounds](#11-tools-for-designing-sounds) |
 
-**Two videos** show the Unity side running. They are built by `docs/video/make_unity_videos.py` and written to
-`out/video/` (not committed):
+**Two videos** show the Unity side running. They are built by `docs/video/make_unity_videos.py` and kept in
+[`videos/`](../videos/README.md), the repository's folder of finished videos:
 
 | File | What it shows |
 |---|---|
-| `out/video/sfx-forge-unity-showcase.mp4` | the showcase game played from start to goal, with captions naming what you hear |
-| `out/video/sfx-forge-unity-how-it-works.mp4` | the three routes and the adaptive music, one at a time. Its pages of code are silent; the game plays between them |
+| [`videos/sfx-forge-unity-showcase.mp4`](../videos/sfx-forge-unity-showcase.mp4) | the showcase game played from start to goal, with captions naming what you hear |
+| [`videos/sfx-forge-unity-how-it-works.mp4`](../videos/sfx-forge-unity-how-it-works.mp4) | the three routes and the adaptive music, one at a time. Its pages of code are silent; the game plays between them |
 
 All sound in them is what SFX FORGE produces in Unity. There is no voice-over.
 

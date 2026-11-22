@@ -27,8 +27,10 @@
  *   MENU         the tour: it plays and names what SFX FORGE can do, a caption at a time. SHIFT + MENU twice: factory reset
  * On the sound pages the display shows the selected sound itself – its whole shape and its wave – as the knobs change it.
  *
- * Two flows: the player (core/sfx_song.h: voices, effects and sequencer) belongs to the audio. The controls reach it
- * through one queue; the song itself they edit in place, one small value at a time.
+ * Two flows: the player (core/sfx_song.h: voices, effects and sequencer) belongs to the audio, its song included. The
+ * controls reach it through one queue. The song they edit is their own; after every event and every draw what differs
+ * goes on its way to the player, which takes it whole between two blocks (song_way.h) - so a grid change, a COPY, an
+ * UNDO or a song that comes in while it plays is heard from one block on, never half made.
  */
 #include "vibe.h"
 #include "vibe_dsp.h"
@@ -38,6 +40,7 @@ size_t strlen(const char *s);                      /* (the SDK brings these two)
 char *strcpy(char *d, const char *s);
 
 #include "../core/sfx_song.h"
+#include "song_way.h"
 
 VIBE_PARALLEL_AUDIO
 
@@ -141,9 +144,15 @@ static const char *const ENGINE_SHORT[SFX_ENGINE_COUNT] = { "IMPACT", "BLIP", "F
 static const uint32_t ENGINE_RGB[SFX_ENGINE_COUNT] = { 0xFF5A36, 0xFFD23F, 0x36C5FF, 0x7BE07B, 0xC48BFF };
 static const char *const SCALE_NAME[SFX_SCALE_COUNT] = { "CHROMATIC", "MAJOR", "MINOR", "PENTATONIC" };
 
-/* ---- the audio flow's own: the player. Its song is edited by the controls (single values, they alone write them) ---- */
+/* ---- the audio flow's own: the player, with the song it plays (P.song: the controls never touch it) ---------------- */
 static sfx_player P;
-#define SONG P.song
+/* ---- the song, as the controls have it: every edit is made here, and this is what is shown, kept and sent. The audio
+   never looks at it. WAY takes it to the player (song_way.h): song_hand when it may have changed, song_way_take at the
+   start of a block. Two songs more than the one that plays: 2 x 38 KB. ------------------------------------------------- */
+static sfx_song song_ed;
+#define SONG song_ed
+static song_way WAY;
+static void song_hand(void) { song_way_hand(&WAY, &SONG); }  /* (should the audio be taking the one before right now, and again: with the next event or draw) */
 static float SR, mixl[VIBE_MAX_BLOCK], mixr[VIBE_MAX_BLOCK];
 static sfx_mods mods = { 0, 0, 0, 1 };
 static float vol_s;
@@ -271,17 +280,19 @@ static void relabel(void) { for (int i = 0; i < 6; i++) vibe_label(VB_F1 + i, so
 
 /* ---- from the controls to the audio: one queue, one writer, one reader ---------------------------------------------- */
 enum { M_TRIGGER, M_RELEASE, M_UPDATE, M_START, M_STOP, M_CUE, M_QUIET, M_LOOP };
-typedef struct { uint8_t type, slot, note, kit; int16_t key; float vel; sfx_patch patch; } msg;
+typedef struct { uint8_t type, slot, note, kit; int16_t key; float vel; uint32_t need; sfx_patch patch; } msg;   /* need: the put of the song it waits for (those four only) */
+static int msg_song(int type) { return type == M_START || type == M_STOP || type == M_CUE || type == M_LOOP; }   /* what starts or changes what plays: it must find the song as it was when this was sent */
 #define QN 64
 static msg q[QN];
 static volatile uint32_t qw, qr;
 
 static void send(int type, int slot, int key, float vel, int note)
 {
+  uint32_t need = msg_song(type) ? song_way_need(&WAY, &SONG) : 0;   /* the song first, as it is now (whole, wherever one of these is sent): what starts, starts in it - the audio works this only with that song, or a later one */
   uint32_t w = qw;
   if (w - qr >= QN) return;                          /* full: dropped */
   msg *m = &q[w % QN];
-  m->type = (uint8_t)type; m->slot = (uint8_t)slot; m->key = (int16_t)key; m->vel = vel; m->note = (uint8_t)note;
+  m->type = (uint8_t)type; m->slot = (uint8_t)slot; m->key = (int16_t)key; m->vel = vel; m->note = (uint8_t)note; m->need = need;
   m->patch = patches[slot & 15]; m->kit = (uint8_t)kit;
   VIBE_RELEASE();
   qw = w + 1;
@@ -290,10 +301,12 @@ static void send(int type, int slot, int key, float vel, int note)
 void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames)
 {
   (void)in;
-  uint32_t w = qw;
+  uint32_t w = qw, k;
   VIBE_ACQUIRE();
-  for (uint32_t k = qr; k != w; k++) {
+  song_way_take(&WAY, &P.song);                      /* the song as the controls have made it since, whole - or none this block, should they be writing the next right now. A grid that changed under the playhead: the player finds its step again */
+  for (k = qr; k != w; k++) {
     const msg *m = &q[k % QN];
+    if (msg_song(m->type) && !song_way_has(&WAY, m->need)) break;   /* its song is not here yet (one of the two stepped back): it waits, and all behind it, in their order - a start never runs in the song from before the edit that came first */
     switch (m->type) {
     case M_TRIGGER: sfx_player_note_on(&P, m->slot + SLOTS * m->kit, m->key, m->vel, m->note, 0.0f, &m->patch); break;   /* (SFX: beside the song) */
     case M_RELEASE: sfx_player_note_off(&P, m->key); break;
@@ -305,7 +318,7 @@ void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames)
     case M_QUIET:   for (int i = 0; i < SFX_PLAYER_VOICES; i++) sfx_voice_release(&P.voice[i]); break;   /* every key let go */
     }
   }
-  VIBE_RELEASE(); qr = w;
+  VIBE_RELEASE(); qr = k;
 
   float c = vd_coef(0.03f, SR / (float)frames);     /* the telemetry glides: 30 ms, no steps */
   mods.pitch_st   = vibe_param_get(P_MOD_PITCH)  + (mods.pitch_st   - vibe_param_get(P_MOD_PITCH))  * c;
@@ -1505,6 +1518,7 @@ void vibe_on_init(float sample_rate)
   SR = sample_rate;
   sfx_player_init(&P, SR);
   factory(); bank_load(); view_sync();
+  song_way_start(&WAY, &SONG, &P.song);              /* (nothing else runs yet: the song as it was loaded is the player's) */
   for (int i = 0; i < SLOTS; i++) P.patch[i] = kits[KIT_MUSIC][i];
   vibe_notes(VIBE_NOTES);
   vibe_params(PARAMS, P_COUNT);
@@ -1622,7 +1636,7 @@ static void pick(int slot, int down)                 /* hear a pad's sound and s
   send(M_TRIGGER, slot, slot, 0.8f, 0);
 }
 
-void vibe_on_event(const vibe_event *e)
+static void on_event(const vibe_event *e)
 {
   int id, r = vf_event(e, &id);
   out_pump(); seq_poll();
@@ -2280,7 +2294,7 @@ static void draw_master(void)
   }
 }
 
-void vibe_on_draw(uint16_t *fb)
+static void on_draw(uint16_t *fb)
 {
   static const char *const SUB[4] = { "OSC", "TONE", "FILTER", "WAVE" };
   char buf[24];
@@ -2459,7 +2473,7 @@ static void stage_value(int i, const char *name, const char *value, float bar, i
   vg_rect(x + 7 + at, SC_Y + 42, 3, 12, TEXT);
 }
 
-void vibe_on_stage(uint16_t *fb, int w, int h)
+static void on_stage(uint16_t *fb, int w, int h)
 {
   static const char *const TAB[ST_N] = { "OSC", "TONE", "FILTER", "WAVE", "ENV", "LFO", "FX", "MIX", "MAST", "AUTO" };
   static const char *const FILLS[2][SF_N] = { { "FILL", "CLEAR", "COPY", "UNDO", "DEMO" }, { "RAMP", "CLEAR", "COPY", "UNDO", "DEMO" } };
@@ -2626,3 +2640,9 @@ void vibe_on_stage(uint16_t *fb, int w, int h)
     }
   }
 }
+
+/* ---- what the host calls in the control flow. After each of them the song as it is now goes on its way to the player:
+   whatever was done to it - one step or all eight patterns - the audio takes whole, with its next block. ------------- */
+void vibe_on_event(const vibe_event *e) { on_event(e); song_hand(); }
+void vibe_on_draw(uint16_t *fb) { on_draw(fb); song_hand(); }
+void vibe_on_stage(uint16_t *fb, int w, int h) { on_stage(fb, w, h); song_hand(); }

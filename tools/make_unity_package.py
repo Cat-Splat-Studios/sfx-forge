@@ -14,7 +14,7 @@ path of the machine it ran on (also inside the firmware's zip), every relative l
 when all of that passed does it replace what it owns in the target. When something it needs is
 missing, or a check fails, it stops with an error and the target is as it was. It never starts Unity.
 
-Needs Python 3 and ffmpeg on the PATH. The videos must exist (out/video, made by docs/video/*.py),
+Needs Python 3 and ffmpeg on the PATH. The videos must exist (videos/, made by docs/video/*.py),
 the figures must be in docs/img (docs/unity_figures.py; its pictures of the editor UI are copies of what the
 tests of tests/unity-inspectors wrote to out/inspector-shots),
 the Vibe must be built (build/sfx-forge.zip, made by build.sh, which also strips its debug sections),
@@ -337,7 +337,7 @@ def make_sample(target):
                         "> **In the package.** This folder is the sample \"" + SAMPLE_NAME + "\" of the package `" + PACKAGE_ID + "`.\n"
                         "> Import it from the Package Manager (SFX Forge > Samples > Import), open `Showcase.unity` in the imported\n"
                         "> folder and press Play. The page below was written in the repository the package is generated from: where\n"
-                        "> it says `unity/Demo`, read \"your project\"; where it names `docs/`, `tests/`, `out/` or `.tools/`, those are\n"
+                        "> it says `unity/Demo`, read \"your project\"; where it names `docs/`, `tests/`, `videos/`, `out/` or `.tools/`, those are\n"
                         "> that repository's and are not in the package (the videos and figures are made there). The older demo it\n"
                         "> mentions (`SfxDemo`) is not in the package either. The links to the manual work in the package's own\n"
                         "> folder or repository, not from the imported copy under `Assets`. The tests in `Tests/` are compiled\n"
@@ -376,11 +376,11 @@ def make_manuals(target):
                         ">   `SfxDemoTests`), and the scripts under `docs/`, `tests/`, `core/` and `out/`: the engine's C source, the\n"
                         ">   emulator script of the link tests, the test project of the editor UI (`tests/unity-inspectors`, with\n"
                         ">   the pictures it writes to `out/inspector-shots`), and the scripts that draw the figures and cut the videos.\n", where)
-    text = replace_once(text, "**Two videos** show the Unity side running. They are built by `docs/video/make_unity_videos.py` and written to\n"
-                              "`out/video/` (not committed):\n\n"
+    text = replace_once(text, "**Two videos** show the Unity side running. They are built by `docs/video/make_unity_videos.py` and kept in\n"
+                              "[`videos/`](../videos/README.md), the repository's folder of finished videos:\n\n"
                               "| File | What it shows |\n|---|---|\n"
-                              "| `out/video/sfx-forge-unity-showcase.mp4` | the showcase game played from start to goal, with captions naming what you hear |\n"
-                              "| `out/video/sfx-forge-unity-how-it-works.mp4` | the three routes and the adaptive music, one at a time. Its pages of code are silent; the game plays between them |\n",
+                              "| [`videos/sfx-forge-unity-showcase.mp4`](../videos/sfx-forge-unity-showcase.mp4) | the showcase game played from start to goal, with captions naming what you hear |\n"
+                              "| [`videos/sfx-forge-unity-how-it-works.mp4`](../videos/sfx-forge-unity-how-it-works.mp4) | the three routes and the adaptive music, one at a time. Its pages of code are silent; the game plays between them |\n",
                         "**Three videos** show the Unity side running. They are in the package, in `Documentation~/video`:\n\n"
                         "| File | What it shows |\n|---|---|\n"
                         "| [`sfx-forge-unity-showcase.mp4`](video/sfx-forge-unity-showcase.mp4) | the showcase game played from start to goal, with captions naming what you hear |\n"
@@ -492,9 +492,9 @@ RECORDED_ELSEWHERE = (
 def make_videos(target):
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         fail("ffmpeg and ffprobe must be on the PATH (the previews are cut from the videos)")
-    missing = [v["file"] for v in VIDEOS if not os.path.exists(src("out", "video", v["file"]))]
+    missing = [v["file"] for v in VIDEOS if not os.path.exists(src("videos", v["file"]))]
     if missing:
-        fail("these videos are missing in out/video: " + ", ".join(missing)
+        fail("these videos are missing in videos/: " + ", ".join(missing)
              + ". Make them first (docs/video/make_videos.py, make_unity_videos.py, make_link_video.py); nothing was skipped.")
     print("ffmpeg: %s   (the previews and still frames are encoded by it: another version may give other bytes)"
           % run(["ffmpeg", "-version"], "ffmpeg").splitlines()[0].strip())
@@ -502,7 +502,7 @@ def make_videos(target):
     previews = os.path.join(target, "Documentation~", "img", "readme")
     os.makedirs(previews, exist_ok=True)
     for v in VIDEOS:
-        source = src("out", "video", v["file"])
+        source = src("videos", v["file"])
         length = float(run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", source], "ffprobe").strip())
         if abs(length - v["seconds"]) > 2 or v["clip"][0] + v["clip"][1] > length:
             fail("%s is %.1f s long, not about %d s: it was made again. Look at it and choose its preview's place again (VIDEOS in this script)."

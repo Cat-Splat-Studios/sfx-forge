@@ -10,7 +10,8 @@ A video is a list of parts (below): a take, or a slide. This file lays each fram
 what SFX FORGE is doing in that frame (read from the telemetry), the caption - and ffmpeg joins pictures and sound. A
 take's sound is its own wav, cut where its pictures are cut; a slide is silent. Nothing else is ever heard. Each take is
 brought to one loudness with a single gain (measured with ffmpeg's ebur128, never above -2 dBFS before the AAC encoder,
-which adds up to a decibel and a half). Results: out/video/*.mp4.
+which adds up to a decibel and a half). Results: videos/*.mp4, the folder of the finished videos, which is committed.
+A video's sound track on the way is a wav in out/video/, removed when the video is written.
 
 The takes are recorded at half the listener's volume (CaptureRecorder.ListenerVolume): Unity limits its output to full
 scale before a take can read it, so only a take with room above it shows what the game's mix reaches (every take asserts
@@ -42,7 +43,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 sys.dont_write_bytecode = True                       # (no __pycache__ beside the scripts)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from make_videos import ROOT, FPS, W, H, BG, PANEL, LINE, TEXT, DIM, EMBER, font, wrap   # the house style is the device videos'
+from make_videos import ROOT, VIDEOS, FPS, W, H, BG, PANEL, LINE, TEXT, DIM, EMBER, font, wrap   # the house style is the device videos'
 
 TAKES = os.environ.get("SFXFORGE_CAPTURE_DIR", os.path.join(ROOT, "out", "unity-video"))
 RATE, PER_FRAME = 48000, 48000 // FPS                # a picture is 1600 sample frames of sound
@@ -496,8 +497,9 @@ def render(name, title, parts, target):
     for p in parts:                                   # a slide: its caption and its lit lines of code
         if isinstance(p, Slide) and p.frames / FPS + 1e-6 < p.reading / READ:
             sys.exit("%s: a slide is on screen %.1f s, its caption and lit code need %.1f s: %s" % (name, p.frames / FPS, p.reading / READ, p.captions[0][2]))
-    out = os.path.join(ROOT, "out", "video")
+    out = os.path.join(ROOT, "out", "video")          # the sound track on the way; the video itself goes to videos/
     os.makedirs(out, exist_ok=True)
+    os.makedirs(VIDEOS, exist_ok=True)
     sound = np.vstack([p.sound(target) for p in parts])
     track = os.path.join(out, name + ".wav")
     with wave.open(track, "wb") as w:
@@ -520,7 +522,7 @@ def render(name, title, parts, target):
     for k0, k1, chapter, text in captions:            # inside the picture's margins?
         if d.textlength(chapter, font=big) > 1100 or len(wrap(d, text, cap, 1800)) > 2:
             sys.exit("%s: does not fit: %s / %s" % (name, chapter, text))
-    mp4 = os.path.join(out, name + ".mp4")
+    mp4 = os.path.join(VIDEOS, name + ".mp4")
     ff = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "%dx%d" % (W, H), "-r", str(FPS), "-i", "-",
                            "-i", track, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20", "-preset", "veryfast", "-c:a", "aac", "-b:a", "192k",
                            "-movflags", "+faststart", mp4], stdin=subprocess.PIPE)

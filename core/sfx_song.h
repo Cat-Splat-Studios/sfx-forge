@@ -463,9 +463,11 @@ typedef struct {
   int16_t key[SFX_PLAYER_VOICES];
   uint32_t age[SFX_PLAYER_VOICES], ages, seed;
   sfx_patch patch[SFX_TRACKS];
-  sfx_song song;                          /* (a host with two threads: the one that edits writes single values - and where it rewrites a whole
-                                             pattern or song while this plays (a grid change, a copy, an undo, a song that comes in), a step that
-                                             begins in those microseconds may play what is half moved; no index leaves the arrays) */
+  sfx_song song;                          /* (a host with two threads: this is the song of the one that renders. Single values the other may
+                                             write here as they are. A whole pattern or song (a grid change, a copy, an undo, a song that comes
+                                             in) it rewrites in a song of its own and hands over between two calls of sfx_player_render - the
+                                             firmware: sfx-forge/song_way.h. Rewritten here while this plays, a step that begins in those
+                                             microseconds may play what is half moved; no index leaves the arrays) */
   sfx_mods mods;
   float intensity;                        /* 0..1 */
   int running, pattern, cue;              /* cue: the pattern to change to on the next bar line, -1 = none */
@@ -627,8 +629,19 @@ static inline uint32_t sfx_player_render(sfx_player *p, float *l, float *r, int 
         p->frac = fr;
         int newbar = (int)bar != p->bar, sub = st;
         int div = sfx_div(s->pat[p->pattern % SFX_PATTERNS].grid);
-        if (!newbar && div != p->div) {                            /* the grid changed under the playhead: no step fires for that */
-          if (p->step >= 0) p->step = p->step * div / p->div;
+        if (!newbar && div != p->div) {                            /* the grid changed under the playhead: it stands on the step of the new grid that is on now, and no step fires for that */
+          if (p->step >= 0) {
+            int now = st; float f2;
+            if (div > 1) now = sfx__sub(st, fr, swing, div, steps, &f2);
+            else if ((st & 1) && fr < swing) now = st - 1;         /* (swing: the off-beat sixteenth has not begun) */
+            int was = st;                                          /* the step of the grid before that is on now: another than the one it stands on = a step begins on this very sample */
+            if (p->div > 1) was = sfx__sub(st, fr, swing, p->div, steps, &f2);
+            else if ((st & 1) && fr < swing) was = st - 1;
+            if (was != p->step && now > 0 && now * (4 / div) == was * (4 / p->div)) now--;   /* ... and in the new grid one begins here too: it has not sounded yet, so it stands on the one before and this one fires below, as any step */
+            int by = now * (4 / div) - p->step * (4 / p->div);     /* a held note counts from where its step began: so many sixty-fourths later (or earlier) now - it ends where it would have */
+            for (int t = 0; t < SFX_TRACKS; t++) if (p->gate[t]) { int g = p->gate[t] - by; p->gate[t] = (uint8_t)(g < 1 ? 1 : g > 255 ? 255 : g); }
+            p->step = now;
+          }
           p->div = (uint8_t)div;
         }
         if ((st & 1) && fr < swing && (div == 1 || newbar)) continue;   /* swing: the off-beat step waits */

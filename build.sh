@@ -68,6 +68,11 @@ node "$SDK/tools/wasmtest.mjs" "$ROOT/build/sfx-forge.wasm" "$ROOT/tests/take64.
 node "$ROOT/tests/check-take64.mjs" "$ROOT/out/take64" "$ROOT/unity/Demo/Assets/SfxDemo/DemoSong.bytes"
 # (the three scenes are written by tests/make-grid-scenes.mjs.) The question that names what it drops, and the windows of a short bar
 node "$ROOT/tests/check-grid-keys.mjs" "$ROOT/build/sfx-forge.wasm"
+# a whole pattern or song rewritten while it plays (a grid change, COPY, UNDO, CLR PAT, a song over SysEx) reaches the
+# player whole, in time, with the playhead where it was; edits with no block between them. Then the same hand-over
+# between two real threads (the hosts above call the firmware in one flow: only this can show the two keep off each other)
+node "$ROOT/tests/check-atomic.mjs" "$ROOT/build/sfx-forge.wasm"
+sh "$ROOT/tests/stress-song-way.sh"
 # the factory sounds and song as SEND gives them: still the bytes the Unity demo's song asset holds
 node "$SDK/tools/wasmtest.mjs" "$ROOT/build/sfx-forge.wasm" "$ROOT/tests/song-export.json" "$ROOT/out/song"
 node "$ROOT/tests/check-song-export.mjs" "$ROOT/out/song" "$ROOT/unity/Demo/Assets/SfxDemo/DemoSong.bytes"

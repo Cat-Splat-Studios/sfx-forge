@@ -355,7 +355,7 @@ keys to press on the device (through `out/link/cues.txt`), and writes `out/unity
 ```sh
 node tests/emulator-link.mjs --cues out/link/cues.txt --frames out/link/emulator &      # the device, filmed
 SFXFORGE_LINK_CUES="$PWD/out/link/cues.txt" "$UNITY" -batchmode -projectPath "$PROJECT" -runTests -testPlatform PlayMode   -testFilter SfxShowcase.Tests.LinkSession -testResults "$OUT/link-session.xml" -logFile "$OUT/link-session.log"
-python docs/video/make_link_video.py                # out/video/sfx-forge-unity-link.mp4
+python docs/video/make_link_video.py                # videos/sfx-forge-unity-link.mp4
 ```
 
 Unity will not open a project twice. With the editor open on `unity/Demo`, run the headless commands on a second

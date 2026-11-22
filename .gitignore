@@ -1,6 +1,7 @@
 .tools/
 build/
 out/
+__pycache__/
 
 # the inspectors' test project: what Unity makes
 tests/unity-inspectors/Library/

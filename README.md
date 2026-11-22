@@ -16,6 +16,9 @@ into a game. In a hurry: **[the cheat sheet](docs/img/cheatsheet.png)** is every
 **[The Unity manual](docs/UNITY.md)** is its sibling for the game's side: the package, the three ways to play a sound,
 adaptive music, the link to the device, recipes, and the showcase game as a worked example.
 
+**[The videos](videos/README.md)** are in `videos/`: five of them, the current ones, made by scripts from the firmware
+and the game themselves. Start with [the tour of the device](videos/sfx-forge-tour.mp4).
+
 Everything is synthesized: there are no samples in it. Its strings, brass, choir and bells are synthesizer
 instruments in that style, not recordings of an orchestra. The wavetables are computed from sums of harmonics in
 `core/sfx_wavetable.h`; nothing is taken from another instrument.
@@ -65,10 +68,11 @@ song's pages; F4 held erases during a take; the keys that throw a whole song or 
 | `tests/unity-inspectors/` | a small Unity project that tests the package's editor UI (the sound inspector with its tools, the song inspector, the variation set's inspector, the SFX Forge window and the bake window; 169 EditMode tests) and writes pictures of it to `out/inspector-shots/`. The pictures are the Inspector's element tree and stylesheet rendered in a panel to a texture, not photographs of the Inspector. Its README has the command |
 | `docs/` | the manual, and `figures.py`, which builds its pictures from the firmware's own screenshots |
 | `docs/UNITY.md` | the Unity manual: the package and the showcase, with its own figures (`docs/img/unity-*.png`, built by `docs/unity_figures.py` from the song file and the recorded takes in `out/unity-video/`; its pictures of the editor UI, `unity-inspector-*.png`, are copied by the same script from `out/inspector-shots/`: `SFXFORGE_FIGURES=inspectors python docs/unity_figures.py` after the inspectors' tests ran) |
-| `docs/video/make_videos.py` | makes the two videos (a feature tour, and building the demo song piece by piece) from scripts of key presses: the firmware renders its own display and sound, ffmpeg joins them. Results in `out/video/` |
+| `videos/` | the five finished videos, the current ones, committed (42 MB). Its [README](videos/README.md) says what each shows and how to make it again. The scripts that make them are in `docs/video/` |
+| `docs/video/make_videos.py` | makes the two videos (a feature tour, and building the demo song piece by piece) from scripts of key presses: the firmware renders its own display and sound, ffmpeg joins them. Results: [`videos/sfx-forge-tour.mp4`](videos/sfx-forge-tour.mp4) and [`videos/sfx-forge-build-a-song.mp4`](videos/sfx-forge-build-a-song.mp4); what is made on the way stays in `out/video/` |
 | `tests/emulator-link.mjs` | the device's end of the link without hands: opens the SDK's emulator in a Chrome of its own, allows it MIDI and presses its keys. With `Tests/LinkTakes.cs` and `Tests/LinkSession.cs` in the showcase it tests the link end to end |
-| `docs/video/make_link_video.py` | makes `out/video/sfx-forge-unity-link.mp4` from one recorded session: the emulator and the game side by side, with what crossed the MIDI ports |
-| `docs/video/make_unity_videos.py` | makes the two Unity videos: `out/video/sfx-forge-unity-showcase.mp4` (the showcase game, start to goal) and `out/video/sfx-forge-unity-how-it-works.mp4` (the three routes, the music, the event seam, with the code). It lays out the takes the showcase records of itself into `out/unity-video/` (the showcase's README, "Recording it"); `docs/video/check_unity_capture.py` checks those takes. Captions only; all sound is SFX FORGE in Unity |
+| `docs/video/make_link_video.py` | makes [`videos/sfx-forge-unity-link.mp4`](videos/sfx-forge-unity-link.mp4) from one recorded session: the emulator and the game side by side, with what crossed the MIDI ports |
+| `docs/video/make_unity_videos.py` | makes the two Unity videos: [`videos/sfx-forge-unity-showcase.mp4`](videos/sfx-forge-unity-showcase.mp4) (the showcase game, start to goal) and [`videos/sfx-forge-unity-how-it-works.mp4`](videos/sfx-forge-unity-how-it-works.mp4) (the three routes, the music, the event seam, with the code). It lays out the takes the showcase records of itself into `out/unity-video/` (the showcase's README, "Recording it"); `docs/video/check_unity_capture.py` checks those takes. Captions only; all sound is SFX FORGE in Unity |
 | `build.sh` | build, `vibe-check`, render the performance to `out/` |
 
 ## Build

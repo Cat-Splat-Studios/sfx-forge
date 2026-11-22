@@ -1,6 +1,6 @@
 """Makes the link video: SFX FORGE in the emulator and the showcase in Unity, joined by two MIDI ports, both recorded at once.
 
-    python docs/video/make_link_video.py            (needs ffmpeg, Pillow and numpy)   ->  out/video/sfx-forge-unity-link.mp4
+    python docs/video/make_link_video.py            (needs ffmpeg, Pillow and numpy)   ->  videos/sfx-forge-unity-link.mp4
 
 It is put together from one recording session (see "Recording the link" in unity/Demo/Assets/Showcase/README.md):
   out/link/emulator/        what the emulator's page showed, as JPEGs with their wall-clock times (tests/emulator-link.mjs --frames)
@@ -22,7 +22,7 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 TAKE = os.path.join(ROOT, "out", "unity-video", "link-session")
 EMU = os.path.join(ROOT, "out", "link", "emulator")
-OUT = os.path.join(ROOT, "out", "video", "sfx-forge-unity-link.mp4")
+OUT = os.path.join(ROOT, "videos", "sfx-forge-unity-link.mp4")   # the finished video, committed; its sound on the way stays in out/link
 FPS, W, H = 30, 1920, 1080
 BG, PANEL, LINE, TEXT, DIM, EMBER, BLUE = "#0E0B09", "#1B1613", "#3A2E26", "#F4EBDD", "#A08E7E", "#FF8A3C", "#6EC6FF"
 DEVICE = (28, 243, 1092, 515)         # in the emulator's page (1484 x 905): the device's upper half, its display,
@@ -94,6 +94,7 @@ def main():
     audio[-fade:] *= np.repeat(np.linspace(1.0, 0.0, fade // channels), channels)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     wav = os.path.join(ROOT, "out", "link", "video-audio.wav")
+    os.makedirs(os.path.dirname(wav), exist_ok=True)
     o = wave.open(wav, "wb")
     o.setnchannels(channels); o.setsampwidth(2); o.setframerate(rate)
     o.writeframes((np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes())

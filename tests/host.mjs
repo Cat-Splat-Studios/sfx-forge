@@ -7,6 +7,7 @@
 //   const d = device();                 // nothing stored
 //   const d = device(files);            // files: a Map of name -> Buffer, read and written by the firmware (kept by the caller)
 //   files.full = true;                  // from then on the store takes nothing more: a write fails, as on a full device
+//   d.listen(); ... d.heard()           // the left channel of every block run since listen(), as samples
 import fs from 'fs';
 
 export const HEAD = [0xF0, 0x7D, 0x56, 0x42];
@@ -30,7 +31,7 @@ export function load(wasmFile) {
       } } });
     const e = inst.exports, out = [];
     e.vibe_wasm_init(48000);
-    let blocks = 0;
+    let blocks = 0, tape = null;
     const drain = () => {   // (the queue's layout: the SDK's vibe_sdk.c, "SDK 9: MIDI out")
       const base = e.vibe_wasm_midi_out(), dv = new DataView(e.memory.buffer), w = dv.getUint32(base, true);
       let r = dv.getUint32(base + 4, true);
@@ -49,7 +50,10 @@ export function load(wasmFile) {
       turn(id, clicks) { for (let i = 0; i < Math.abs(clicks); i++) { e.vibe_wasm_event(4, id, 0, Math.sign(clicks), 0); d.run(1); } },   // an encoder: 0-3 the four, 4 A, 5 B
       button(id) { e.vibe_wasm_event(3, id, 1, 0, 0); d.run(4); e.vibe_wasm_event(3, id, 0, 0, 0); d.run(4); },
       shift(id) { e.vibe_wasm_event(3, BUTTON.SHIFT, 1, 0, 0); d.run(2); d.button(id); e.vibe_wasm_event(3, BUTTON.SHIFT, 0, 0, 0); d.run(2); },
-      run(n) { for (let i = 0; i < n; i++) { e.vibe_wasm_audio(128, 0); drain(); if (++blocks % 12 === 0) e.vibe_wasm_draw(); } },   // (a draw every 12 blocks, as wasmtest)
+      run(n) { for (let i = 0; i < n; i++) { e.vibe_wasm_audio(128, 0); drain(); if (tape) tape.push(new Float32Array(e.memory.buffer, e.vibe_wasm_io() + 1024, 128).slice()); if (++blocks % 12 === 0) e.vibe_wasm_draw(); } },   // (a draw every 12 blocks, as wasmtest)
+      get blocks() { return blocks; },                    // audio blocks run so far
+      listen() { tape = []; },                            // from here on the left channel is kept ...
+      heard() { const x = new Float32Array(tape.length * 128); tape.forEach((b, i) => x.set(b, i * 128)); return x; },   // ... and this is all of it
       take() { return out.splice(0); },
       screen() { const fb = new Uint16Array(e.memory.buffer, e.vibe_wasm_draw(), 480 * 320); let h = 2166136261; for (let i = 0; i < fb.length; i++) h = Math.imul(h ^ fb[i], 16777619) >>> 0; return h; },
       // REQUEST SONG: what comes back - the 16 sounds and the song's bytes (null when its pieces are not all there)
