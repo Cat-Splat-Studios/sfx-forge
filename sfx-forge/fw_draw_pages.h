@@ -5,12 +5,13 @@
  *   dr_read, head_at (where the song is, for whatever draws now), step_text, len_text
  *   SEQ      draw_seq, bar_strip (the whole bar in one line, at 32 and 64 steps)
  *   SONG     draw_song
- *            strip (the eight patterns in a row, under SEQ and AUTO)
+ *            strip_at, strip (the eight patterns in a row, under SEQ, AUTO and PERFORM)
  *   LINK     draw_link
  *   MIX      mix_text, silent
  *   AUTO     auto_name, auto_text, draw_auto
  *   MIX      draw_mix
  *   MASTER   draw_master
+ *   PERFORM  perform_hint, perform_value, draw_perform
  * Needs:  fw_draw_parts.h (colours, tile_at, footer, texts), fw_sequencer.h (view_win, aut_at, auto_hi, view_to),
  *         fw_pages.h (mix_value), fw_edit.h (pat, pad_name, toast_on, pattern_holds).
  * Read:   these only draw - on_draw (fw_draw.h) decides which of them, and draws the four values beside them. A tile
@@ -330,12 +331,12 @@ static void draw_song(uint32_t step, uint32_t now, int heat) {
   }
 }
 
-/* SEQ and AUTO, under the column: the eight patterns – which plays, which is shown, which waits for the bar line, which
-   hold something – and a word beside them */
-static void strip(uint32_t step, uint32_t now, const char *hint, uint32_t hint_rgb) {
+/* the eight patterns in a row from x0 – which plays, which is shown, which waits for the bar line, which hold
+   something – and a word beside them */
+static void strip_at(int x0, uint32_t step, uint32_t now, const char *hint, uint32_t hint_rgb) {
   for (int k = 0; k < SFX_PATTERNS; k++) {
     char letter[2] = {(char)('A' + k), 0};
-    int x = 262 + k * 13;
+    int x = x0 + k * 13;
     int y = CY + 209;
     int next = k == queued && BLINK;
     int plays = step != NO_STEP && now == (uint32_t)k;
@@ -355,7 +356,12 @@ static void strip(uint32_t step, uint32_t now, const char *hint, uint32_t hint_r
             VG_CENTER);
     // clang-format on
   }
-  vg_text(hint, 376, CY + 209, VG_SMALL, hint_rgb, VG_LEFT);
+  vg_text(hint, x0 + 114, CY + 209, VG_SMALL, hint_rgb, VG_LEFT);
+}
+
+/* SEQ and AUTO: that row, under the column */
+static void strip(uint32_t step, uint32_t now, const char *hint, uint32_t hint_rgb) {
+  strip_at(262, step, now, hint, hint_rgb);
 }
 
 /* ---- LINK ------------------------------------------------------------------------------------------------------ */
@@ -596,6 +602,136 @@ static void draw_master(void) {
     if (hgt > 0) {
       vg_rect(255 + i, base - hgt, 2, hgt,
               vg_mix(tone, 0x5B3F86, (float)i / 200.0f * (float)SONG.fx[SFX_M_REVERB_DAMP] / 127.0f));
+    }
+  }
+}
+
+/* ---- PERFORM --------------------------------------------------------------------------------------------------- */
+/* The whole pattern as a drum machine shows it: a row a sound, a cell a step, the playhead a column that moves. Under
+   it the four values in one line, and the eight patterns with a word on what the pads are. */
+#define PF_X  84  /* the grid: its left edge … */
+#define PF_W  384 /* … and its width: 16 cells of 24 pixels, 32 of 12 or 64 of 6 */
+#define PF_RH 12  /* a row's height */
+
+/* what the pads are now, in words (t: room for 40 characters) */
+static const char *perform_hint(char *t) {
+  if (perf_mode == PERF_SOUNDS) {
+    return !rec ? "PADS: PLAY THE KIT" : running ? "PADS: THE KIT - RECORDING" : "PADS: THE KIT - REC READY: PLAY";
+  }
+  if (perf_mode == PERF_MUTES) {
+    return "PADS: MUTE - SHIFT + PAD: SOLO";
+  }
+  if (perf_mode == PERF_PATTERNS) {
+    return "PADS: 1-8 PATTERN - 9-16 INTENSITY";
+  }
+  /* "PADS: STEPS 17-32 OF KICK" (at 16 steps: "PADS: STEPS OF KICK") */
+  strcpy(t, "PADS: STEPS ");
+  if (gsteps() > PADS) {
+    int w = view_win();
+    vg_itoa(w * PADS + 1, t + strlen(t));
+    strcpy(t + strlen(t), "-");
+    vg_itoa(w * PADS + PADS, t + strlen(t));
+    strcpy(t + strlen(t), " ");
+  }
+  strcpy(t + strlen(t), "OF ");
+  /* (the name: as much of it as there is room for) */
+  int n = (int)strlen(t);
+  const char *name = pad_name(sel);
+  for (int k = 0; k < 14 && name[k]; k++) {
+    t[n++] = name[k];
+  }
+  t[n] = 0;
+  return t;
+}
+
+/* one of the four values, in the line under the grid. i: its encoder (0-3) */
+static void perform_value(int i, const char *name, const char *value, uint32_t rgb) {
+  static const char *const NUM[4] = {"1", "2", "3", "4"};
+  /* where each begins, and how wide it is: as wide as its name and its longest value need */
+  static const int16_t X[4] = {12, 118, 204, 346};
+  static const int16_t W[4] = {102, 82, 138, 122};
+  int x = X[i];
+  int y = CY + SLOTS * PF_RH + 1;
+  vibe_link_encoder(VE_1 + i, name, value);
+  enc_rect[i][0] = (int16_t)x;
+  enc_rect[i][1] = (int16_t)y;
+  enc_rect[i][2] = W[i];
+  enc_rect[i][3] = 15;
+  vg_round(x, y, W[i], 15, 4, touched(i) ? vg_mix(PANEL, rgb, 0.30f) : PANEL);
+  vg_text(NUM[i], x + 5, y, VG_SMALL, rgb, VG_LEFT);
+  vg_text(name, x + 16, y, VG_SMALL, touched(i) ? TEXT : DIM, VG_LEFT);
+  vg_text(value, x + W[i] - 5, y, VG_BOLD, TEXT, VG_RIGHT);
+}
+
+/* step: the step that plays (NO_STEP: none). now: the pattern that plays. on: what sounds, a bit a sound */
+static void draw_perform(uint32_t step, uint32_t now, uint32_t on) {
+  char buf[12];
+  /* here: the pattern shown is the one that plays. n: its steps. lim: those of the bar. cw: a cell's width.
+     w: which 16 steps the pads show (STEPS) */
+  int here = now == (uint32_t)edit_pat && step != NO_STEP;
+  int div = pat_div(edit_pat);
+  int n = gsteps();
+  int lim = bar_len() * div;
+  int cw = PF_W / n;
+  int w = view_win();
+  const sfx_pattern *p = pat();
+  for (int s = 0; s < SLOTS; s++) {
+    /* c: the sound's colour. quiet: it is not heard in the song now (muted, another one solo, its layer off).
+       room: the letters of its name that fit (an S or M after it takes two letters' room) */
+    uint32_t c = ENGINE_RGB[patches[s].engine];
+    int y = CY + s * PF_RH;
+    int quiet = silent(s) || !layer_on(s);
+    int solo = (SONG.solo >> s) & 1;
+    int mute = (SONG.mute >> s) & 1;
+    const char *name = pad_name(s);
+    int room = solo || mute ? 8 : 10;
+    int k = 0;
+    /* the selected sound's row stands out */
+    if (s == sel) {
+      vg_rect(8, y - 1, 464, PF_RH + 1, 0x3E2C23);
+    }
+    vg_rect(11, y + 1, 3, PF_RH - 3, quiet ? 0x6A5248 : c);
+    while (k < room && name[k]) {
+      buf[k] = name[k];
+      k++;
+    }
+    buf[k] = 0;
+    // clang-format off
+    vg_text(buf, 18, y - 2, VG_SMALL,
+            quiet           ? 0x6A5248
+            : (on >> s) & 1 ? 0xFFFFFF
+            : s == sel      ? TEXT
+            :                 DIM,
+            VG_LEFT);
+    // clang-format on
+    if (solo) {
+      vg_text("S", PF_X - 4, y - 2, VG_SMALL, YELLOW, VG_RIGHT);
+    } else if (mute) {
+      vg_text("M", PF_X - 4, y - 2, VG_SMALL, RED, VG_RIGHT);
+    }
+    /* its steps: brighter the harder they play, white under the playhead; grey when the sound is not heard; an empty
+       cell in two shades beat by beat, dark beyond the bar */
+    for (int g = 0; g < n; g++) {
+      int set = (p->on[g] >> s) & 1;
+      int head = here && head_at(g, div);
+      uint32_t rgb;
+      // clang-format off
+      if (set) {
+        rgb = quiet  ? (head ? DIM : 0x6A5248)
+              : head ? 0xFFFFFF
+              :        vg_mix(BG, c, 0.44f + 0.08f * (float)(p->vel[s][g] & 7));
+      } else {
+        rgb = g >= lim              ? 0x1A120E
+              : head                ? 0x64463A
+              : (g / (4 * div)) & 1 ? 0x2A1D17
+              :                       0x35251D;
+      }
+      // clang-format on
+      vg_rect(PF_X + g * cw, y, cw - 1, PF_RH - 1, rgb);
+    }
+    /* STEPS: a frame round the 16 steps the pads are */
+    if (s == sel && perf_mode == PERF_STEPS) {
+      vg_frame(PF_X + w * PADS * cw - 2, y - 2, PADS * cw + 3, PF_RH + 3, 1, 0xFFFFFF);
     }
   }
 }

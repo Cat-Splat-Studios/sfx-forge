@@ -52,6 +52,7 @@ const bar = (d, sixteenths) => {
   }
   d.button(BUTTON.K5);
   d.button(BUTTON.K5);
+  d.button(BUTTON.K5);
   return d.song().bytes[1];
 };
 

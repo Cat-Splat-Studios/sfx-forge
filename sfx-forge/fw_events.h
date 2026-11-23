@@ -1,6 +1,6 @@
 /* fw_events.h – the start, and every event: pads, keys, notes, MIDI, the mouse. A part of sfx-forge.c.
  *
- * Holds:  vibe_on_init (the host's first call); the HOME texts (HELP_...); factory_reset; pick;
+ * Holds:  vibe_on_init (the host's first call); the HOME texts (HELP_...); factory_reset; pick; perform_pad;
  *         on_event (vibe_on_event in sfx-forge.c calls it for every event).
  * Needs:  every part before it.
  * Read:   on_event is where to begin when the question is "what does this key do": it decides nothing itself, it
@@ -97,6 +97,20 @@ static const char *const HELP_AUTO[] = {
   "A",                 "TEMPO (SHIFT: SWING)",
 };
 
+static const char *const HELP_PERFORM[] = {
+  "K5 PERFORM",        "a row a sound. SAVE: F6 on SEQ (K5 again)",
+  "F1 STEPS",          "pads: 16 steps. PAD + KEY: the step's note",
+  "F2 SOUNDS",         "pads: the kit. REC + PLAY: played in",
+  "F3 MUTES",          "pads: mute a sound.  SHIFT + pad: solo",
+  "F4 PATTERN",        "pads 1-8: pattern A-H · 9-16: INTENSITY",
+  "F5  F6",            "FILL the selected sound · UNDO (again: redo)",
+  "SHIFT + F1-F4",     "LOOP or SONG · CLEAR · ALL ON · COPY",
+  "SHIFT + F5 F6",     "the grid coarser / finer",
+  "DATA  SHIFT+PAD",   "select a sound (STEPS: SHIFT + its pad)",
+  "ENCODER 1-4  A  B", "VOLUME PAN INTENSITY LAYER · TEMPO · BAR",
+  "LEFT RIGHT",        "pattern before / after · SHIFT: the steps shown",
+};
+
 static const char *const HELP_LINK[] = {
   "ENCODERS",          "1-4, A, B send CC 20-25 to the game",
   "PADS",              "play, and send notes 36-51",
@@ -174,7 +188,7 @@ static const char *const HELP_MIX[] = {
 };
 // clang-format on
 
-/* SHIFT + a pad on SEQ and AUTO: hear a pad's sound and select it – without recording it */
+/* SHIFT + a pad on SEQ, AUTO and PERFORM's STEPS: hear a pad's sound and select it – without recording it */
 static void pick(int slot, int down) {
   if (!down) {
     send(M_RELEASE, slot, slot, 0, 0);
@@ -182,6 +196,54 @@ static void pick(int slot, int down) {
   }
   sel = slot;
   send(M_TRIGGER, slot, slot, 0.8f, 0);
+}
+
+/* A pad on PERFORM: what it is there is perf_mode (F1-F4). Each mode is the pads of another page: STEPS those of SEQ,
+   SOUNDS those of a sound page, MUTES those of MIX, PATTERNS those of SONG. */
+static void perform_pad(int id, int down, float vel) {
+  /* let go: whatever it began – the mode or SHIFT may have gone since */
+  if (!down) {
+    send(M_RELEASE, id, id, 0, 0);
+    if (held_pad == id) {
+      held_step = -1;
+      held_pad = -1;
+    }
+    return;
+  }
+  switch (perf_mode) {
+  case PERF_STEPS:
+    /* SHIFT: the pad's sound - hear it, select it. Else the step this pad stands for, on / off; while it is held a
+       key gives the step its note */
+    if (shift) {
+      pick(id, 1);
+    } else {
+      int step = cur_step / PADS * PADS + id;
+      step_toggle(step, sel);
+      held_pad = id;
+      held_step = step;
+    }
+    break;
+  case PERF_SOUNDS:
+    /* it sounds, it is selected - and with REC, while the song runs, it is recorded */
+    pad(id, 1, vel);
+    break;
+  case PERF_MUTES:
+    sel = id;
+    if (shift) {
+      SONG.solo ^= (uint16_t)(1u << id);
+    } else {
+      SONG.mute ^= (uint16_t)(1u << id);
+    }
+    break;
+  default:
+    /* PATTERNS: pads 1-8 a pattern (on the bar line while it plays), 9-16 the intensity */
+    if (id < 8) {
+      pattern_pick(id);
+    } else {
+      intensity_set((float)(id - 7) / 8.0f);
+    }
+    break;
+  }
 }
 
 /* ---- events ---------------------------------------------------------------------------------------------------- */
@@ -196,8 +258,8 @@ static void pick(int slot, int down) {
      2  what waits to go out is sent on, and what the audio did since is taken in (out_pump, seq_poll)
      3  any touch ends the tour
      4  one case for each kind of event:
-          a pad       by page: SEQ a step, SONG a pattern or the intensity, AUTO a point, MIX mute / solo; else it
-                      plays its sound (and sends its note to the game)
+          a pad       by page: SEQ a step, SONG a pattern or the intensity, AUTO a point, MIX mute / solo, PERFORM
+                      whatever F1-F4 chose (perform_pad); else it plays its sound (and sends its note to the game)
           a note      from outside, notes 36-51 are the pads; else a key plays the selected sound at that pitch - and
                       gives a held step its note, or is recorded
           MIDI        the game's telemetry: CC 10-15 on channel 2
@@ -293,6 +355,11 @@ static void on_event(const vibe_event *e) {
       }
       break;
     }
+    /* PERFORM: the pads are what F1-F4 chose */
+    if (page == PG_PERFORM) {
+      perform_pad(e->id, e->down, e->value);
+      break;
+    }
     /* MIX: the pads: mute, SHIFT: solo */
     if (page == PG_MIX) {
       if (e->down) {
@@ -329,7 +396,7 @@ static void on_event(const vibe_event *e) {
       send(M_RELEASE, sel, 100 + (e->id % 96), 0, 0);
       break;
     }
-    if (page == PG_SEQ && held_step >= 0) {
+    if ((page == PG_SEQ || page == PG_PERFORM) && held_step >= 0) {
       undo_open(1);
       step_set(pat(), held_step, sel, e->id);
     } else {
@@ -388,7 +455,7 @@ static void on_event(const vibe_event *e) {
     break;
 
   case VIBE_EV_BUTTON:
-    /* SHIFT, down and up (on SEQ and AUTO, F5 and F6 say what they do with it) */
+    /* SHIFT, down and up (on SEQ, AUTO and PERFORM the keys' captions say what they do with it) */
     if (e->id == VB_SHIFT) {
       shift = e->down;
       relabel();
@@ -430,6 +497,11 @@ static void on_event(const vibe_event *e) {
         say(metro ? "CLICK ON" : "CLICK OFF");
       } else {
         seq_rec(!rec);
+        /* PERFORM: lighting REC makes the pads the kit, as it does on SEQ (F1 makes them steps again; REC off leaves
+           them as they are) */
+        if (rec && page == PG_PERFORM) {
+          perform_mode(PERF_SOUNDS);
+        }
       }
     } else if (e->id == VB_MENU) {
       if (shift) {
@@ -448,6 +520,8 @@ static void on_event(const vibe_event *e) {
         soft_song(f);
       } else if (page == PG_AUTO) {
         soft_auto(f);
+      } else if (page == PG_PERFORM) {
+        soft_perform(f);
       } else if (mix_page()) {
         soft_mix(f);
       } else {

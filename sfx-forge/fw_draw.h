@@ -6,8 +6,9 @@
  * Read:   on_draw is also the firmware's clock in the control flow: every frame it sends on what waits to go out
  *         (out_pump), moves the tour on (tour_pump) and takes in what the audio did (seq_poll) - before it draws.
  *         To change what a page shows, find its branch in part 5 below; the picture of each page is drawn by one
- *         function (scene, draw_seq, draw_song, draw_auto, draw_mix, draw_master, draw_link), the four values beside
- *         or over it by hud (a picture's corners) or row (the column beside the tiles).
+ *         function (scene, draw_seq, draw_song, draw_auto, draw_mix, draw_master, draw_link, draw_perform), the four
+ *         values beside or over it by hud (a picture's corners), row (the column beside the tiles) or perform_value
+ *         (PERFORM's line under its grid).
  */
 
 /* A frame, from top to bottom:
@@ -15,7 +16,7 @@
      2  HOME: the page's controls instead of the page (the SDK draws the table) - and nothing else
      3  the top line (header), and under it where you are: the page's name, the pattern, six marks for K1-K6
      4  the 16 pads' lights, as this page uses the pads
-     5  the page itself with its four values: AUTO, MIX, MASTER, LINK, SEQ, SONG, or a sound page
+     5  the page itself with its four values: AUTO, MIX, MASTER, LINK, SEQ, PERFORM, SONG, or a sound page
      6  F1-F6 (or the tour's caption)
      7  FOCUS: where the SDK's frame may go */
 static void on_draw(uint16_t *fb) {
@@ -41,6 +42,8 @@ static void on_draw(uint16_t *fb) {
       vg_controls("SFX FORGE: AUTO", HELP_AUTO, sizeof HELP_AUTO / sizeof HELP_AUTO[0] / 2);
     } else if (mix_page()) {
       vg_controls("SFX FORGE: MIX", HELP_MIX, sizeof HELP_MIX / sizeof HELP_MIX[0] / 2);
+    } else if (page == PG_PERFORM) {
+      vg_controls("SFX FORGE: PERFORM", HELP_PERFORM, sizeof HELP_PERFORM / sizeof HELP_PERFORM[0] / 2);
     } else if (page == PG_LINK) {
       vg_controls("SFX FORGE: LINK", HELP_LINK, sizeof HELP_LINK / sizeof HELP_LINK[0] / 2);
     } else {
@@ -63,11 +66,12 @@ static void on_draw(uint16_t *fb) {
   int div = pat_div(edit_pat);
   int lim = bar_len() * div;
   int win = view_win();
-  /* the page, as four yes / no; heat: the intensity 0..127; wt: the selected sound is a wavetable */
+  /* the page, as five yes / no; heat: the intensity 0..127; wt: the selected sound is a wavetable */
   int seq = page == PG_SEQ;
   int song = page == PG_SONG;
   int mix = page == PG_MIX;
   int aut = page == PG_AUTO;
+  int perf = page == PG_PERFORM;
   int heat = (int)(vibe_param_get(P_INTENSITY) * 127.0f + 0.5f);
   int wt = p->engine == SFX_ENGINE_WAVETABLE;
 
@@ -81,14 +85,14 @@ static void on_draw(uint16_t *fb) {
     static const char *const TITLE[] = {
       "SOUND   OSC", "SOUND   TONE", "SOUND   FILTER", "SOUND   WAVE",
       "ENVELOPE", "LFO", "EFFECT SENDS",
-      "SEQUENCER", "SONG", "AUTOMATION",
+      "SEQUENCER", "SONG", "AUTOMATION", "PERFORM",
       "MIXER", "MASTER EFFECTS",
       "GAME LINK" };
     /* the first page of each page's K key (for K1 and K5: the dot is the page's place after it) */
     static const uint8_t FIRST[] = {
       PG_OSC, PG_OSC, PG_OSC, PG_OSC,
       PG_ENV, PG_LFO, PG_FX,
-      PG_SEQ, PG_SEQ, PG_SEQ,
+      PG_SEQ, PG_SEQ, PG_SEQ, PG_SEQ,
       PG_FX, PG_FX,
       PG_LINK };
     // clang-format on
@@ -97,11 +101,13 @@ static void on_draw(uint16_t *fb) {
 
     /* tab: the K key of this page */
     int tab = TAB_OF[page];
-    /* pages: how many pages that key has - SOUND three, a fourth for a wavetable; FX and SEQ three; the others one */
+    /* pages: how many pages that key has - SOUND three, a fourth for a wavetable; FX three; SEQ four; the others
+       one */
     // clang-format off
-    int pages = tab == TAB_SOUND                 ? (wt ? 4 : 3)
-              : tab == TAB_FX || tab == TAB_SEQ  ? 3
-              :                                    1;
+    int pages = tab == TAB_SOUND ? (wt ? 4 : 3)
+              : tab == TAB_FX    ? 3
+              : tab == TAB_SEQ   ? 4
+              :                    1;
     // clang-format on
     /* at: which of them this page is. The pages of a key follow each other in the PG_ list - but FX's: MIX and MASTER
        stand after SEQ's three */
@@ -114,7 +120,7 @@ static void on_draw(uint16_t *fb) {
     /* tw: how wide what is written so far is */
     int tw = vg_text(TITLE[page], 12, 36, VG_BOLD, rgb, VG_LEFT);
     /* … and the pattern; on AUTO the knob the lane moves */
-    if (seq || song || aut) {
+    if (seq || song || aut || perf) {
       char t[40] = "PATTERN  ";
       /* what is shown is not what plays: say both */
       int other = step != NO_STEP && now != (uint32_t)edit_pat;
@@ -147,17 +153,19 @@ static void on_draw(uint16_t *fb) {
     }
   }
 
-  /* 4. the 16 pads as they are on this page: sounds, the selected sound's steps, or patterns and intensity.
+  /* 4. the 16 pads as they are on this page: sounds, the selected sound's steps, or patterns and intensity. (On
+     PERFORM they are one of these, as F1-F4 chose: the branch of the page whose pads they are.)
      For each: a colour (base) and a state - 0 off, 1 dim, 2 set, 3 bright (white). A light is sent to the host only
      when it changes: led is everything that decides it, in one word, kept in led_cache. */
   for (int s = 0; s < SLOTS; s++) {
-    /* g: the step this pad stands for on SEQ and AUTO. strong: a dim light that is a little brighter */
+    /* g: the step this pad stands for on SEQ, AUTO and PERFORM's STEPS. strong: a dim light that is a little brighter
+     */
     int state;
     int frame = 0;
     int g = win * PADS + s;
     int strong = 0;
     uint32_t base;
-    if (seq && !rec) {
+    if ((seq && !rec) || (perf && perf_mode == PERF_STEPS)) {
       /* SEQ: the steps. (REC lit: the pads are the kit, and look it – the last branch) */
       int set = (pat()->on[g] >> sel) & 1;
       int head = now == (uint32_t)edit_pat && head_at(g, div);
@@ -170,7 +178,7 @@ static void on_draw(uint16_t *fb) {
       // clang-format on
       /* a finer grid: the steps that begin a sixteenth are lit a little more */
       strong = state == 1 && div > 1 && g % div == 0;
-    } else if (song) {
+    } else if (song || (perf && perf_mode == PERF_PATTERNS)) {
       if (s < 8) {
         /* SONG, pads 1-8: the patterns - the one that plays, the one that waits (it blinks), the one shown, those of
            the chain */
@@ -197,7 +205,7 @@ static void on_draw(uint16_t *fb) {
             :                                                1;
       // clang-format on
       strong = state == 1 && div > 1 && g % div == 0;
-    } else if (mix) {
+    } else if (mix || (perf && perf_mode == PERF_MUTES)) {
       /* MIX: the sounds - dim when not heard, white while they play */
       base = ENGINE_RGB[patches[s].engine];
       state = silent(s) ? 1 : (on >> s) & 1 ? 3 : 2;
@@ -210,10 +218,12 @@ static void on_draw(uint16_t *fb) {
     /* (the pads themselves show it: their lights) */
     (void)frame;
     // clang-format off
-    /* the colour in the low 24 bits; the state, the page and `strong` in the high 8
-       (at most 3 + 4 * 21 + 100 = 187: it fits the 8 bits) */
+    /* the colour in the low 24 bits; the state, the page (PERFORM: 5 to 8, by what the pads are) and `strong` in the
+       high 8 (at most 3 + 4 * 21 + 100 = 187: it fits the 8 bits) */
     uint32_t led = (base & 0xFFFFFF)
-                   | (uint32_t)(state + 4 * (seq + 2 * song + 3 * mix + 4 * aut + 20 * (seq && rec)) + 100 * strong)
+                   | (uint32_t)(state
+                                + 4 * (seq + 2 * song + 3 * mix + 4 * aut + 20 * (seq && rec) + (5 + perf_mode) * perf)
+                                + 100 * strong)
                          << 24;
     if (led != led_cache[s]) {
       led_cache[s] = led;
@@ -232,6 +242,7 @@ static void on_draw(uint16_t *fb) {
   vibe_link_page(page <= PG_WAVE     ? SUB[page]
                  : song              ? "SONG"
                  : aut               ? "AUTO"
+                 : perf              ? "PERFORM"
                  : mix               ? "MIX"
                  : page == PG_MASTER ? "MASTER"
                  :                     TAB_NAME[TAB_OF[page]]);
@@ -322,6 +333,19 @@ static void on_draw(uint16_t *fb) {
               : SCALE_NAME[SONG.scale % SFX_SCALE_COUNT],
           rec && div > 1 ? RED : DIM);
     // clang-format on
+  } else if (perf) {
+    /* PERFORM: the pattern as a grid; VOLUME and PAN of the selected sound (MIX's), INTENSITY, its LAYER, in one
+       line; the patterns and what the pads are */
+    char hint[40];
+    const char *name;
+    float bar;
+    int centre;
+    draw_perform(step, now, on);
+    perform_value(0, "VOLUME", mix_text(PG_MIX, 0, &name, buf, &bar, &centre), rgb);
+    perform_value(1, "PAN", mix_text(PG_MIX, 1, &name, buf, &bar, &centre), rgb);
+    perform_value(2, "INTENSITY", percent(heat, buf), 0xFF5A36);
+    perform_value(3, "LAYER", percent(SONG.level[sel], buf), layer_on(sel) ? rgb : DIM);
+    strip_at(12, step, now, perform_hint(hint), perf_mode == PERF_SOUNDS && rec ? RED : TEXT);
   } else if (song) {
     /* SONG: patterns and intensity as tiles; PATTERN, CHAIN ("A-D"), INTENSITY, the selected sound's LAYER */
     char chain[4] = "A-A";
@@ -365,22 +389,25 @@ static void on_draw(uint16_t *fb) {
     tour_caption();
   } else {
     for (int i = 0; i < 6; i++) {
-      /* lit: PLAY on MIX, while it plays. held: ERASE, while it erases */
+      /* lit: PLAY on MIX, while it plays. held: ERASE, while it erases. mode: on PERFORM, what the pads are */
       int lit = mix_page() && i == 4 && running;
       int held = seq && i == 3 && f4_held;
+      int mode = perf && !shift && i == perf_mode;
       /* an UNDO with nothing to take back */
-      int dim = (sound_page() && i == 2 && !sound_has_undo[sel]) || (song_keys() && i == 1 && !undo_has);
+      int dim = (sound_page() && i == 2 && !sound_has_undo[sel]) || (song_keys() && i == 1 && !undo_has) ||
+                (perf && !shift && i == 5 && !undo_has);
       // clang-format off
-      /* the key: red while it erases, green while it plays */
+      /* the key: red while it erases, green while it plays, blue when it is what the pads are */
       vg_round(4 + i * 79, 292, 73, 24, 12,
-               held  ? RED
-               : lit ? GREEN
-               :       0x36241C);
+               held   ? RED
+               : lit  ? GREEN
+               : mode ? BLUE
+               :        0x36241C);
       /* its caption: dark on a lit key, faint when there is nothing to take back */
       vg_text(soft_caption(i), 40 + i * 79, 297, VG_BOLD,
-              held || lit ? BG
-              : dim       ? 0x6A5248
-              :             TEXT,
+              held || lit || mode ? BG
+              : dim               ? 0x6A5248
+              :                     TEXT,
               VG_CENTER);
       // clang-format on
     }

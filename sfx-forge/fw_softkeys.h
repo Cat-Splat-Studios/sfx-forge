@@ -1,11 +1,14 @@
 /* fw_softkeys.h – F1-F6 on every page. A part of sfx-forge.c.
  *
  * Holds:  the sound pages   soft_sound (PRESET MUTATE UNDO RANDOM EXPORT SAVE), audition
- *         SEQ               soft_seq (mode, UNDO, FILL, CLEAR, COPY, SAVE) with fill, pattern_copy, grid_change
+ *         SEQ               soft_seq (mode, UNDO, FILL, CLEAR, COPY, SAVE) with fill, sound_clear, pattern_copy,
+ *                           grid_change
  *         AUTO              soft_auto (mode, UNDO, RAMP, CLEAR, COPY, SAVE)
  *         SONG              soft_song (mode, UNDO, CLR PAT, NEW / DEMO, SEND, SAVE) with pattern_clear, song_new,
  *                           song_demo; arr_edit (the arrangement: SHIFT + a pad)
  *         MIX, MASTER       soft_mix (MUTE, SOLO, RESET, ALL ON, PLAY, SAVE)
+ *         PERFORM           perform_mode, soft_perform (STEPS, SOUNDS, MUTES, PATTERN, FILL, UNDO - with SHIFT: what
+ *                           PLAY plays, CLEAR, ALL ON, COPY, the grid)
  * Needs:  fw_state.h, fw_edit.h (say, confirm, the undo), fw_factory.h, fw_store.h (save_say), fw_link.h (out_pump),
  *         fw_sequencer.h, fw_pages.h (set_page).
  * Read:   each soft_... takes f = 0..5 for F1..F6; on_event (fw_events.h) chooses the one for the page that is open.
@@ -189,15 +192,17 @@ static void fill(void) {
   say(next < levels ? SAID[next] : SAID[4]);
 }
 
-/* SEQ and AUTO, SHIFT + F5 / F6: the grid of the pattern shown, a step coarser or finer. Finer moves every step to the
-   step that begins at the same moment: it sounds the same. Coarser drops what stands between the steps that stay - that
-   asks twice (the second press counts for the same pattern, the same grid and the same number of things dropped only),
-   and F2 brings it back. */
+/* SEQ, AUTO and PERFORM, SHIFT + F5 / F6: the grid of the pattern shown, a step coarser or finer. Finer moves every
+   step to the step that begins at the same moment: it sounds the same. Coarser drops what stands between the steps that
+   stay - that asks twice (the second press counts for the same pattern, the same grid and the same number of things
+   dropped only), and F2 (on PERFORM: F6) brings it back. */
 static void grid_change(int dir) {
   // clang-format off
   /* what is said after it, by the grid it goes to */
   static const char *const UP[SFX_GRIDS]   = { "", "GRID 1/32", "GRID 1/64" };
   static const char *const DOWN[SFX_GRIDS] = { "GRID 1/16 - F2: UNDO", "GRID 1/32 - F2: UNDO", "" };
+  /* (on PERFORM, where UNDO is F6) */
+  static const char *const DOWN_PERFORM[SFX_GRIDS] = { "GRID 1/16 - F6: UNDO", "GRID 1/32 - F6: UNDO", "" };
   // clang-format on
   /* the question, and what it was asked about: the pattern, the grid, how much would be dropped */
   static char ask[24];
@@ -237,13 +242,34 @@ static void grid_change(int dir) {
   if (dir < 0) {
     lanes_tidy();
   }
-  say(dir > 0 ? UP[to] : DOWN[to]);
+  say(dir > 0 ? UP[to] : page == PG_PERFORM ? DOWN_PERFORM[to] : DOWN[to]);
   erase_at = -1;
   cur_sync();
   relabel();
 }
 
-/* ---- SEQ and AUTO ---------------------------------------------------------------------------------------------- */
+/* ---- SEQ and AUTO (PERFORM uses sound_clear too) -------------------------------------------------------------- */
+
+/* CLEAR: the selected sound's steps in this pattern, with their notes, velocities and lengths */
+static void sound_clear(void) {
+  int any = 0;
+  for (int i = 0; i < gsteps(); i++) {
+    any |= ((pat()->on[i] >> sel) & 1) || pat()->note[sel][i] || pat()->vel[sel][i] != SFX_VEL_DEFAULT ||
+           pat()->len[sel][i];
+  }
+  if (!any) {
+    say("NOTHING TO CLEAR");
+    return;
+  }
+  undo_mark("CLEAR", 0);
+  for (int i = 0; i < gsteps(); i++) {
+    pat()->on[i] &= (uint16_t) ~(1u << sel);
+    pat()->note[sel][i] = 0;
+    pat()->vel[sel][i] = SFX_VEL_DEFAULT;
+    pat()->len[sel][i] = 0;
+  }
+  say(page == PG_PERFORM ? "CLEARED - F6: UNDO" : "CLEARED - F2: UNDO");
+}
 
 /* F1-F6 on the SEQ page */
 static void soft_seq(int f) {
@@ -261,28 +287,10 @@ static void soft_seq(int f) {
   case 2:
     fill();
     break;
-  case 3: {
-    /* CLEAR: the selected sound's steps in this pattern, with their notes, velocities and lengths
-       (while a take runs F4 is ERASE, held: on_event) */
-    int any = 0;
-    for (int i = 0; i < gsteps(); i++) {
-      any |= ((pat()->on[i] >> sel) & 1) || pat()->note[sel][i] || pat()->vel[sel][i] != SFX_VEL_DEFAULT ||
-             pat()->len[sel][i];
-    }
-    if (!any) {
-      say("NOTHING TO CLEAR");
-      break;
-    }
-    undo_mark("CLEAR", 0);
-    for (int i = 0; i < gsteps(); i++) {
-      pat()->on[i] &= (uint16_t) ~(1u << sel);
-      pat()->note[sel][i] = 0;
-      pat()->vel[sel][i] = SFX_VEL_DEFAULT;
-      pat()->len[sel][i] = 0;
-    }
-    say("CLEARED - F2: UNDO");
+  case 3:
+    /* CLEAR (while a take runs F4 is ERASE, held: on_event) */
+    sound_clear();
     break;
-  }
   case 4:
     pattern_copy();
     break;
@@ -446,5 +454,53 @@ static void soft_mix(int f) {
   case 5:
     save_say();
     break;
+  }
+}
+
+/* ---- PERFORM --------------------------------------------------------------------------------------------------- */
+
+/* what the pads are on PERFORM: PERF_... A pad that is held is let go of as a step; every pad's light is set again */
+static void perform_mode(int m) {
+  perf_mode = m;
+  held_step = -1;
+  held_pad = -1;
+  for (int i = 0; i < SLOTS; i++) {
+    led_cache[i] = 0xFFFFFFFFu;
+  }
+}
+
+/* F1-F6 on the PERFORM page. F1-F4 choose what the pads are; F5 FILL and F6 UNDO are SEQ's F3 and F2. With SHIFT:
+   what PLAY plays, CLEAR the selected sound, ALL ON (no mute, no solo), COPY the pattern, and the grid. Each of these
+   is the key of another page, and F6 takes back what F2 takes back there. (What they say names F6 where it names F2
+   there. The page has no SAVE: that is F6 on SEQ.) */
+static void soft_perform(int f) {
+  if (shift) {
+    switch (f) {
+    case 0:
+      mode_toggle();
+      break;
+    case 1:
+      sound_clear();
+      break;
+    case 2:
+      SONG.solo = 0;
+      SONG.mute = 0;
+      say("ALL ON");
+      break;
+    case 3:
+      pattern_copy();
+      break;
+    default:
+      grid_change(f == 4 ? -1 : 1);
+      break;
+    }
+    return;
+  }
+  if (f < PERF_COUNT) {
+    perform_mode(f);
+  } else if (f == 4) {
+    fill();
+  } else {
+    song_undo();
   }
 }

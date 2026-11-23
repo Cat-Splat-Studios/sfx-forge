@@ -310,8 +310,11 @@ static void stage_event(const vibe_event *e) {
     /* PLAY / STOP */
     seq_play(!running);
   } else if (inside(x, y, TB_REC_X, TB_Y, 64, 36)) {
-    /* REC */
+    /* REC - on PERFORM it makes the pads the kit, as the REC key does */
     seq_rec(!rec);
+    if (rec && page == PG_PERFORM) {
+      perform_mode(PERF_SOUNDS);
+    }
   } else if (inside(x, y, TB_TEMPO_X, TB_Y, 104, 36)) {
     /* the tempo: its left half slower, its right half faster */
     SONG.bpm = (uint16_t)clampi(SONG.bpm + (x < 394 ? -1 : 1), 40, 240);

@@ -7,7 +7,7 @@
  * Needs:  fw_state.h (the pages, PAGE_PARAMS), fw_edit.h, fw_sequencer.h (the steps and the lanes).
  * Read:   "the four values" of a page are what encoders 1-4 turn and what the display shows over them. Three kinds:
  *         a sound page's (a row of PAGE_PARAMS: values of the selected sound), MIX and MASTER's (bytes of the song:
- *         mix_value), and those of SEQ, SONG, AUTO and LINK, which encoder() handles one by one.
+ *         mix_value), and those of SEQ, SONG, AUTO, PERFORM and LINK, which encoder() handles one by one.
  */
 
 /* a page is opened. p: PG_... */
@@ -17,6 +17,10 @@ static void set_page(int p) {
     view_to[sel] = last_to;
   }
   follow_end();
+  /* PERFORM opened with REC lit: the pads are the kit, as they are on SEQ then (F1 makes them steps) */
+  if (p == PG_PERFORM && page != PG_PERFORM && rec) {
+    perf_mode = PERF_SOUNDS;
+  }
   page = p;
   held_step = -1;
   held_pad = -1;
@@ -28,7 +32,7 @@ static void set_page(int p) {
   }
   /* where patterns are made PLAY loops one; on SONG it plays the song */
   if (!running && !rec && !tour_on) {
-    if (p == PG_SEQ || p == PG_AUTO) {
+    if (p == PG_SEQ || p == PG_AUTO || p == PG_PERFORM) {
       mode_set(1);
     } else if (p == PG_SONG) {
       mode_set(0);
@@ -36,7 +40,7 @@ static void set_page(int p) {
   }
   /* F1-F6 and the two K keys that have several pages say what they are now; every pad's light is set again */
   relabel();
-  vibe_label(VB_K1 + TAB_SEQ, p == PG_SONG ? "SONG" : p == PG_AUTO ? "AUTO" : "SEQ");
+  vibe_label(VB_K1 + TAB_SEQ, p == PG_SONG ? "SONG" : p == PG_AUTO ? "AUTO" : p == PG_PERFORM ? "PERFORM" : "SEQ");
   vibe_label(VB_K1 + TAB_FX, p == PG_MASTER ? "MASTER" : p == PG_MIX ? "MIX" : "FX");
   for (int i = 0; i < SLOTS; i++) {
     led_cache[i] = 0xFFFFFFFFu;
@@ -44,7 +48,7 @@ static void set_page(int p) {
 }
 
 /* a K key: its page – or, on it already, its next one (SOUND has three pages, a fourth for a
-   wavetable; SEQ has SONG and AUTO; FX has MIX and MASTER) */
+   wavetable; SEQ has SONG, AUTO and PERFORM; FX has MIX and MASTER) */
 static void tab_key(int tab) {
   if (TAB_OF[page] != tab) {
     set_page(TAB_FIRST[tab]);
@@ -54,14 +58,14 @@ static void tab_key(int tab) {
     int last = patches[sel].engine == SFX_ENGINE_WAVETABLE ? PG_WAVE : PG_FILTER;
     set_page(page >= last ? PG_OSC : page + 1);
   } else if (tab == TAB_SEQ) {
-    set_page(page == PG_SEQ ? PG_SONG : page == PG_SONG ? PG_AUTO : PG_SEQ);
+    set_page(page == PG_PERFORM ? PG_SEQ : page + 1);
   } else if (tab == TAB_FX) {
     set_page(page == PG_FX ? PG_MIX : page == PG_MIX ? PG_MASTER : PG_FX);
   }
 }
 
-/* SEQ and AUTO, SHIFT + LEFT / RIGHT: the 16 steps before / after (a pattern of 32 or 64 steps has two or four such
-   windows - fewer when the bar is short: only those with a step that plays) */
+/* SEQ, AUTO and PERFORM, SHIFT + LEFT / RIGHT: the 16 steps before / after (a pattern of 32 or 64 steps has two or four
+   such windows - fewer when the bar is short: only those with a step that plays) */
 static void window_step(int d) {
   static char t[24];
   /* lim: the steps of the bar. wins: the windows that hold a step of the bar. w: the window the cursor is in */
@@ -92,13 +96,14 @@ static void window_step(int d) {
   say(t);
 }
 
-/* LEFT / RIGHT: the sound page before or after (WAVE only for a wavetable) – on SEQ, SONG and AUTO the pattern */
+/* LEFT / RIGHT: the sound page before or after (WAVE only for a wavetable) – on SEQ, SONG, AUTO and PERFORM the
+   pattern */
 static void arrow(int d) {
-  if (shift && (page == PG_SEQ || page == PG_AUTO)) {
+  if (shift && (page == PG_SEQ || page == PG_AUTO || page == PG_PERFORM)) {
     window_step(d);
     return;
   }
-  if (song_keys()) {
+  if (pattern_keys()) {
     pattern_step(d);
     return;
   }
@@ -237,10 +242,20 @@ static void param_put(int pg, int i, float u) {
   }
 }
 
+/* SONG and PERFORM, B: the bar's length in sixteenths (said in the top line) */
+static void bar_turn(int d) {
+  static char t[16];
+  SONG.len = (uint8_t)clampi(SONG.len + d, 1, SFX_BAR);
+  strcpy(t, "BAR: ");
+  vg_itoa(SONG.len, t + 5);
+  strcpy(t + strlen(t), "/16");
+  say(t);
+}
+
 /* An encoder was turned. id: VE_1..VE_4 (the four values), VE_A, VE_B, VE_DATA. turn: clicks, + or -.
    In this order: the turn is gathered into whole steps (SHIFT: eight times as fast); DATA selects a sound; A is the
-   tempo on the song's pages and the output volume elsewhere; then one block for each of LINK, AUTO, SEQ and SONG; any
-   other page's four values go to param_nudge. */
+   tempo on the song's pages and the output volume elsewhere; then one block for each of LINK, AUTO, SEQ, SONG and
+   PERFORM; any other page's four values go to param_nudge. */
 static void encoder(int id, float turn) {
   acc[id] += turn * (shift ? 8.0f : 1.0f);
   int d = (int)acc[id];
@@ -259,8 +274,8 @@ static void encoder(int id, float turn) {
     return;
   }
 
-  /* SEQ, SONG, AUTO: A is the tempo (the top line shows it), with SHIFT the swing */
-  if (id == VE_A && song_keys()) {
+  /* SEQ, SONG, AUTO, PERFORM: A is the tempo (the top line shows it), with SHIFT the swing */
+  if (id == VE_A && pattern_keys()) {
     if (shift) {
       static char t[12] = "SWING ";
       SONG.swing = (uint8_t)clampi(SONG.swing + (d > 0 ? 2 : -2), 0, 100);
@@ -351,12 +366,25 @@ static void encoder(int id, float turn) {
       SONG.level[sel] = (uint8_t)clampi(SONG.level[sel] + d * 2, 0, 127);
     }
     if (id == VE_B) {
-      static char t[16];
-      SONG.len = (uint8_t)clampi(SONG.len + d, 1, SFX_BAR);
-      strcpy(t, "BAR: ");
-      vg_itoa(SONG.len, t + 5);
-      strcpy(t + strlen(t), "/16");
-      say(t);
+      bar_turn(d);
+    }
+    return;
+  }
+
+  /* PERFORM: 1 and 2 the selected sound's volume and pan (MIX's), 3 the intensity, 4 the sound's layer; B the bar's
+     length */
+  if (page == PG_PERFORM) {
+    if (id == VE_1 || id == VE_2) {
+      param_nudge(PG_MIX, id, d);
+    }
+    if (id == VE_3) {
+      intensity_set(vibe_param_get(P_INTENSITY) + (float)d * 0.02f);
+    }
+    if (id == VE_4) {
+      SONG.level[sel] = (uint8_t)clampi(SONG.level[sel] + d * 2, 0, 127);
+    }
+    if (id == VE_B) {
+      bar_turn(d);
     }
     return;
   }

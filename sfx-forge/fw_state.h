@@ -8,6 +8,7 @@
  *   4  the two kits and the selected one
  *   5  the control flow's own: what is selected, the sequencer's view, undo, the tour, the link's transfers
  *   6  F1-F6: their captions on each page (SOFT, soft_caption, relabel)
+ *      (PERFORM's pad mode, perf_mode, stands at the end of 5)
  * Needs:  fw_protocol.h (SLOTS, the song's pieces), core/sfx_song.h, song_way.h.
  * Read:   the rule of the two flows first (sfx-forge.c). A variable here is written by ONE flow. What the audio flow
  *         writes for the controls to read is a single 32-bit value each, marked volatile; everything else the audio
@@ -111,19 +112,20 @@ static int click_step = -1;
    A new page goes after PG_LINK unless it is one of these. docs/MAINTAINING.md, "Add a page", lists every table that
    has an entry a page. */
 enum {
-  PG_OSC,    /* K1 SOUND: engine, frequency, the pitch envelope */
-  PG_TIMBRE, /* K1 again ("TONE"): the engine's two knobs A and B, noise, crush */
-  PG_FILTER, /* K1 again: cutoff, resonance, the filter envelope */
-  PG_WAVE,   /* K1 again, for a WAVETABLE sound only: table, spread */
-  PG_ENV,    /* K2: attack, decay, sustain, release */
-  PG_LFO,    /* K3: rate, and how far it moves pitch, filter and timbre */
-  PG_FX,     /* K4: the sends to chorus, delay and reverb; the level */
-  PG_SEQ,    /* K5: the steps of the selected sound in the pattern (from here on: not a sound page) */
-  PG_SONG,   /* K5 again: patterns, intensity, the arrangement */
-  PG_AUTO,   /* K5 again: the selected sound's automation lane */
-  PG_MIX,    /* K4 again: faders, pans, mute and solo */
-  PG_MASTER, /* K4 again: the delay and the reverb */
-  PG_LINK,   /* K6: what the game sends, and the encoders as CCs to it */
+  PG_OSC,     /* K1 SOUND: engine, frequency, the pitch envelope */
+  PG_TIMBRE,  /* K1 again ("TONE"): the engine's two knobs A and B, noise, crush */
+  PG_FILTER,  /* K1 again: cutoff, resonance, the filter envelope */
+  PG_WAVE,    /* K1 again, for a WAVETABLE sound only: table, spread */
+  PG_ENV,     /* K2: attack, decay, sustain, release */
+  PG_LFO,     /* K3: rate, and how far it moves pitch, filter and timbre */
+  PG_FX,      /* K4: the sends to chorus, delay and reverb; the level */
+  PG_SEQ,     /* K5: the steps of the selected sound in the pattern (from here on: not a sound page) */
+  PG_SONG,    /* K5 again: patterns, intensity, the arrangement */
+  PG_AUTO,    /* K5 again: the selected sound's automation lane */
+  PG_PERFORM, /* K5 again: the whole pattern as a grid, a row a sound; F1-F4 say what the pads are */
+  PG_MIX,     /* K4 again: faders, pans, mute and solo */
+  PG_MASTER,  /* K4 again: the delay and the reverb */
+  PG_LINK,    /* K6: what the game sends, and the encoders as CCs to it */
   PG_COUNT
 };
 
@@ -143,7 +145,7 @@ enum {
 static const uint8_t TAB_OF[] = {
   TAB_SOUND, TAB_SOUND, TAB_SOUND, TAB_SOUND,   /* OSC, TIMBRE, FILTER, WAVE */
   TAB_ENV, TAB_LFO, TAB_FX,                     /* ENV, LFO, FX */
-  TAB_SEQ, TAB_SEQ, TAB_SEQ,                    /* SEQ, SONG, AUTO */
+  TAB_SEQ, TAB_SEQ, TAB_SEQ, TAB_SEQ,           /* SEQ, SONG, AUTO, PERFORM */
   TAB_FX, TAB_FX,                               /* MIX, MASTER */
   TAB_LINK,                                     /* LINK */
 };
@@ -219,7 +221,7 @@ static int loop_mode;
 /* the pattern chosen while it runs that has not started yet */
 static int queued = -1;
 
-/* F2 on SEQ, SONG, AUTO – the SONG's undo: the song as it was one step ago */
+/* F2 on SEQ, SONG, AUTO, F6 on PERFORM – the SONG's undo: the song as it was one step ago */
 static sfx_song undo_song;
 /* there is one */
 static int undo_has;
@@ -390,17 +392,29 @@ static int sent_song_any;
 /* an echo comes back within a tenth of a second */
 #define ECHO_FRAMES ((uint64_t)SR / 10)
 
+/* PERFORM: what the 16 pads are there. F1-F4 choose it, in this order (soft_perform, fw_softkeys.h) */
+enum {
+  PERF_STEPS,    /* 16 steps of the selected sound, as on SEQ */
+  PERF_SOUNDS,   /* the kit: a pad plays its sound and selects it - with REC, into the pattern */
+  PERF_MUTES,    /* a sound muted or not, as on MIX */
+  PERF_PATTERNS, /* pads 1-8 the patterns, 9-16 the intensity, as on SONG */
+  PERF_COUNT
+};
+static int perf_mode;
+
 /* ---- 6. F1-F6 -------------------------------------------------------------------------------------------------- */
 
 // clang-format off
 /* their captions; a row for each set of pages (soft_set says which) */
-static const char *const SOFT[5][6] = {
+static const char *const SOFT[7][6] = {
   /*                      F1         F2        F3         F4        F5        F6     */
   /* 0 the sound pages */ { "PRESET",  "MUTATE", "UNDO",    "RANDOM", "EXPORT", "SAVE" },
   /* 1 SEQ             */ { "TO SONG", "UNDO",   "FILL",    "CLEAR",  "COPY",   "SAVE" },
   /* 2 SONG            */ { "TO SONG", "UNDO",   "CLR PAT", "NEW",    "SEND",   "SAVE" },
   /* 3 MIX, MASTER     */ { "MUTE",    "SOLO",   "RESET",   "ALL ON", "PLAY",   "SAVE" },
   /* 4 AUTO            */ { "TO SONG", "UNDO",   "RAMP",    "CLEAR",  "COPY",   "SAVE" },
+  /* 5 PERFORM         */ { "STEPS",   "SOUNDS", "MUTES",   "PATTERN", "FILL",  "UNDO" },
+  /* 6 … with SHIFT    */ { "TO SONG", "CLEAR",  "ALL ON",  "COPY",   "",       ""     },
 };
 // clang-format on
 
@@ -415,6 +429,7 @@ static int soft_set(void) {
        : page == PG_SONG ? 2
        : mix_page()      ? 3
        : page == PG_AUTO ? 4
+       : page == PG_PERFORM ? 5
        :                   0;
   // clang-format on
 }
@@ -423,21 +438,30 @@ static int sound_page(void) {
   return page < PG_SEQ;
 }
 
-/* the pages where LEFT / RIGHT, F1 and F2 belong to the song */
+/* the pages where F1 and F2 belong to the song (LEFT / RIGHT and A: pattern_keys) */
 static int song_keys(void) {
   return page == PG_SEQ || page == PG_SONG || page == PG_AUTO;
 }
 
+/* the pages where LEFT / RIGHT are the pattern and A is the tempo */
+static int pattern_keys(void) {
+  return song_keys() || page == PG_PERFORM;
+}
+
 /* F1-F6 as they are now: F1 says what it will do, F4 erases while a take runs */
 static const char *soft_caption(int i) {
-  if (i == 0 && song_keys()) {
+  if (i == 0 && (song_keys() || (page == PG_PERFORM && shift))) {
     return loop_mode ? "TO SONG" : "TO LOOP";
+  }
+  /* PERFORM, SHIFT held: F2-F4 are CLEAR, ALL ON, COPY (F5 and F6 the grid: below) */
+  if (page == PG_PERFORM && shift && i < 4) {
+    return SOFT[6][i];
   }
   if (i == 3 && page == PG_SEQ && rec && running) {
     return "ERASE";
   }
   /* SHIFT held: F5 and F6 are the pattern's grid, coarser and finer */
-  if (shift && i >= 4 && (page == PG_SEQ || page == PG_AUTO)) {
+  if (shift && i >= 4 && (page == PG_SEQ || page == PG_AUTO || page == PG_PERFORM)) {
     static const char *const TO[2][SFX_GRIDS] = {{"IS 1/16", "TO 1/16", "TO 1/32"}, {"TO 1/32", "TO 1/64", "IS 1/64"}};
     return TO[i - 4][pat_grid(edit_pat)];
   }

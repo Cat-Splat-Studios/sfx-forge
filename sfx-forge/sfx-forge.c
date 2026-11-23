@@ -8,16 +8,15 @@
  *   16 pads      the kit's 16 sounds, each a 28-byte patch (core/sfx_core.h). Five engines: IMPACT, UI BLIP, SCI-FI FM,
  *                FOLEY, WAVETABLE – with envelopes, an LFO, and sends to a chorus, a delay and a reverb
  *   keys         the selected sound as an instrument, in tune, 16 voices
- *   K1-K6        SOUND (press again: its next page) · ENV · LFO · FX (again: MIX, MASTER) · SEQ (again: SONG, AUTO) ·
- *                LINK
- *   AUTO         automation: a lane for every sound, moving any knob - one of the sound's, its fader, the master's
- *   SONG         also the arrangement: up to 32 bars, a pattern each
- *   MIX          a fader, a pan, mute and solo for every sound; a drive on the sum
- *   MASTER       the delay's time and feedback, the reverb's size and damping
+ *   K1-K6        SOUND (press again: its next page) · ENV · LFO · FX (again: MIX, MASTER) · SEQ (again: SONG, AUTO,
+ * PERFORM) · LINK PERFORM      the whole pattern as a grid, a row a sound; F1-F4 make the pads STEPS, SOUNDS, MUTES or
+ * PATTERN AUTO         automation: a lane for every sound, moving any knob - one of the sound's, its fader, the
+ * master's SONG         also the arrangement: up to 32 bars, a pattern each MIX          a fader, a pan, mute and solo
+ * for every sound; a drive on the sum MASTER       the delay's time and feedback, the reverb's size and damping
  *                encoders 1-4 = the four values shown
  *   F1           PRESET: the next of the kit's named sounds (16 for SFX, 23 for MUSIC) onto the selected pad
  *                (SHIFT: the one before)
- *   LEFT RIGHT   the sound page before / after; on SEQ, SONG and AUTO the pattern
+ *   LEFT RIGHT   the sound page before / after; on SEQ, SONG, AUTO and PERFORM the pattern
  *   PLAY         plays what the top line of the song's pages says: LOOP – the pattern repeats, a chosen one takes over
  *                on the bar line – or SONG – the arrangement, else the chain. F1 there changes it; REC lit switches to
  *                LOOP
@@ -103,7 +102,7 @@ VIBE_PARALLEL_AUDIO
 /* The firmware's version. firmware.json says the same: tests/check-identity.mjs reads these three lines from THIS file
    and compares, so they stay here (the identity that carries them is in fw_protocol.h and fw_link.h). */
 #define FW_MAJOR 1
-#define FW_MINOR 6
+#define FW_MINOR 7
 #define FW_PATCH 0
 
 #include "fw_protocol.h"

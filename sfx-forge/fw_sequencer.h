@@ -81,7 +81,7 @@ static int mode_set(int loop) {
   return 1;
 }
 
-/* F1 on the song's pages */
+/* F1 on the song's pages, SHIFT + F1 on PERFORM */
 static void mode_toggle(void) {
   mode_set(!loop_mode);
   say(loop_mode ? "LOOP: PATTERN REPEATS" : "SONG: PLAYS IN ORDER");

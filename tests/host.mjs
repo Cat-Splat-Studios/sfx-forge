@@ -16,7 +16,7 @@
 // heard, take, screen, song. The numbers in e.vibe_wasm_event(type, ...) are the SDK's event types: EVENT below.
 //
 // Two things a check relies on without saying so every time:
-//   - K5 pressed again goes on to its next page: SEQ, SONG, AUTO, and SEQ again (K4: FX, MIX, MASTER).
+//   - K5 pressed again goes on to its next page: SEQ, SONG, AUTO, PERFORM, and SEQ again (K4: FX, MIX, MASTER).
 //   - d.song() runs three seconds of blocks while it waits for the answer: the song plays on for that long.
 import fs from 'fs';
 

@@ -7,7 +7,7 @@
 #
 # How it reads: 1. where things are, 2. the build, 3. the checks - each a scene (tests/<name>.json) that the SDK's
 # wasmtest plays into out/<name>, and a check (tests/check-<name>.mjs) that judges what came out. A check says at its
-# top what it proves. The run ends at the first check that fails (set -e); when all pass, 22 lines say PASSED.
+# top what it proves. The run ends at the first check that fails (set -e); when all pass, 23 lines say PASSED.
 set -e
 
 # ---- 1. where things are ------------------------------------------------------------------------------------------
@@ -124,6 +124,9 @@ node "$ROOT/tests/check-take64.mjs" "$ROOT/out/take64" "$DEMO_SONG"
 
 # the question that names what it drops, and the windows of a short bar (a host of its own: tests/host.mjs)
 node "$ROOT/tests/check-grid-keys.mjs" "$WASM"
+
+# the PERFORM page (1.7.0): the whole pattern as a grid, and the pads as steps, the kit, mutes or patterns
+node "$ROOT/tests/check-perform.mjs" "$WASM"
 
 # a whole pattern or song rewritten while it plays (a grid change, COPY, UNDO, CLR PAT, a song over SysEx) reaches the
 # player whole, in time, with the playhead where it was; edits with no block between them. Then the same hand-over

@@ -179,9 +179,10 @@ const peak = (x, a, b) => {
   s = d.song().bytes;
   ok(same(pattern(s, G), pattern(s, A)) && !empty(s, G), 'COPY while it plays: G is A, grid and all');
   alike('COPY while it plays, and the copy from the bar line on');
-  // SONG: pad 1 is pattern A; SEQ again
+  // SONG: pad 1 is pattern A; SEQ again (over AUTO and PERFORM)
   d.button(BUTTON.K5);
   d.pad(1);
+  d.button(BUTTON.K5);
   d.button(BUTTON.K5);
   d.button(BUTTON.K5);
   d.run(3 * SECOND);

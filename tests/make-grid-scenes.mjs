@@ -85,12 +85,13 @@ class Scene {
     return this;
   }
 
-  // SEQ -> SONG, SEND, AUTO, SEQ again: 1.3 s
+  // SEQ -> SONG, SEND, AUTO, PERFORM, SEQ again: 1.3 s
   send(t = this.t) {
     this.btn('K5', t);
     this.btn('F5', t + 0.12);
     this.btn('K5', t + 1.0);
-    this.btn('K5', t + 1.12);
+    this.btn('K5', t + 1.08);
+    this.btn('K5', t + 1.16);
     return this;
   }
 
