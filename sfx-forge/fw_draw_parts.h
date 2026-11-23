@@ -175,7 +175,8 @@ static void arc(float cx, float cy, float r, float a0, float a1, float w, uint32
   }
 }
 
-/* A page is one of two kinds, and nothing else:
+/* A page is one of three kinds (the third, PERFORM's grid of a row a sound, is drawn in fw_draw_pages.h); the two
+   that are drawn from the pieces here:
      a PICTURE of what the knobs shape, with their four values in its corners (the sound's pages, MASTER) – the knob
      you turn is written large across the middle for a moment;
      the 16 PADS as tiles, laid out as the pads are, with the four values in a column beside them (SEQ, SONG, AUTO,

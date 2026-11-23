@@ -158,8 +158,7 @@ static void on_draw(uint16_t *fb) {
      For each: a colour (base) and a state - 0 off, 1 dim, 2 set, 3 bright (white). A light is sent to the host only
      when it changes: led is everything that decides it, in one word, kept in led_cache. */
   for (int s = 0; s < SLOTS; s++) {
-    /* g: the step this pad stands for on SEQ, AUTO and PERFORM's STEPS. strong: a dim light that is a little brighter
-     */
+    /* g: the step this pad stands for on SEQ, AUTO and PERFORM's STEPS. strong: a dim light, a little brighter */
     int state;
     int frame = 0;
     int g = win * PADS + s;

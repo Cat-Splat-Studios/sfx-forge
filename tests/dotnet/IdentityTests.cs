@@ -71,6 +71,14 @@ static partial class Tests
         {
             0xF0, 0x7D, 0x56, 0x42, 0x08, 1, 1, 6, 0, 1, 2, 6, 16, 2, 8, 64, 24, 32, 16, 5, 6, 25, 15, 0xF7,
         };
+
+        // firmware 1.7.0, the one built from this source today: the same answer but for the version's second byte
+        // (tests/check-identity.mjs reads these bytes off the built firmware)
+        var fm17 = fm16;
+        fm17.minor = 7;
+        var id17 = SfxProtocol.BuildIdentity(fm17);
+        var want17 = (byte[])want16.Clone();
+        want17[7] = 7;
         Ok(
             id16.SequenceEqual(want16)
                 && SfxProtocol.TryParseIdentity(id16, out var got16)
@@ -78,9 +86,18 @@ static partial class Tests
                 && got16.profile == SfxProfile.VibeFm1
                 && got16.profile.songFormat == 6
                 && got16.profile.steps == 64
-                && got16.IsAtLeast(1, 6, 0),
-            "IDENTITY of firmware 1.6.0 says song format 6 and 64 steps, and survives build -> parse: "
-                + SfxLink.Describe(id16)
+                && got16.IsAtLeast(1, 6, 0)
+                && !got16.IsAtLeast(1, 7, 0)
+                && id17.SequenceEqual(want17)
+                && SfxProtocol.TryParseIdentity(id17, out var got17)
+                && got17.Equals(fm17)
+                && got17.profile == got16.profile
+                && got17.flags == got16.flags
+                && got17.IsAtLeast(1, 7, 0)
+                && got17.ToString() == "VIBE FM, firmware 1.7.0, profile 1",
+            "IDENTITY of firmware 1.6.0 says song format 6 and 64 steps, and survives build -> parse; that of 1.7.0 "
+                + "is the same but for the version: "
+                + SfxLink.Describe(id17)
         );
         Ok(got.ToString() == "VIBE FM, firmware 1.4.0, profile 1", $"and reads \"{got}\"");
         bool everyField = true;
@@ -699,6 +716,7 @@ static partial class Tests
             flags = 15,
         };
         var dev16 = fm16;
+        var dev17 = fm17;
         var dev9 = fm16;
         dev9.major = 9;
         dev9.profile.songFormat = 9;
@@ -746,9 +764,14 @@ static partial class Tests
                 && newShape(new5, s5)
                 && new5.Length == 33
                 && newShape(new6, s6fine)
-                && new6.Length == 1,
-            "a device that said 1.6 (song format 6) is sent a song of any format this version reads, in the "
-                + "message of 1.6: a format-5 song in 33 pieces, an empty format-6 one in 1"
+                && new6.Length == 1
+                && SfxLink.Refusal(dev17, s5) == null
+                && SfxLink.Refusal(dev17, s6fine) == null
+                && SfxLink.Refusal(dev17, true) == null
+                && newShape(SfxLink.SongMessages(dev17, s5), s5)
+                && newShape(SfxLink.SongMessages(dev17, s6fine), s6fine),
+            "a device that said 1.6 or 1.7 (song format 6) is sent a song of any format this version reads, in "
+                + "the message of 1.6: a format-5 song in 33 pieces, an empty format-6 one in 1"
         );
         Ok(
             SfxLink.Refusal(null, s5) == null

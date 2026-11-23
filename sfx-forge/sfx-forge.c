@@ -8,11 +8,13 @@
  *   16 pads      the kit's 16 sounds, each a 28-byte patch (core/sfx_core.h). Five engines: IMPACT, UI BLIP, SCI-FI FM,
  *                FOLEY, WAVETABLE – with envelopes, an LFO, and sends to a chorus, a delay and a reverb
  *   keys         the selected sound as an instrument, in tune, 16 voices
- *   K1-K6        SOUND (press again: its next page) · ENV · LFO · FX (again: MIX, MASTER) · SEQ (again: SONG, AUTO,
- * PERFORM) · LINK PERFORM      the whole pattern as a grid, a row a sound; F1-F4 make the pads STEPS, SOUNDS, MUTES or
- * PATTERN AUTO         automation: a lane for every sound, moving any knob - one of the sound's, its fader, the
- * master's SONG         also the arrangement: up to 32 bars, a pattern each MIX          a fader, a pan, mute and solo
- * for every sound; a drive on the sum MASTER       the delay's time and feedback, the reverb's size and damping
+ *   K1-K6        SOUND (press again: its next page) · ENV · LFO · FX (again: MIX, MASTER) · SEQ (again: SONG,
+ *                AUTO, PERFORM) · LINK
+ *   PERFORM      the whole pattern as a grid, a row a sound; F1-F4 make the pads STEPS, SOUNDS, MUTES or PATTERN
+ *   AUTO         automation: a lane for every sound, moving any knob - one of the sound's, its fader, the master's
+ *   SONG         also the arrangement: up to 32 bars, a pattern each
+ *   MIX          a fader, a pan, mute and solo for every sound; a drive on the sum
+ *   MASTER       the delay's time and feedback, the reverb's size and damping
  *                encoders 1-4 = the four values shown
  *   F1           PRESET: the next of the kit's named sounds (16 for SFX, 23 for MUSIC) onto the selected pad
  *                (SHIFT: the one before)

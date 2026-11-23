@@ -118,11 +118,28 @@ annotated("grid-take", "grid-take", [(128, 114), (250, 80), (250, 256), (468, 26
 plain("grid-song")  # 32 in the corner of G
 annotated("grid-stage", "stage-grid", [(774, 49), (947, 338)], scale=1, r=11)  # the GRID chip, a row of 32 cells
 
+# ---- PERFORM: reading the page, the pads four ways, the frame at 1/32 ----------------------------------------------
+# LOOP, the title, the names, the grid, the selected row with its frame, the playhead, the values, the patterns and
+# what the pads are, F1 - F6
+annotated(
+    "perform",
+    "page-perform",
+    [(306, 17), (200, 44), (72, 226), (252, 112), (471, 88), (312, 48), (173, 258), (300, 275), (238, 304)],
+)
+plain("perform-open")  # as the page opens: stopped, STEPS
+annotated("perform-mutes", "perform-mutes", [(68, 136), (330, 275), (159, 304)])  # M and a grey row, the hint, F3
+# A>B, EDIT B - PLAYS A, B blinks
+annotated("perform-pattern", "perform-pattern", [(380, 17), (232, 44), (121, 262)])
+# the REC dot, the hits, the red hint, F2
+annotated("perform-sounds", "perform-sounds", [(384, 17), (471, 100), (302, 275), (80, 304)])
+annotated("perform-32", "perform-32", [(200, 44), (372, 192), (312, 275)])  # 1/32, the frame, STEPS 17-32
+
 # ---- the tutorials: a picture a step -------------------------------------------------------------------------------
 # fmt: off
 for n in (
     "t-sfx-1", "t-sfx-2", "t-sfx-3", "t-sfx-4", "t-beat-1", "t-beat-2", "t-beat-3", "t-beat-4", "t-beat-5", "env",
-    "lfo", "fx", "music-wave", "touch", "lanes-sound",
+    "lfo", "fx", "music-wave", "touch", "lanes-sound", "t-perform-1", "t-perform-2", "t-perform-3", "t-perform-4",
+    "t-perform-5", "t-perform-6", "t-perform-7", "t-perform-8",
 ):
     plain(n)
 # fmt: on
@@ -332,6 +349,7 @@ def cheat():
                 ("SEQUENCER", "STEP · NOTE · VELOCITY · LENGTH", "pads: 16 steps of the bar    REC lit: the kit"),
                 ("SONG", "PATTERN · CHAIN · INTENSITY · LAYER", "pads 1-8: pattern    9-16: intensity"),
                 ("AUTOMATION", "STEP · VALUE · TARGET", "pads: points    opens on the knob turned last"),
+                ("PERFORM", "VOLUME · PAN · INTENSITY · LAYER", "F1-F4: pads steps, the kit, mutes, patterns"),
             ],
         ),
         ("K6", "LINK", [("GAME LINK", "send CC 20 · 21 · 22 · 23", "A B: CC 24 25")]),
@@ -362,10 +380,10 @@ def cheat():
 
     # (beside the short rows: how the display is laid out)
     def screen(x, y, title, note):
-        d.rounded_rectangle([x, y, x + 168, y + 110], 8, fill=panel, outline=line)
-        d.text((x + 184, y + 6), title, font=b, fill=text)
+        d.rounded_rectangle([x, y, x + 150, y + 110], 8, fill=panel, outline=line)
+        d.text((x + 164, y + 6), title, font=b, fill=text)
         for n, t in enumerate(note):
-            d.text((x + 184, y + 34 + n * 22), t, font=sm, fill=dim)
+            d.text((x + 164, y + 34 + n * 22), t, font=sm, fill=dim)
 
     def ring(x, y, n):
         d.ellipse([x - 11, y - 11, x + 11, y + 11], outline=ember, width=2)
@@ -373,30 +391,25 @@ def cheat():
 
     sx, sy = 540, 266
     d.text((sx, sy - 34), "THE DISPLAY", font=b, fill=ember)
-    d.text((sx + 130, sy - 32), "a page is one of two kinds", font=sm, fill=dim)
+    d.text((sx + 130, sy - 32), "a page is one of three kinds", font=sm, fill=dim)
     screen(
         sx,
         sy,
         "A PICTURE",
-        [
-            "the sound pages, MASTER",
-            "the four values in its corners:",
-            "1 2 on top, 3 4 below.",
-            "A knob you turn shows large",
-        ],
+        ["the sound pages, MASTER", "the four values in its", "corners: 1 2 on top, 3 4", "below"],
     )
     d.polygon(
-        [(sx + 34, sy + 55), (sx + 36, sy + 34), (sx + 134, sy + 53), (sx + 134, sy + 57), (sx + 36, sy + 76)],
+        [(sx + 34, sy + 55), (sx + 36, sy + 34), (sx + 116, sy + 53), (sx + 116, sy + 57), (sx + 36, sy + 76)],
         fill="#36C5FF",
     )
-    for n, (cx, cy) in enumerate([(sx + 18, sy + 18), (sx + 150, sy + 18), (sx + 18, sy + 92), (sx + 150, sy + 92)], 1):
+    for n, (cx, cy) in enumerate([(sx + 18, sy + 18), (sx + 132, sy + 18), (sx + 18, sy + 92), (sx + 132, sy + 92)], 1):
         ring(cx, cy, n)
-    sx += 500
+    sx += 366
     screen(
         sx,
         sy,
         "THE PADS",
-        ["SEQ, SONG, AUTO, MIX", "16 tiles, laid out as the pads.", "The four values in a column,", "1 at the top"],
+        ["SEQ, SONG, AUTO, MIX", "16 tiles, laid out as the", "pads. The four values in", "a column, 1 at the top"],
     )
     for n in range(16):
         d.rounded_rectangle(
@@ -405,7 +418,25 @@ def cheat():
             fill="#36C5FF" if n in (0, 3, 5, 7, 8, 10, 13, 14) else "#35251D",
         )
     for n in range(4):
-        ring(sx + 134, sy + 19 + n * 24, n + 1)
+        ring(sx + 126, sy + 19 + n * 24, n + 1)
+    sx += 366
+    screen(
+        sx,
+        sy,
+        "A GRID",
+        ["PERFORM", "a row a sound, a cell a", "step. The four values in", "a line under it"],
+    )
+    # (six of the 16 rows: a kick, a snare, a bass line and a hat among them)
+    steps = [(0, 4, 8, 12), (4, 12), (), (0, 3, 6, 10, 11), (0, 2, 4, 6, 8, 10, 12, 14), ()]
+    tint = ["#FF5A36", "#FF5A36", "#35251D", "#36C5FF", "#7BE07B", "#35251D"]
+    for r in range(6):
+        for c in range(16):
+            d.rectangle(
+                [sx + 11 + c * 8, sy + 9 + r * 10, sx + 17 + c * 8, sy + 17 + r * 10],
+                fill=tint[r] if c in steps[r] else "#35251D",
+            )
+    for n in range(4):
+        ring(sx + 24 + n * 34, sy + 90, n + 1)
 
     def block(x, y, title, items, kw=150):
         d.text((x, y), title, font=b, fill=ember)
@@ -429,7 +460,7 @@ def cheat():
             ("PLAY  STOP", "what the K5 pages' top line says: LOOP or SONG"),
             ("LEFT  RIGHT", "page before / after - on K5 pages: pattern"),
             ("A", "output volume - K5 pages: tempo - LINK: CC 24"),
-            ("B", "SEQ: the scale - SONG: the bar in 16ths"),
+            ("B", "SEQ: the scale - SONG, PERFORM: the bar in 16ths"),
             ("HOME", "this page's controls"),
             ("MENU", "the tour"),
             ("RETURN", "back to the first page"),
@@ -440,11 +471,11 @@ def cheat():
         y0 + 366,
         "LOOP, SONG, REC  -  the K5 pages",
         [
-            ("F1", "LOOP: the pattern repeats.  SONG: the arrangement"),
+            ("F1  (not PERFORM)", "LOOP: the pattern repeats.  SONG: the arrangement"),
             ("LEFT  RIGHT", "another pattern: it starts on the bar line"),
             ("REC + PLAY", "play it in: pads the kit, keys the notes. It loops"),
-            ("F4 held  (REC)", "ERASE the selected sound as the bar passes"),
-            ("F2", "UNDO one step: edits, a take, a key. Again: redo"),
+            ("F4 held  (SEQ, REC)", "ERASE the selected sound as the bar passes"),
+            ("F2  (PERFORM: F6)", "UNDO one step: edits, a take, a key. Again: redo"),
         ],
     )
     block(
@@ -458,10 +489,12 @@ def cheat():
             ("F1  (sound pages)", "the preset before"),
             ("an encoder", "turn fast"),
             ("A  (K5 pages)", "the swing"),
-            ("F5  F6  (SEQ, AUTO)", "the pattern's grid: 1/16, 1/32, 1/64"),
-            ("LEFT  RIGHT", "SEQ, AUTO: the 16 steps before / after"),
+            ("F5  F6", "SEQ, AUTO, PERFORM: the grid 1/16, 1/32, 1/64"),
+            ("LEFT  RIGHT", "SEQ, AUTO, PERFORM: the 16 steps before / after"),
             ("a pad  (SEQ, AUTO)", "hear and select that sound"),
             ("a pad  (MIX)", "solo"),
+            ("a pad  (PERFORM)", "STEPS: hear and select that sound.  MUTES: solo"),
+            ("F1 - F4  (PERFORM)", "LOOP/SONG · CLEAR · ALL ON · COPY"),
             ("pad 1-8  (SONG)", "add that pattern as a bar"),
             ("pad 9-15  (SONG)", "take the last bar away"),
             ("pad 16  (SONG)  x2", "no arrangement: the chain plays"),
@@ -479,6 +512,7 @@ def cheat():
             ("SONG", "LOOP/SONG · UNDO · CLR PAT · NEW x2 · SEND · SAVE"),
             ("AUTOMATION", "LOOP/SONG · UNDO · RAMP · CLEAR · COPY · SAVE"),
             ("MIXER, MASTER", "MUTE · SOLO · RESET · ALL ON · PLAY · SAVE"),
+            ("PERFORM", "STEPS · SOUNDS · MUTES · PATTERN · FILL · UNDO"),
         ],
         kw=130,
     )

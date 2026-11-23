@@ -610,7 +610,8 @@ def song():
     v = Take("sfx-forge-build-a-song", "building a song")
     v.say(
         "BUILD A SONG",
-        "A song from nothing, played in like on a groovebox. Everything is on the three K5 pages: SEQ, SONG and AUTO.",
+        "A song from nothing, played in like on a groovebox. Everything is on the four K5 pages: SEQ, SONG, AUTO and "
+        "PERFORM.",
     )
     v.wait(4.0)
 
@@ -623,9 +624,12 @@ def song():
     v.btn("F4", "F4  again: yes", gap=2.8)
 
     v.say(
-        "LOOP", "K5 twice more: SEQ, pattern A. LOOP in the top line says what PLAY will do: repeat this one pattern."
+        "LOOP",
+        "K5 three times more, past AUTO and PERFORM: SEQ, pattern A. LOOP in the top line says what PLAY will do: "
+        "repeat this one pattern.",
     )
     v.btn("K5", "K5  again: AUTO", gap=0.8)
+    v.btn("K5", "K5  again: PERFORM", gap=0.8)
     v.btn("K5", "K5  again: SEQ", gap=4.0)
 
     v.say(
@@ -845,7 +849,48 @@ def song():
     v.turn("2", 35, "KNOB 2  VALUE", 1.0)
     v.btn("F3", "F3  RAMP", gap=4.0)
 
-    v.say("16  THE MIX", "K4 twice: the mixer. DATA selects, knob 1 is the fader, knob 2 the pan.")
+    # PERFORM. It comes in with the song playing in its order, pattern A shown, FM BASS selected, nothing muted, and
+    # leaves the same way: LOOP is SONG again, the pattern A, the pads STEPS, and FM BASS is the pad muted last.
+    v.say(
+        "16  PERFORM",
+        "K5 once more: PERFORM. The whole pattern as one grid: a row for each sound, a cell for each step, brighter "
+        "the harder it plays.",
+    )
+    v.btn("K5", "K5  again: PERFORM", gap=3.0)
+    v.say(
+        "16  PERFORM",
+        "SHIFT + F1 TO LOOP: one pattern goes round. F4 PATTERN: pads 1 to 8 are the patterns. D takes over on the "
+        "bar line, and the playhead crosses the grid.",
+    )
+    # (the song is in a bar of pattern C as LOOP is chosen: C goes round until D takes over)
+    v.shift_btn("F1", "SHIFT + F1  TO LOOP", gap=0.9)
+    v.btn("F4", "F4  PATTERN", gap=0.5)
+    v.pad(4, "PAD 4  pattern D", gap=0.1)
+    after_bar_line()
+    v.wait(2.0)
+    v.say(
+        "16  MUTES",
+        "F3 MUTES: a pad drops its sound - the hi-hat, then the bass. Its row turns grey, with an M. The pad again "
+        "brings it back.",
+    )
+    v.btn("F3", "F3  MUTES", gap=0.8)
+    v.pad(13, "PAD 13  mute HI-HAT", gap=1.6)
+    v.pad(7, "PAD 7  mute FM BASS", gap=2.2)
+    v.pad(13, "PAD 13  HI-HAT again", gap=1.2)
+    v.pad(7, "PAD 7  FM BASS again", gap=1.6)
+    v.say(
+        "16  STEPS",
+        "Pattern A again, then F1 STEPS: the pads are the steps of the selected sound, framed in white. SHIFT + F1 "
+        "TO SONG: the song goes on in its order.",
+    )
+    v.btn("F4", "F4  PATTERN", gap=0.6)
+    v.pad(1, "PAD 1  pattern A", gap=0.1)
+    after_bar_line()
+    v.wait(0.6)
+    v.btn("F1", "F1  STEPS", gap=1.4)
+    v.shift_btn("F1", "SHIFT + F1  TO SONG", gap=2.4)
+
+    v.say("17  THE MIX", "K4 twice: the mixer. DATA selects, knob 1 is the fader, knob 2 the pan.")
     v.btn("K4", "K4  FX", gap=0.5)
     v.btn("K4", "K4  again: MIX", gap=1.2)
     v.turn("DATA", 1, "DATA  select FM KEYS", 0.4, after=0.8)
@@ -854,7 +899,7 @@ def song():
     v.turn("2", 20, "KNOB 2  PAN", 1.2, after=2.0)
 
     v.say(
-        "17  KEEP IT, SEND IT",
+        "18  KEEP IT, SEND IT",
         "F6 SAVE keeps the song. On the SONG page, F5 SEND gives it and its instruments to the game.",
     )
     v.btn("K5", "K5  SEQ", gap=0.5)
@@ -863,7 +908,8 @@ def song():
     v.btn("F5", "F5  SEND", gap=3.0)
 
     v.say(
-        "THE SONG", "That is the whole of it: played in, erased, undone, copied, arranged, layered, automated, mixed."
+        "THE SONG",
+        "That is the whole of it: played in, erased, undone, copied, arranged, layered, automated, performed, mixed.",
     )
     v.wait(14.0)
     v.btn("STOP", "STOP", gap=1.0)

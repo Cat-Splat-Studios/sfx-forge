@@ -4,7 +4,7 @@
 [the Unity manual](UNITY.md) what the package does. This page says where each thing is made, how to build and test
 it, and what must change together.
 
-It describes the repository at firmware 1.6.0, song format 6, patch format 2.
+It describes the repository at firmware 1.7.0, song format 6, patch format 2.
 
 | I want to … | Go to |
 |---|---|
@@ -59,7 +59,7 @@ How the pieces depend on each other:
                   ../unity-sfx-forge   (the package repository: generated, never edited by hand)
 
   tests around them:
-    build.sh ............... the built .wasm: 20 scene and host checks, vibe-check, the two-thread stress test
+    build.sh ............... the built .wasm: 21 scene and host checks, vibe-check, the two-thread stress test
     tests/dotnet ........... Runtime/Core + sfxforge.dll, against what the firmware sent in build.sh's run
     tests/unity-inspectors . the package's Editor code (EditMode)
     unity/Demo ............. the showcase's editor checks and PlayMode tests
@@ -108,17 +108,28 @@ copies out again. Then it strips the debug sections from the `.wasm`: they hold 
 
 When it is right:
 
-- It ends with exit code 0, and 22 lines of the output say `PASSED`. The first is `vibe-check`'s, the last is
+- It ends with exit code 0, and 23 lines of the output say `PASSED`. The first is `vibe-check`'s, the last is
   `store PASSED`. Count them: `sh build.sh | grep -c PASSED`.
-- Every check prints `  ok    …` lines. A failure prints `  FAIL  …` and the run stops there.
+- Every check prints `  ok    …` lines: 218 in a whole run of 1.7.0 (`sh build.sh | grep -c "  ok  "`). A failure
+  prints `  FAIL  …` and the run stops there.
 - `sha256sum build/sfx-forge.wasm` gives the same hash before and after a change that only moves text. This is how
-  the readability pass was proved. With the SDK in `.tools` at the time of writing the hash of 1.6.0 was
-  `9f777350…4bb4`.
+  the readability pass was proved.
+
+**A hash belongs to one state of the source.** It says nothing about a version: any change to the code gives
+another. Compare a hash only with one you took yourself, just before your change. The two that were written down:
+
+| Firmware | State of the source | sha256 of `build/sfx-forge.wasm` |
+|---|---|---|
+| 1.6.0 | after the readability pass; the pass left it as it was before | `9f777350b8433e09c644a41817b34dfc7fda255e3917aa6d906f9a4bcce74bb4` |
+| 1.7.0 | with the PERFORM page | `4e59a51fc0257c96a9f43172952d0bb61bc03e3f9f15bf95c988c239c81f27e7` |
+
+The hash of 1.7.0 came out the same with the SDK in `.tools` and with SDK 28. Another SDK, or another Zig, may give
+another hash for the same source.
 
 Each check is a scene `tests/<name>.json` played by the SDK's `wasmtest` into `out/<name>`, then judged by
-`tests/check-<name>.mjs`. A check says at its top what it proves and how to run it alone. Five checks have no scene:
+`tests/check-<name>.mjs`. A check says at its top what it proves and how to run it alone. Six checks have no scene:
 they load the `.wasm` themselves through `tests/host.mjs` (`check-identity.mjs`, `check-grid-keys.mjs`,
-`check-atomic.mjs`, `check-wire.mjs`, `check-store.mjs`). The README's table "Build" lists what each one checks.
+`check-perform.mjs`, `check-atomic.mjs`, `check-wire.mjs`, `check-store.mjs`). The README's table "Build" lists what each one checks.
 
 ### The native library
 
@@ -294,8 +305,8 @@ Every file's header says what it holds. These are the doors.
 | **the sound (the engines)** | `core/sfx_core.h`: the `SFX_P_*` list (what a patch is), then `sfx_voice_render` (the signal chain, top to bottom), then `sfx__control` (where knobs become frequencies). `core/sfx_wavetable.h`, `sfx__wt_harmonic`, for the tables |
 | **the song format** | `core/sfx_song.h`: the structs `sfx_pattern` and `sfx_song`, then the block comment of section 4 (the byte layout of format 6 and of formats 1 to 5), then `sfx_song_pack` and `sfx_song_unpack` |
 | **the player** | `core/sfx_song.h`: `sfx_player`, then `sfx_player_render` (it has a summary at its top), with `sfx__render` and `sfx__sub`. Effects: `sfx_fx_process`. Automation: `sfx_auto` |
-| **the firmware's pages and keys** | `sfx-forge/sfx-forge.c` (the header: the map of the parts). `fw_state.h` for the pages (`PG_*`, `TAB_OF`, `PAGE_PARAMS`, `SOFT`). `fw_events.h`, `on_event`: it names the function for every pad, key and message. Then `fw_pages.h` (`set_page`, `encoder`) and `fw_softkeys.h` (`soft_sound`, `soft_seq`, `soft_song`, `soft_auto`, `soft_mix`). The sequencer's keys: `fw_sequencer.h` |
-| **the display** | `fw_draw.h`, `on_draw`: seven numbered parts, one branch a page. The pages' pictures: `fw_draw_pages.h` (`draw_seq`, `draw_song`, `draw_auto`, `draw_mix`, `draw_master`, `draw_link`) and `fw_draw_sound.h` (`scene`). The pieces: `fw_draw_parts.h` (`hud`, `row`, `dial`, `param_text`). The stage: `fw_stage_draw.h` (`on_stage`) and `fw_stage_input.h` (`stage_event`) |
+| **the firmware's pages and keys** | `sfx-forge/sfx-forge.c` (the header: the map of the parts). `fw_state.h` for the pages (`PG_*`, `TAB_OF`, `PAGE_PARAMS`, `SOFT`). `fw_events.h`, `on_event`: it names the function for every pad, key and message. Then `fw_pages.h` (`set_page`, `tab_key`, `encoder`) and `fw_softkeys.h` (`soft_sound`, `soft_seq`, `soft_song`, `soft_auto`, `soft_mix`, `soft_perform`). The sequencer's keys: `fw_sequencer.h`. PERFORM is the page to read for pads that change their job: the table under this one |
+| **the display** | `fw_draw.h`, `on_draw`: seven numbered parts, one branch a page. The pages' pictures: `fw_draw_pages.h` (`draw_seq`, `draw_song`, `draw_auto`, `draw_mix`, `draw_master`, `draw_link`, `draw_perform`) and `fw_draw_sound.h` (`scene`). The pieces: `fw_draw_parts.h` (`hud`, `row`, `dial`, `param_text`). The stage: `fw_stage_draw.h` (`on_stage`) and `fw_stage_input.h` (`stage_event`) |
 | **the link (SysEx)** | README, "The link". `fw_protocol.h` for the bytes. `fw_link.h`: `sysex_in` (in), `out_pump` with `export_pump`, `ident_pump`, `dump_pump` (out), `song_piece` (a song arriving). In C#: `Runtime/Core/SfxProtocol.cs`, then `SfxLink.cs` and `SfxSongTransfer.cs` |
 | **the store** | `fw_store.h`: its header describes the three files; `bank_save`, `bank_load`. The reset: `factory_reset` in `fw_events.h` |
 | **the Unity runtime** | `Runtime/Core/SfxPatch.cs`, then `SfxNative.cs` (the door to the DLL). Then the components: `SfxPlayer.cs` (one sound, live), `SfxMusicPlayer.cs` (a song), `SfxVariationPlayer.cs`. Assets: `SfxPreset.cs`, `SfxSong.cs`, `SfxVariationSet.cs` |
@@ -304,6 +315,28 @@ Every file's header says what it holds. These are the doors.
 | **the showcase** | `unity/Demo/Assets/Showcase/README.md`, then `Docs/ARCHITECTURE.md`. The SFX FORGE part is `Scripts/Audio`: `SoundLibrary.cs`, `SoundEffects.cs`, `ContinuousSounds.cs`, `MusicDirector.cs`, `AudioInstaller.cs` |
 | **the tests** | `tests/check.mjs` first, then `tests/host.mjs` and `tests/song-read.mjs`. `tests/dotnet/Program.cs` for the C# side |
 | **the figures and the videos** | `docs/shots.mjs` (the `Scene` class, then "the scenes") and `docs/figures.py`. `docs/video/make_videos.py` (`Take`, `render`, then `tour` and `song`). `make_unity_videos.py` imports its style from `make_videos.py` and reads takes from `SFXFORGE_CAPTURE_DIR`. `tools/make_unity_package.py`: the comment under its docstring is its map; `build()` at the bottom is the table of contents |
+
+**PERFORM (firmware 1.7.0), part by part.** The page has little code of its own: each of its keys and pad modes
+calls what another page already had.
+
+| Name | Part | What it is |
+|---|---|---|
+| `PG_PERFORM` | `fw_state.h` | the page: after `PG_AUTO`, before `PG_MIX`, so it is one of the song's pages |
+| `perf_mode`, `PERF_STEPS`, `PERF_SOUNDS`, `PERF_MUTES`, `PERF_PATTERNS`, `PERF_COUNT` | `fw_state.h` | what the 16 pads are on the page. The order is the order of F1 to F4 |
+| `SOFT` rows 5 and 6, `soft_set`, `soft_caption` | `fw_state.h` | the captions: row 5 as they stand, row 6 with SHIFT held |
+| `song_keys`, `pattern_keys` | `fw_state.h` | `song_keys`: F1 is LOOP / SONG and F2 is UNDO (SEQ, SONG, AUTO). `pattern_keys`: LEFT / RIGHT are the pattern and A is the tempo (those three and PERFORM) |
+| `set_page`, `tab_key`, `arrow`, `encoder`, `bar_turn` | `fw_pages.h` | opening the page (REC lit: the pads are SOUNDS; standing and REC off: LOOP), K5's walk, LEFT / RIGHT, the encoders. `bar_turn` is B, the bar's length, for SONG and PERFORM |
+| `perform_mode` | `fw_softkeys.h` | sets `perf_mode`, lets go of a held step, sets every pad's light again |
+| `soft_perform` | `fw_softkeys.h` | F1 to F6 on the page, and with SHIFT |
+| `sound_clear` | `fw_softkeys.h` | CLEAR of the selected sound's steps: F4 on SEQ, SHIFT + F2 on PERFORM. It says which key is UNDO on the page that is open |
+| `perform_pad` | `fw_events.h` | a pad on the page, by `perf_mode`. `HELP_PERFORM` beside it: what HOME shows |
+| `draw_perform` | `fw_draw_pages.h` | the grid: a row a sound, a cell a step, the playhead |
+| `perform_value` | `fw_draw_pages.h` | one of the four values in the line under the grid; it gives the encoder its place for the mouse |
+| `perform_hint` | `fw_draw_pages.h` | the line that says what the pads are |
+| `strip_at` | `fw_draw_pages.h` | the eight pattern letters from a given x, with a word beside them. `strip` is `strip_at` at SEQ's and AUTO's place |
+| `on_draw` | `fw_draw.h` | the page's branch in part 5; the pads' lights in part 4, where each pad mode uses the branch of the page whose pads it copies; the blue key in part 6 |
+
+`tests/check-perform.mjs` holds the page's behaviour: it says at its top what it proves.
 
 The firmware's parts are included once, in a fixed order, and each uses what the parts before it define. That order
 is also the order of the code in the built `.wasm`. Moving a function between parts changes the binary, not what it
@@ -411,7 +444,7 @@ The full way:
     `check-song-export.mjs` (a dump is 28 bytes), `tests/dotnet` (`PatchAndProtocol`, `Identity`,
     `PatchAsTextAndSyx`), `tests/unity-inspectors` (`SfxUnitsTests` with `units_table.py`, `SfxPresetPanelTests`).
     Then the song files, as in the next recipe, step 8: they begin with 16 patches.
-11. Docs: README ("Patch bytes", the identity table), `docs/MANUAL.md` sections 6 and 19, `docs/UNITY.md`, the
+11. Docs: README ("Patch bytes", the identity table), `docs/MANUAL.md` sections 6 and 20, `docs/UNITY.md`, the
     cheat sheet (`docs/figures.py`).
 
 ### Add a page or a soft key
@@ -419,20 +452,23 @@ The full way:
 **A soft key** on a page that exists:
 
 1. `sfx-forge/fw_state.h`: its caption in the `SOFT` table. If the caption changes with the state: `soft_caption`.
-2. `sfx-forge/fw_softkeys.h`: its `case` in `soft_sound`, `soft_seq`, `soft_song`, `soft_auto` or `soft_mix`
-   (`f` is 0 for F1). SHIFT is the variable `shift`.
+2. `sfx-forge/fw_softkeys.h`: its `case` in `soft_sound`, `soft_seq`, `soft_song`, `soft_auto`, `soft_mix` or
+   `soft_perform` (`f` is 0 for F1). SHIFT is the variable `shift`.
 3. What it does:
-   - it changes the song: change `SONG`. Call `undo_mark` (`fw_edit.h`) first if F2 should take it back.
+   - it changes the song: change `SONG`. Call `undo_mark` (`fw_edit.h`) first if UNDO should take it back.
+   - it does what a key of another page does: call that key's function, as `soft_perform` does. If the function
+     says which key is UNDO, make it say the right one for the page (`sound_clear`, `DOWN_PERFORM` in
+     `fw_softkeys.h`).
    - it changes a sound: `keep_undo(slot)` before, `changed(slot)` after.
    - it throws much away: ask twice with `confirm("…")`.
    - it says something: `say("…")`.
-4. `sfx-forge/fw_events.h`: the line in the page's `HELP_…` table (HOME shows it).
+4. `sfx-forge/fw_events.h`: the line in the page's `HELP_…` table (HOME shows it). A table has at most 11 rows.
 5. The stage, if it should have the button: hit test in `stage_event` (`fw_stage_input.h`), drawing in `on_stage`
    (`fw_stage_draw.h`). The same numbers stand in both files.
 6. A test: a scene `tests/<name>.json` and `tests/check-<name>.mjs`, and their three lines in `build.sh`
    (`mkdir -p out/<name>`, the `wasmtest` line, the check). Copy the nearest: `edit.json` with `check-edit.mjs`. If
    it needs SysEx or the store, use `tests/host.mjs` as `check-grid-keys.mjs` does.
-7. Docs: `docs/MANUAL.md` section 19, README "Playing it", the cheat sheet (`docs/figures.py`, then run it).
+7. Docs: `docs/MANUAL.md` section 20, README "Playing it", the cheat sheet (`docs/figures.py`, then run it).
 
 **A page.** A page hangs on one of the six K keys: the SDK has `VB_K1` to `VB_K6` and no seventh, and the six
 marks in the display's second line fill its width. So a new page is one more press of a key that exists.
@@ -442,36 +478,84 @@ pages (they mean the MUSIC kit and show LOOP / SONG in the top line); on the sta
 but AUTO is taken for MIX or MASTER. The comment over the enum lists the tests. A page that is none of these goes
 after `PG_LINK`.
 
+**The example is PERFORM** (firmware 1.7.0): a song page, the fourth of K5, whose pads have four jobs. What each
+step meant for it stands in the step. The whole change is one commit: `git log --oneline -- tests/check-perform.mjs`
+finds it.
+
 1. `sfx-forge/fw_state.h`: `PG_…` in the enum. A sound page goes **before** `PG_SEQ` and gets a row in
    `PAGE_PARAMS` (`sound_page()` is `page < PG_SEQ`). Then its entry in `TAB_OF` (a missing one stops the build:
-   `_Static_assert`), and `TAB_FIRST` / `TAB_NAME` if it has a K key of its own. Look at `mix_page`, `sound_page`
-   and `song_keys`: is the new page one of them?
+   `_Static_assert`), and `TAB_FIRST` / `TAB_NAME` if it has a K key of its own. Look at `mix_page`, `sound_page`,
+   `song_keys` and `pattern_keys`: is the new page one of them?
+   - PERFORM: `PG_PERFORM` stands after `PG_AUTO`, because the pages of K5 must follow each other in the list
+     (step 2), and before `PG_MIX`, so it is a song page. It is in `pattern_keys` and not in `song_keys`: LEFT /
+     RIGHT and A are as on SEQ, but its F1 and F2 are pad modes, not LOOP / SONG and UNDO. Every test that asks
+     `song_keys()` had to be read for that: the dimmed UNDO in `on_draw` asks for PERFORM's F6 apart.
+   - A page whose pads have modes keeps the mode in one variable with an enum (`perf_mode`, `PERF_…`), in the
+     order of the keys that choose it, so that the key's number is the mode.
 2. `sfx-forge/fw_pages.h`: `tab_key` (which press of which K key opens it), `set_page` (the K key's label, the
    kit, LOOP or SONG), `arrow` (LEFT / RIGHT), `encoder` (what the four encoders turn), and `param_nudge`,
    `param_put` and `mix_value` if its values are none of a sound's.
+   - `tab_key` walks K5 with `page + 1` and goes back to `PG_SEQ` from the last page. A new last page changes that
+     one name; a page between two others changes nothing there.
+   - `set_page` gives the K key its label: at most 7 characters (`PERFORM` is 7). It also sets LOOP when the page
+     is opened while the song stands and REC is off, and makes the pads SOUNDS when REC is lit.
+   - `encoder`: PERFORM's volume and pan are the mixer's (`param_nudge(PG_MIX, …)`), and B is `bar_turn`, which
+     SONG uses too.
 3. Soft keys: a row in `SOFT`, its case in `soft_set`, `soft_caption` if a caption changes with the state, a
-   function `soft_…` in `fw_softkeys.h`, and the branch in `on_event` (`fw_events.h`, "F1-F6: by page").
-4. Pads: the page's branch in `on_event`'s pad case.
-5. Display: a `draw_…` function in `fw_draw_pages.h`, and `header`'s `pill` there if it is a song page. In
-   `on_draw` (`fw_draw.h`):
-   - part 2: HOME, with a new `HELP_…` table in `fw_events.h`;
+   function `soft_…` in `fw_softkeys.h`, and the branch in `on_event` (`fw_events.h`, "F1-F6: by page"). A caption
+   has at most 7 characters (`PATTERN`).
+   - PERFORM has two rows of `SOFT`: 5 as the keys stand, 6 with SHIFT held. `soft_set` gives 5; `soft_caption`
+     takes row 6 for F1 to F4 while SHIFT is held, and the grid's captions for F5 and F6. Raise the table's first
+     size (`SOFT[7][6]`) with a new row.
+   - Call `relabel()` when the captions change. For SHIFT that is already done where SHIFT is taken.
+4. Pads: the page's branch in `on_event`'s pad case. PERFORM's is one call, `perform_pad`, which has a `case` for
+   each mode; each calls what the pads of another page call (`step_toggle`, `pad`, `pattern_pick`,
+   `intensity_set`). REC pressed on the page calls `perform_mode(PERF_SOUNDS)`, in `on_event` and for the stage's
+   REC button in `stage_event`. A pad let go must end what it began whatever the mode is by then.
+5. Display: a `draw_…` function in `fw_draw_pages.h`, and `header`'s `pill` there if it is a song page (PERFORM
+   needed nothing: the pill asks `PG_SEQ` to `PG_MASTER`). In `on_draw` (`fw_draw.h`):
+   - part 2: HOME, with a new `HELP_…` table in `fw_events.h`. At most 11 rows, so that each has the whole
+     width: `HELP_PERFORM` has 11;
    - part 3: `TITLE` and `FIRST` (a missing entry stops the build), and the `pages` / `at` lines under them, which
-     count the pages of each key;
-   - part 4: the pads' lights, and the page's number in the lights' cache word `led`;
-   - part 5: `vibe_link_page` at its top (the page's name for the host) and the page's branch;
-   - part 6: which key is dimmed.
+     count the pages of each key (`TAB_SEQ` has 4 now). The line under them that writes the pattern beside the
+     title names the pages one by one;
+   - part 4: the pads' lights, and the page's number in the lights' cache word `led`. A light is sent to the host
+     only when `led` changes, so everything that decides a light must be in it. PERFORM is 5 to 8 there, one
+     number a pad mode (`(5 + perf_mode) * perf`), and the comment beside it shows that the sum still fits 8
+     bits: do that sum again for a new page. A change of mode also sets every `led_cache` entry to
+     `0xFFFFFFFF` (`perform_mode`, `set_page`), so every light is sent again;
+   - part 5: `vibe_link_page` at its top (the page's name for the host) and the page's branch. Values drawn
+     without `hud` or `row` must give each encoder its name and its rectangle themselves (`perform_value`:
+     `vibe_link_encoder`, `enc_rect`);
+   - part 6: which key is dimmed, and for PERFORM which is blue (the pad mode).
 6. The stage shows the sound's pages as tabs: `ST_PAGE` and `ST_N` in `fw_stage_input.h`, the names `TAB` in
    `on_stage` in the same order, `stage_page_follows`, and the two places in each stage file that ask
-   `>= PG_SEQ`.
+   `>= PG_SEQ`. PERFORM has no tab on the stage: the stage's right half already is the pattern as a grid.
 7. `vibe-check` (in `build.sh`) presses the buttons and looks whether the display changes, and whether HOME shows
    something.
-8. Tests and docs as for a soft key. The Unity inspectors mirror the sound pages: `SfxUnits.PageNames`,
-   `PageTitles`, `PageParams`.
+8. Tests and docs as for a soft key. A page with pads and SHIFT is easiest to test on `tests/host.mjs`:
+   `tests/check-perform.mjs` is the model. The Unity inspectors mirror the sound pages: `SfxUnits.PageNames`,
+   `PageTitles`, `PageParams`. The header of `sfx-forge.c` and of each part you touched lists pages and
+   functions: update them.
+9. **Walk through every script that counts presses of that K key.** This is the lesson of PERFORM. A script that
+   pressed K5 three times to come back from AUTO to SEQ landed on PERFORM, where F3 mutes and F2 makes the pads
+   the kit. Nothing stops the build for it: the check fails later with a wrong song, or a picture shows another
+   page. `grep -n K5` over these, and read every hit:
+   - `tests/*.json`: the scenes. With 1.7.0 six changed: `edit.json`, `grid.json`, `regrid.json`,
+     `retake.json`, `take64.json`, `undo.json`;
+   - `tests/make-grid-scenes.mjs`, which writes `grid.json`, `regrid.json` and `take64.json`: change the script
+     and run it, not the three files;
+   - `tests/check-atomic.mjs` and `tests/check-grid-keys.mjs`, which press keys themselves;
+   - `docs/shots.mjs`: the manual's screenshots;
+   - `docs/video/make_videos.py`: the two device videos, and their captions, which count the presses in words.
+
+   The same holds for K1 and K4, and for anything else that walks: LEFT / RIGHT over the sound pages, F1 over the
+   presets.
 
 ### Add an engine
 
-A sixth engine changes no format by itself: the engine is one byte of the patch. But **a 1.6.0 device refuses engine
-5** (`sfx_patch_unpack`), so a sound that uses it cannot go to an older firmware.
+A sixth engine changes no format by itself: the engine is one byte of the patch. But **a device up to 1.7.0 refuses
+engine 5** (`sfx_patch_unpack`), so a sound that uses it cannot go to an older firmware.
 
 1. `core/sfx_core.h`, section 2: the entry in `sfx_engine` before `SFX_ENGINE_COUNT`, and what its knobs A and B do
    in the comment over the `SFX_P_*` list. `sfx_patch_init`, `sfx_patch_pack`, `sfx_patch_unpack` and
@@ -626,11 +710,14 @@ Then:
 5. `tests/check-identity.mjs`: the hex string of the whole answer names the version's three bytes. Same in
    `tests/dotnet/IdentityTests.cs`.
 6. `sh build.sh`. The line to look for is
-   `ok    the firmware's defines (1.6.0) and firmware.json ("1.6.0") say the same version`, and `vibe-check`'s
-   `Manifest    SFX FORGE 1.6.0`.
+   `ok    the firmware's defines (1.7.0) and firmware.json ("1.7.0") say the same version`, and `vibe-check`'s
+   `Manifest    SFX FORGE 1.7.0`. Then 23 lines `PASSED`. Write down the new hash (section 2): it is another one
+   with every version, because the version is in the code.
 7. `dotnet run -c Release --project tests/dotnet -- .`, and the Unity tests.
 8. If pages or sound changed: the screenshots and figures (`docs/shots.mjs`, `docs/figures.py`) and the two device
-   videos (`docs/video/make_videos.py`).
+   videos (`docs/video/make_videos.py`). If a K key got another page: step 9 of the page recipe first.
+9. Say what was run with the new version and what was not. A test made with the version before (the link tests,
+   the Unity runs) keeps its version in the documents until it is run again.
 
 The Unity package has its own version: `VERSION` and `RELEASED` in `tools/make_unity_package.py`. The
 `package.json` in this repository (0.1.0, `com.catsplat.sfxforge`) is the source's and is rewritten by the script.
@@ -667,8 +754,8 @@ What it demands, and stops with a named error when it is missing:
   machine, the owner's name only inside the GitHub address.
 - Every relative link in every Markdown file resolves.
 
-The numbers in its front-page texts (205 checks, 169 tests, 20 firmware checks) are prose in the script. Update
-them when a count changes.
+The numbers in its front-page texts (the .NET checks, the EditMode tests, the firmware's checks) and the firmware
+version they name are prose in the script. Update them when a count or the version changes.
 
 ---
 
@@ -760,8 +847,15 @@ In C# and the scripts:
 
 - **The hardware and the plugin.** Everything ran in the SDK's `wasmtest`, on `tests/host.mjs`, or in the SDK's
   emulator. Nobody has held a VIBE with this firmware.
-- **The two device videos after the readability pass.** `make_videos.py` was reformatted and not run again. The
-  Unity and link videos were made again, the link video from a take recorded on firmware 1.6.0.
+- **PERFORM by hand** (firmware 1.7.0). `tests/check-perform.mjs` presses its keys on the built firmware and
+  reads the song and the sound. Nobody has played the page, looked at it while it plays, or listened to it; it was
+  never on hardware or in the plugin. The check does not see the display, the stage's REC button, or solo.
+- **The videos are not a test.** They are made by scripts from the firmware and the game.
+  [The videos' README](../videos/README.md) says for each what it was made from; a video made before a page
+  existed does not show it.
+- **The link with PERFORM open.** The six link tests and the recorded session passed against the emulator with
+  1.7.0 on 23 Nov 2026, each in one run (`docs/UNITY.md`, section 6). PERFORM was not open in any of them. 1.7.0
+  changed no message; its identity says 1.7.0.
 - **Two real flows inside the firmware.** Only `song_way.h` was run on two threads. The queue and the `volatile`
   values are correct by reading.
 - **A pattern at 1/32 or 1/64 over a MIDI port.** The link tests used songs of sixteenths.
@@ -769,7 +863,8 @@ In C# and the scripts:
 - **The real Inspector and windows.** Their tests build the same elements in a test panel and press keys by code.
   Nobody has opened them, and nobody has listened to a generated sound or a variant.
 - **What a page or a toast says.** The firmware's checks hear the output and read the song; none reads the display's
-  text. Also unchecked: the stage's buttons, ERASE across a change of pattern, undo of RAMP and FILL.
+  text. Also unchecked: the stage's buttons, ERASE across a change of pattern, undo of RAMP, and undo of FILL but
+  on PERFORM.
 - **Any Unity but 6000.3.8f1, any platform but Windows x64.** MIDI is winmm only; the DLL is Windows only.
 - **The showcase's standalone build** was last run before firmware 1.5.
 
@@ -781,7 +876,7 @@ In C# and the scripts:
   update changes the number, the kit changes there instead. `tests/check-grid-keys.mjs` watches exactly this case:
   if it fails after an SDK update, look here first.
 - **The SDK moves.** The firmware's comments already describe SDK 28 (SHIFT + K1 – K6). Build with
-  `VIBE_SDK=…` against a new checkout before you replace the one in `.tools`, and compare the 22 lines.
+  `VIBE_SDK=…` against a new checkout before you replace the one in `.tools`, and compare the 23 lines.
 - **One SysEx a block.** Anything sent out of turn is lost without an error. Everything goes through `out_pump`.
 - **A full queue drops the message** (`send`, `QN` 64). A burst of more than 64 notes and edits between two blocks
   loses the rest.
@@ -819,6 +914,7 @@ In C# and the scripts:
 | **chain** | walk patterns A to n by itself, a bar each. Used when there is no arrangement |
 | **arrangement** | up to 32 bars, a pattern each, played in order and again from the top |
 | **cue** | choose a pattern: it takes over at once while the song stands, on the next bar line while it plays (`sfx_player_cue`, CC 15). A cued pattern that waits is "queued" |
+| **pad mode** | on PERFORM: what the 16 pads are, chosen with F1 to F4: STEPS, SOUNDS, MUTES, PATTERN (`perf_mode`) |
 | **LOOP / SONG** | what PLAY plays: the pattern round and round, or the arrangement (`loop_mode`, `M_LOOP`) |
 | **take** | what is recorded from the first hit until STOP, PLAY or REC. One undo step. In the showcase's tests a take is also one recorded run for a video |
 | **telemetry** | what a game moves while a sound plays: pitch, cutoff, timbre, level (CC 10–13, `sfx_mods`) |

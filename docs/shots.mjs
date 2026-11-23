@@ -119,6 +119,16 @@ class Scene {
     return this;
   }
 
+  // SHIFT + a pad; n: 1..16
+  shiftPad(n, gap = 0.3) {
+    this.ev(this.t, 3, BUTTON.SHIFT, 1);
+    this.ev(this.t + 0.03, 1, n - 1, 1, 0.9);
+    this.ev(this.t + 0.07, 1, n - 1, 0, 0);
+    this.ev(this.t + 0.1, 3, BUTTON.SHIFT, 0);
+    this.t += gap;
+    return this;
+  }
+
   // a picture of the display, taken by wasmtest
   shot(name) {
     this.steps.push({ t: +this.t.toFixed(4), shot: name });
@@ -294,6 +304,97 @@ scene('song').btn('K5').btn('K5').turn('DATA', 6).at(1.0).btn('PLAY').at(1.0 + B
     s.at(t0 + g * S64 + 0.004).pad(2, 0.02, 0.5 + (g - 16) * 0.03);
   }
   s.at(t0 + BAR + 27 * S64 + 0.01).shot('grid-take');
+}
+
+// ---- PERFORM on the demo song: as it opens, playing, two sounds muted, a pattern that waits, the kit with REC -----
+{
+  // K5 four times; DATA: the kick
+  const s = scene('perform').btn('K5').btn('K5').btn('K5').btn('K5').turn('DATA', 2).wait(0.3).shot('perform-open');
+
+  // PLAY: pattern A repeats. The pads are the kick's steps
+  const t0 = 1.5;
+  s.at(t0).btn('PLAY');
+  s.at(t0 + BAR + 9 * STEP + 0.07).shot('perform');
+
+  // F3 MUTES: pads 7 and 16, the bass and the strings
+  // prettier-ignore
+  s.at(t0 + 2 * BAR + 0.1).btn('F3').pad(7).pad(16);
+  s.at(t0 + 2 * BAR + 13 * STEP + 0.07).shot('perform-mutes');
+
+  // the two pads again: all are heard. F4 PATTERN, pad 2: B waits for the bar line
+  // prettier-ignore
+  s.at(t0 + 3 * BAR + 0.1).pad(7).pad(16).btn('F4').pad(2);
+  // (at a moment the waiting pattern's letter is lit: it blinks)
+  s.at(t0 + 3 * BAR + 11 * STEP + 0.05).shot('perform-pattern');
+
+  // B plays. REC: the pads are the kit. The cowbell (pad 4) on the off-beats, for a bar
+  s.at(t0 + 4 * BAR + 0.3).btn('REC');
+  for (const beat of [0, 1, 2, 3]) {
+    s.at(t0 + 5 * BAR + (beat * 4 + 2) * STEP + 0.02).pad(4);
+  }
+  s.at(t0 + 6 * BAR + 5 * STEP + 0.07).shot('perform-sounds');
+}
+
+// ---- PERFORM, a beat from nothing: FILL, SHIFT + a pad, PLAY, a mute, COPY, the bar line, a part played in -------
+{
+  const s = scene('perform-beat').btn('K5').btn('K5').btn('K5').btn('K5');
+
+  // G, the first empty pattern
+  for (let k = 0; k < 6; k++) {
+    s.btn('RIGHT', 0.08);
+  }
+  // prettier-ignore
+  s.turn('DATA', 2).btn('F5').wait(0.3).shot('t-perform-1').wait(2.6)       // the kick: F5 FILL, every quarter
+    .shiftPad(2).pad(5, 0.5).pad(13, 0.5).wait(1.2).shot('t-perform-2')     // the snare: SHIFT + its pad; 5 and 13
+    // the hi-hat: SHIFT + its pad; FILL twice
+    .shiftPad(13).btn('F5', 0.3).btn('F5').wait(0.3).shot('t-perform-3').wait(2.6);
+
+  // PLAY: G repeats
+  const t0 = s.t + 0.1;
+  // prettier-ignore
+  s.at(t0).btn('PLAY').at(t0 + BAR + 6 * STEP + 0.06).shot('t-perform-4');
+
+  // F3 MUTES: pad 13, the hi-hat, is out - and in again a bar later
+  // prettier-ignore
+  s.at(t0 + 2 * BAR + 0.1).btn('F3').pad(13);
+  s.at(t0 + 2 * BAR + 10 * STEP + 0.06).shot('t-perform-5');
+  s.at(t0 + 3 * BAR + 0.1).pad(13);
+
+  // SHIFT + F4 COPY: H is a copy of G, and starts on the bar line. F1 STEPS, the kick, two steps more
+  s.at(t0 + 3 * BAR + 8 * STEP).shift('F4');
+  // prettier-ignore
+  s.at(t0 + 4 * BAR + 0.2).btn('F1').shiftPad(3).pad(11, 0.3).pad(16, 0.3);
+  s.at(t0 + 5 * BAR + 3 * STEP + 0.06).shot('t-perform-6');
+
+  // F4 PATTERN, pad 7: G waits for the bar line
+  // prettier-ignore
+  s.at(t0 + 6 * BAR + 0.2).btn('F4').pad(7);
+  s.at(t0 + 6 * BAR + 9 * STEP + 0.05).shot('t-perform-7');
+
+  // G plays. REC: the pads are the kit; the cowbell played in, and heard on the next round
+  s.at(t0 + 7 * BAR + 0.3).btn('REC');
+  for (const g of [3, 6, 11, 14]) {
+    s.at(t0 + 8 * BAR + g * STEP + 0.02).pad(4);
+  }
+  s.at(t0 + 9 * BAR + 12 * STEP + 0.07).shot('t-perform-8');
+}
+
+// ---- PERFORM at 1/32: the frame round the 16 steps the pads are, and a roll in the second 16 ---------------------
+{
+  const s = scene('perform-32').btn('K5').btn('K5').btn('K5').btn('K5');
+  for (let k = 0; k < 6; k++) {
+    s.btn('RIGHT', 0.08);
+  }
+  // prettier-ignore
+  s.turn('DATA', 2).btn('F5', 0.3)                    // the kick on every quarter
+    .shiftPad(13).btn('F5', 0.3).btn('F5', 0.3)       // the hi-hat on every eighth
+    .shift('F6').wait(2.6)                            // SHIFT + F6: GRID 1/32
+    // SHIFT + RIGHT: the pads are steps 17-32
+    .shift('RIGHT');
+  for (const p of [10, 11, 12, 14, 15, 16]) {
+    s.pad(p, 0.1);
+  }
+  s.wait(0.3).shot('perform-32');
 }
 
 // ==== the pictures =================================================================================================
