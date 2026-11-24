@@ -3,12 +3,14 @@
  * Holds:  bank_save (F6 SAVE, and the host's own save), save_say, bank_load (at the start).
  * Needs:  fw_state.h (kits, SONG, the undo's variables), fw_edit.h (say), core (sfx_patch_pack / unpack,
  *         sfx_song_pack / unpack), the SDK's store (vibe_store_read / write / size).
- * Read:   the three files.
+ * Read:   the four files.
  *
  *   kits.bin    both kits: 32 patches of 28 bytes (MUSIC's 16, then SFX's), then 32 bytes that say which named sound
  *               each pad holds (its row of PRESETS + 1, 0 = its own). BANK_BYTES in all.
  *   song6.bin   the packed song (format 6, core/sfx_song.h) and two bytes more - a check of the song.bin that lay
  *               beside it when it was written (0: there was none).
+ *   meter.bin   one byte, the beat in sixteenths (2, 3 or 6) - only while it is not a quarter: SAVE with a beat of a
+ *               quarter takes the file away. The beat is the device's, not the song's (fw_state.h, beat_len).
  *   song.bin    the file of the firmwares up to 1.5.0 (format 5): it is still read and never written again, so a
  *               device put back to an older firmware finds its song. And should that older firmware save a song there
  *               and the device come forward again: its song.bin no longer fits the check, so it is the later one and
@@ -57,6 +59,16 @@ static int bank_save(void) {
   if (vibe_store_write("song6.bin", store_buf, n + 2)) {
     failed = 1;
   }
+
+  /* meter.bin: the beat, when it is not a quarter (a device that never chose another keeps no such file) */
+  if (beat() == 4) {
+    vibe_store_delete("meter.bin");
+  } else {
+    uint8_t m = (uint8_t)beat();
+    if (vibe_store_write("meter.bin", &m, 1)) {
+      failed = 1;
+    }
+  }
   return failed ? -1 : 0;
 }
 
@@ -79,6 +91,14 @@ static void bank_load(void) {
           pad_preset_k[k][i] = (int8_t)(n >= 1 && n <= PRESET_COUNT ? n - 1 : -1);
         }
       }
+    }
+  }
+
+  /* meter.bin: the beat (anything but 2, 3 or 6 leaves the quarter) */
+  {
+    uint8_t m = 0;
+    if (vibe_store_read("meter.bin", &m, 1) == 1 && (m == 2 || m == 3 || m == 6)) {
+      beat_len = m;
     }
   }
 

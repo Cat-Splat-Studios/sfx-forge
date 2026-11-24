@@ -121,7 +121,7 @@ static void on_draw(uint16_t *fb) {
     int tw = vg_text(TITLE[page], 12, 36, VG_BOLD, rgb, VG_LEFT);
     /* … and the pattern; on AUTO the knob the lane moves */
     if (seq || song || aut || perf) {
-      char t[40] = "PATTERN  ";
+      char t[48] = "PATTERN  ";
       /* what is shown is not what plays: say both */
       int other = step != NO_STEP && now != (uint32_t)edit_pat;
       if (other) {
@@ -134,6 +134,23 @@ static void on_draw(uint16_t *fb) {
       /* … and its grid: the steps it cuts the bar in */
       strcpy(t + strlen(t), "  ");
       strcpy(t + strlen(t), GRID_NAME[pat_grid(edit_pat)]);
+      /* … and the bar, when it is not four quarters: "BAR 7/8". A beat of an eighth is said after it ("BAR 6/8
+         IN 1/8"): the name alone would be read as dotted quarters. Each only where it leaves the six marks alone */
+      if (meter_shown()) {
+        char m[8];
+        int n = (int)strlen(t);
+        strcpy(t + n, "  BAR ");
+        strcpy(t + strlen(t), meter_text(m));
+        if (26 + tw + vg_text_width(t, VG_BOLD) >= LOC_X - 8) {
+          t[n] = 0;
+        } else if (beat() == 2) {
+          n = (int)strlen(t);
+          strcpy(t + n, " IN 1/8");
+          if (26 + tw + vg_text_width(t, VG_BOLD) >= LOC_X - 8) {
+            t[n] = 0;
+          }
+        }
+      }
       tw += vg_text(t, 26 + tw, 36, VG_BOLD, other ? ORANGE : TEXT, VG_LEFT);
       if (aut) {
         const char *n = auto_name(view_to[sel], sel);

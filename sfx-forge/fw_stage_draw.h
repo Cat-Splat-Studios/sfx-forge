@@ -271,7 +271,7 @@ static void on_stage(uint16_t *fb, int w, int h) {
         uint32_t cell = head                  ? 0x5F4134
                         : off                 ? 0x1C130F
                         : s == sel            ? 0x503328
-                        : (i / (4 * div)) & 1 ? 0x2B1D17
+                        : (i / (beat() * div)) & 1 ? 0x2B1D17
                         :                       0x38261E;
         // clang-format on
         if (div == 1) {
@@ -314,7 +314,7 @@ static void on_stage(uint16_t *fb, int w, int h) {
       uint32_t cell = set                   ? (head && layer ? 0xFFFFFF : layer ? c : vg_mix(BG, c, 0.35f))
                       : head                ? 0x5F4134
                       : off                 ? 0x1C130F
-                      : (i / (4 * div)) & 1 ? 0x2B1D17
+                      : (i / (beat() * div)) & 1 ? 0x2B1D17
                       :                       0x38261E;
       // clang-format on
       /* a set step is as high as it is hard */

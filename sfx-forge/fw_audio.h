@@ -179,7 +179,7 @@ void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames) {
   if (at != click_step) {
     /* a new sixteenth: on a beat, the click starts */
     click_step = at;
-    if (at >= 0 && at % 4 == 0 && metro && rec_on) {
+    if (at >= 0 && at % beat() == 0 && metro && rec_on) {
       click_env = at == 0 ? 0.30f : 0.20f;
       click_f = (at == 0 ? 2200.0f : 1500.0f) / SR;
       click_ph = 0.0f;

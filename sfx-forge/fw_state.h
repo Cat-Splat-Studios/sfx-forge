@@ -12,8 +12,9 @@
  * Needs:  fw_protocol.h (SLOTS, the song's pieces), core/sfx_song.h, song_way.h.
  * Read:   the rule of the two flows first (sfx-forge.c). A variable here is written by ONE flow. What the audio flow
  *         writes for the controls to read is a single 32-bit value each, marked volatile; everything else the audio
- *         never touches but metro and rec_on, which it only reads. The order of the definitions is the order of the
- *         data in the built .wasm: a new variable goes at the end of its group, and moving one changes the binary.
+ *         never touches but metro, rec_on and beat_len, which it only reads. The order of the definitions is the
+ *         order of the data in the built .wasm: a new variable goes at the end of its group (beat_len stands with
+ *         metro and rec_on: the values the controls write for the audio), and moving one changes the binary.
  */
 
 /* ---- 1. the audio flow's own ----------------------------------------------------------------------------------- */
@@ -89,10 +90,17 @@ static int sc_n;
 /* the metronome: a click on every beat while REC is on and the song runs – higher on the bar line. The firmware's own:
    it is not part of the song, and a game never hears it. No count-in: REC loops the pattern, the first pass is one.
 
-   These are the two values the CONTROLS write and the audio only reads:
-   metro: the metronome is on (SHIFT + REC). rec_on: the audio's copy of rec (REC). */
+   These are the values the CONTROLS write and the audio only reads:
+   metro: the metronome is on (SHIFT + REC). rec_on: the audio's copy of rec (REC). beat_len: under them. */
 static volatile int metro = 1;
 static volatile int rec_on;
+/* and a third: the beat, in sixteenths - 2 (an eighth), 3, 4 (a quarter) or 6 (a dotted quarter). SHIFT + B on SONG
+   and PERFORM. The click falls on it; the display shades the bar by it and names the bar's length by it (meter_text);
+   FILL begins with it. It is the device's own, as the click is: it is not in the song, a game never gets it, F2 does
+   not take it back, and a new song, the demo song or a song from a game leave it as it is - only the factory reset
+   puts the quarter back. It is kept in meter.bin. (Swing holds back every other sixteenth: with a beat of three
+   sixteenths every second click is on such a one and comes late, with the notes of its step.) */
+static volatile int beat_len = 4;
 /* the click that sounds: its level, phase and frequency */
 static float click_env;
 static float click_ph;
@@ -278,6 +286,37 @@ static int clampi(int v, int a, int b) {
 /* the bar in sixteenths */
 static int bar_len(void) {
   return SONG.len >= 1 && SONG.len <= SFX_BAR ? SONG.len : SFX_BAR;
+}
+
+/* the beat in sixteenths: 2, 3, 4 or 6 (whatever beat_len may hold: read once) */
+static int beat(void) {
+  int b = beat_len;
+  return b == 2 || b == 3 || b == 6 ? b : 4;
+}
+
+/* The bar as a time signature, into t (room for 6 characters): its length counted in the beat's kind of note where it
+   comes out whole, else in the next finer one. A beat of a quarter counts quarters ("3/4"), then eighths ("7/8"), then
+   sixteenths; a beat of an eighth or a dotted quarter counts eighths ("6/8"), then sixteenths; a beat of three
+   sixteenths counts sixteenths ("12/16"). */
+static const char *meter_text(char *t) {
+  int len = bar_len();
+  int b = beat();
+  /* den: the note that is counted. one: how many sixteenths it has */
+  int den = b == 4 ? 4 : b == 3 ? 16 : 8;
+  int one = 16 / den;
+  while (len % one) {
+    den *= 2;
+    one /= 2;
+  }
+  vg_itoa(len / one, t);
+  strcpy(t + strlen(t), "/");
+  vg_itoa(den, t + strlen(t));
+  return t;
+}
+
+/* the bar is not four quarters: the display says what it is */
+static int meter_shown(void) {
+  return bar_len() != SFX_BAR || beat() != 4;
 }
 
 /* pattern k's grid: 0 = 1/16, 1 = 1/32, 2 = 1/64 */

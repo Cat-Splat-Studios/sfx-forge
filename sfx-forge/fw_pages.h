@@ -242,13 +242,39 @@ static void param_put(int pg, int i, float u) {
   }
 }
 
-/* SONG and PERFORM, B: the bar's length in sixteenths (said in the top line) */
+/* SONG and PERFORM, B: the bar's length in sixteenths - with SHIFT (on SEQ too) the beat: an eighth, three sixteenths,
+   a quarter, a dotted quarter. Both are said in the top line, with the time signature they make: "BAR: 12/16 = 3/4"
+   (a signature counted in sixteenths is not said twice: "BAR: 7/16"), "BEAT 3/8: BAR 6/8". */
 static void bar_turn(int d) {
-  static char t[16];
+  static char t[24];
+  char m[8];
+  if (shift) {
+    /* the four beats, in sixteenths, and what they are called */
+    static const uint8_t BEATS[4] = {2, 3, 4, 6};
+    static const char *const NAME[4] = {"1/8", "3/16", "1/4", "3/8"};
+    int k = 0;
+    while (k < 3 && BEATS[k] != beat()) {
+      k++;
+    }
+    k = clampi(k + (d > 0 ? 1 : -1), 0, 3);
+    beat_len = BEATS[k];
+    strcpy(t, "BEAT ");
+    strcpy(t + strlen(t), NAME[k]);
+    strcpy(t + strlen(t), ": BAR ");
+    strcpy(t + strlen(t), meter_text(m));
+    say(t);
+    return;
+  }
   SONG.len = (uint8_t)clampi(SONG.len + d, 1, SFX_BAR);
   strcpy(t, "BAR: ");
   vg_itoa(SONG.len, t + 5);
   strcpy(t + strlen(t), "/16");
+  meter_text(m);
+  /* (m ends in 6 only when it counts sixteenths: then it is what stands there already) */
+  if (m[strlen(m) - 1] != '6') {
+    strcpy(t + strlen(t), " = ");
+    strcpy(t + strlen(t), m);
+  }
   say(t);
 }
 
@@ -341,8 +367,13 @@ static void encoder(int id, float turn) {
     }
     /* (said in the top line) */
     if (id == VE_B) {
-      SONG.scale = (uint8_t)wrap(SONG.scale, d, SFX_SCALE_COUNT);
-      say(SCALE_NAME[SONG.scale]);
+      if (shift) {
+        /* the beat, as on SONG and PERFORM */
+        bar_turn(d);
+      } else {
+        SONG.scale = (uint8_t)wrap(SONG.scale, d, SFX_SCALE_COUNT);
+        say(SCALE_NAME[SONG.scale]);
+      }
     }
     return;
   }

@@ -62,7 +62,7 @@ static const char *const HELP_SEQ[] = {
   "DATA",              "select a sound (a row)",
   "ENCODER 1 2",       "the step in the frame, and its NOTE",
   "ENCODER 3 4",       "its VELOCITY (1-8) · its LENGTH in steps",
-  "A   B",             "TEMPO (SHIFT: SWING) · the scale of NOTE",
+  "A   B",             "TEMPO (SHIFT: SWING) · scale (SHIFT: the beat)",
   "LEFT RIGHT",        "pattern before / after · SHIFT: the steps shown",
   "F1  F2",            "LOOP or SONG plays · UNDO (again: redo)",
   "F3 F4 F5",          "FILL · CLEAR · COPY · SHIFT+F5 F6: grid",
@@ -76,7 +76,7 @@ static const char *const HELP_SONG[] = {
   "SHIFT+PAD 9-15 16", "take the last bar away · all (press twice)",
   "ENCODER 1 2",       "PATTERN · CHAIN: A to here play in a row",
   "ENCODER 3 4",       "INTENSITY (CC 14) · LAYER of the sound",
-  "A   B",             "TEMPO (SHIFT: SWING) · the bar in 16ths",
+  "A   B",             "TEMPO (SHIFT: SWING) · bar (SHIFT: the beat)",
   "F1",                "what PLAY plays: LOOP a pattern, or the SONG",
   "F2 F3",             "UNDO (again: redo) · CLEAR the pattern",
   "F4",                "NEW empty song (SHIFT: DEMO) - press twice",
@@ -104,10 +104,10 @@ static const char *const HELP_PERFORM[] = {
   "F3 MUTES",          "pads: mute a sound.  SHIFT + pad: solo",
   "F4 PATTERN",        "pads 1-8: pattern A-H · 9-16: INTENSITY",
   "F5  F6",            "FILL the selected sound · UNDO (again: redo)",
-  "SHIFT + F1-F4",     "LOOP or SONG · CLEAR · ALL ON · COPY",
-  "SHIFT + F5 F6",     "the grid coarser / finer",
+  "SHIFT + F1-F6",     "LOOP/SONG · CLEAR · ALL ON · COPY · grid - +",
   "DATA  SHIFT+PAD",   "select a sound (STEPS: SHIFT + its pad)",
-  "ENCODER 1-4  A  B", "VOLUME PAN INTENSITY LAYER · TEMPO · BAR",
+  "ENCODER 1-4",       "VOLUME · PAN · INTENSITY · LAYER",
+  "A   B",             "TEMPO (SHIFT: SWING) · bar (SHIFT: the beat)",
   "LEFT RIGHT",        "pattern before / after · SHIFT: the steps shown",
 };
 
@@ -158,6 +158,7 @@ static void factory_reset(void) {
   undo_run = 0;
   undo_redo = 0;
   undo_pat = -1;
+  beat_len = 4;
   kit = KIT_MUSIC;
   /* the song's sounds, to the player */
   for (int i = 0; i < SLOTS; i++) {

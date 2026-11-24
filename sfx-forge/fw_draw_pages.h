@@ -100,7 +100,7 @@ static void header(uint32_t rgb, uint32_t pos, uint32_t now) {
        beat */
     // clang-format off
     vg_circle((float)ix + 5.0f, 17.0f,
-              step != NO_STEP && ((int)step / pdiv) % 4 == 0
+              step != NO_STEP && ((int)step / pdiv) % beat() == 0
                   && ((float)((int)step % pdiv) + pos_frac(pos)) / (float)pdiv < 0.6f ? 7.5f : 5.0f,
               RED);
     // clang-format on
@@ -129,6 +129,13 @@ static void dr_read(uint32_t pos) {
    step of the sixteenth that plays (a single sixty-fourth is over before it can be seen) */
 static int head_at(int g, int div) {
   return dr_step != NO_STEP && (div == 1 && dr_div == 1 ? (int)dr_step == g : g / div == (int)dr_step / dr_div);
+}
+
+/* An empty tile of SEQ and AUTO has one of two shades. At 16 steps they are the beats: every other beat is darker (with
+   a beat of a quarter that is every other row of pads, as ever). At 32 and 64 steps they are the rows of pads: a row is
+   an eighth or a sixteenth there. g: the step. s: its tile, 0-15. 1 = the darker one */
+static int shade_at(int g, int div, int s) {
+  return div == 1 ? (g / beat()) & 1 : (s / 4) & 1;
 }
 
 /* the cursor: "5" at 16 steps, "17/32" at more */
@@ -167,8 +174,8 @@ static const char *len_text(int len, char *buf) {
 }
 
 /* ---- SEQ ------------------------------------------------------------------------------------------------------- */
-/* 16 steps of the selected sound as the 16 pads – a row is a beat at 16 steps a bar, an eighth at 32, a sixteenth at
-   64. rgb: the sound's colour. step: the step that plays (NO_STEP: none). now: the pattern that plays. */
+/* 16 steps of the selected sound as the 16 pads – a row is a quarter at 16 steps a bar, an eighth at 32, a sixteenth
+   at 64. rgb: the sound's colour. step: the step that plays (NO_STEP: none). now: the pattern that plays. */
 static void draw_seq(uint32_t rgb, uint32_t step, uint32_t now) {
   char buf[16];
   /* here: the pattern shown is the one that plays. lim: the steps of the bar. w: which 16 steps are shown */
@@ -196,7 +203,7 @@ static void draw_seq(uint32_t rgb, uint32_t step, uint32_t now) {
              head && !set  ? 0x64463A
              : set         ? vg_mix(BG, rgb, 0.25f)
              : off         ? 0x1A120E
-             : (s / 4) & 1 ? 0x2A1D17
+             : shade_at(g, div, s) ? 0x2A1D17
              :               0x35251D);
     // clang-format on
     if (set) {
@@ -239,8 +246,9 @@ static void bar_strip(uint32_t rgb, uint32_t step, uint32_t now, int points) {
   vg_rect(x0, y0, 128, 12, 0x1A120E);
   /* (the bar: what lies beyond it stays dark) */
   vg_rect(x0, y0, lim * px, 12, 0x2A1D17);
-  for (int b = 1; b < 4; b++) {
-    vg_rect(x0 + b * 32, y0, 1, 12, LINE);
+  /* (a line at every beat: 8 pixels a sixteenth) */
+  for (int b = beat(); b < SFX_BAR; b += beat()) {
+    vg_rect(x0 + b * 8, y0, 1, 12, LINE);
   }
   for (int i = 0; i < lim; i++) {
     if (points ? aut_at(sel, i) : (pat()->on[i] >> sel) & 1) {
@@ -499,7 +507,7 @@ static void draw_auto(uint32_t rgb, uint32_t step, uint32_t now) {
     vg_round(x, y, 55, 54, 7,
              off           ? 0x1A120E
              : head        ? 0x563A2E
-             : (s / 4) & 1 ? 0x2A1D17
+             : shade_at(g, div, s) ? 0x2A1D17
              :               0x35251D);
     // clang-format on
     if (a) {
@@ -723,7 +731,7 @@ static void draw_perform(uint32_t step, uint32_t now, uint32_t on) {
       } else {
         rgb = g >= lim              ? 0x1A120E
               : head                ? 0x64463A
-              : (g / (4 * div)) & 1 ? 0x2A1D17
+              : (g / (beat() * div)) & 1 ? 0x2A1D17
               :                       0x35251D;
       }
       // clang-format on

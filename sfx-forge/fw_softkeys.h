@@ -105,7 +105,8 @@ static void pattern_clear(void) {
   say("PAT CLEARED - F2: UNDO");
 }
 
-/* A whole song goes: these two ask twice, and F2 brings it back – tempo, mix and all. The sounds are not touched; it
+/* A whole song goes: these two ask twice, and F2 brings it back – tempo, mix and all. (The beat is the device's:
+   they leave it.) The sounds are not touched; it
    plays on. */
 
 /* SONG, F4 NEW: an empty song */
@@ -159,18 +160,36 @@ static void pattern_copy(void) {
   say(said);
 }
 
-/* F3 FILL: the selected sound on every quarter, then every eighth, every sixteenth - at 32 and 64 steps also every
-   thirty-second -, none. Each press goes one further: it looks which of these the row is now, and writes the next. */
+/* F3 FILL: the selected sound on every beat (a quarter, unless SHIFT + B chose another), then every eighth (where the
+   beat is made of eighths), every sixteenth - at 32 and 64 steps also every thirty-second -, none. Each press goes one
+   further: it looks which of these the row is now, and writes the next. */
 static void fill(void) {
-  static const char *const SAID[5] = {"EVERY 1/4", "EVERY 1/8", "EVERY 1/16", "EVERY 1/32", "SOUND CLEARED"};
+  /* what is said, by how many thirty-seconds lie between two steps of the fill (1, 2, 4, 6, 8, 12) */
+  static const char *const SAID[13] = {"", "EVERY 1/32", "EVERY 1/16", "", "EVERY 1/8", "",         "EVERY 3/16",
+                                       "", "EVERY 1/4",  "",           "", "",          "EVERY 3/8"};
   /* n: the pattern's steps. lim: those of the bar. levels: how many fills there are. next: the one to write */
   int div = pat_div(edit_pat);
   int n = gsteps();
   int lim = bar_len() * div;
-  int levels = div > 1 ? 4 : 3;
+  int levels = 0;
   int next = 0;
-  /* every[k]: fill k has a step every so many */
-  int every[4] = {4 * div, 2 * div, div, div > 1 ? div / 2 : 1};
+  /* six[k]: fill k has a step every so many sixteenths - the beat first, then the eighth (where the beat is made of
+     eighths), then the sixteenth. every[k]: the same in steps of the pattern; at 32 and 64 steps the thirty-second
+     comes last */
+  int b = beat();
+  int six[3];
+  int every[4];
+  six[levels++] = b;
+  if (b > 2 && b % 2 == 0) {
+    six[levels++] = 2;
+  }
+  six[levels++] = 1;
+  for (int k = 0; k < levels; k++) {
+    every[k] = six[k] * div;
+  }
+  if (div > 1) {
+    every[levels++] = div / 2;
+  }
   undo_mark("FILL", 0);
   for (int k = 0; k < levels; k++) {
     int same = 1;
@@ -189,7 +208,7 @@ static void fill(void) {
       pat()->on[i] |= (uint16_t)(1u << sel);
     }
   }
-  say(next < levels ? SAID[next] : SAID[4]);
+  say(next < levels ? SAID[every[next] * 2 / div] : "SOUND CLEARED");
 }
 
 /* SEQ, AUTO and PERFORM, SHIFT + F5 / F6: the grid of the pattern shown, a step coarser or finer. Finer moves every
