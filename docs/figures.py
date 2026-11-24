@@ -134,6 +134,16 @@ annotated("perform-pattern", "perform-pattern", [(380, 17), (232, 44), (121, 262
 annotated("perform-sounds", "perform-sounds", [(384, 17), (471, 100), (302, 275), (80, 304)])
 annotated("perform-32", "perform-32", [(200, 44), (372, 192), (312, 275)])  # 1/32, the frame, STEPS 17-32
 
+# ---- the bar and the beat: 3/4 on SEQ, the same bar as 6/8, PERFORM in 6/8 while it plays, 7/8 -----------------------
+# EVERY 1/4, BAR 3/4 in the title, the three beats, the dark row beyond the bar
+annotated("meter-34", "meter-34", [(160, 17), (258, 44), (128, 114), (128, 258)])
+# BEAT 3/8: BAR 6/8, the title, where the second beat begins
+annotated("meter-beat", "meter-beat", [(228, 17), (258, 44), (128, 143)])
+# the title, where the second beat begins, the end of the bar
+annotated("meter-68", "meter-68", [(248, 44), (227, 150), (384, 150)])
+# BAR: 14/16 = 7/8, the title, the short last beat, beyond the bar
+annotated("meter-78", "meter-78", [(212, 17), (248, 44), (395, 150), (444, 150)])
+
 # ---- the tutorials: a picture a step -------------------------------------------------------------------------------
 # fmt: off
 for n in (
@@ -489,6 +499,7 @@ def cheat():
             ("F1  (sound pages)", "the preset before"),
             ("an encoder", "turn fast"),
             ("A  (K5 pages)", "the swing"),
+            ("B", "SEQ, SONG, PERFORM: the beat - 1/8, 3/16, 1/4, 3/8"),
             ("F5  F6", "SEQ, AUTO, PERFORM: the grid 1/16, 1/32, 1/64"),
             ("LEFT  RIGHT", "SEQ, AUTO, PERFORM: the 16 steps before / after"),
             ("a pad  (SEQ, AUTO)", "hear and select that sound"),

@@ -59,7 +59,7 @@ How the pieces depend on each other:
                   ../unity-sfx-forge   (the package repository: generated, never edited by hand)
 
   tests around them:
-    build.sh ............... the built .wasm: 21 scene and host checks, vibe-check, the two-thread stress test
+    build.sh ............... the built .wasm: 22 scene and host checks, vibe-check, the two-thread stress test
     tests/dotnet ........... Runtime/Core + sfxforge.dll, against what the firmware sent in build.sh's run
     tests/unity-inspectors . the package's Editor code (EditMode)
     unity/Demo ............. the showcase's editor checks and PlayMode tests
@@ -108,28 +108,32 @@ copies out again. Then it strips the debug sections from the `.wasm`: they hold 
 
 When it is right:
 
-- It ends with exit code 0, and 23 lines of the output say `PASSED`. The first is `vibe-check`'s, the last is
-  `store PASSED`. Count them: `sh build.sh | grep -c PASSED`.
-- Every check prints `  ok    …` lines: 218 in a whole run of 1.7.0 (`sh build.sh | grep -c "  ok  "`). A failure
-  prints `  FAIL  …` and the run stops there.
+- It ends with exit code 0, and 24 lines of the output say `PASSED`. The first is `vibe-check`'s, the last is
+  `store PASSED`. Count them: `sh build.sh | grep -c PASSED`. In order: `vibe-check`'s line, then `tour`, `daw`,
+  `guide`, `reset`, `metronome`, `loop`, `modes`, `take`, `edit`, `undo`, `retake`, `grid`, `regrid`, `take64`,
+  `grid keys`, `perform`, `meter`, `atomic`, `song way stress`, `song export`, `identity`, `wire`, `store`.
+- Every check prints `  ok    …` lines: 239 in a whole run of 1.7.0 (`sh build.sh | grep -c "  ok  "`); `meter`
+  prints 21 of them. A failure prints `  FAIL  …` and the run stops there.
 - `sha256sum build/sfx-forge.wasm` gives the same hash before and after a change that only moves text. This is how
   the readability pass was proved.
 
 **A hash belongs to one state of the source.** It says nothing about a version: any change to the code gives
-another. Compare a hash only with one you took yourself, just before your change. The two that were written down:
+another. Compare a hash only with one you took yourself, just before your change. The three that were written down:
 
 | Firmware | State of the source | sha256 of `build/sfx-forge.wasm` |
 |---|---|---|
 | 1.6.0 | after the readability pass; the pass left it as it was before | `9f777350b8433e09c644a41817b34dfc7fda255e3917aa6d906f9a4bcce74bb4` |
 | 1.7.0 | with the PERFORM page | `4e59a51fc0257c96a9f43172952d0bb61bc03e3f9f15bf95c988c239c81f27e7` |
+| 1.7.0 | with the PERFORM page and the beat (`meter.bin`, `tests/check-meter.mjs`) | `177d05b39109508ff69db11f3acfeb826e407bc0ec2d0f176a83fe3ddad42da3` |
 
-The hash of 1.7.0 came out the same with the SDK in `.tools` and with SDK 28. Another SDK, or another Zig, may give
-another hash for the same source.
+Two rows say 1.7.0: the version was not released between them, so its number stayed, and the hash changed with the
+code. Each hash of 1.7.0 came out the same with the SDK in `.tools` and with SDK 28. Another SDK, or another Zig,
+may give another hash for the same source.
 
 Each check is a scene `tests/<name>.json` played by the SDK's `wasmtest` into `out/<name>`, then judged by
-`tests/check-<name>.mjs`. A check says at its top what it proves and how to run it alone. Six checks have no scene:
+`tests/check-<name>.mjs`. A check says at its top what it proves and how to run it alone. Seven checks have no scene:
 they load the `.wasm` themselves through `tests/host.mjs` (`check-identity.mjs`, `check-grid-keys.mjs`,
-`check-perform.mjs`, `check-atomic.mjs`, `check-wire.mjs`, `check-store.mjs`). The README's table "Build" lists what each one checks.
+`check-perform.mjs`, `check-meter.mjs`, `check-atomic.mjs`, `check-wire.mjs`, `check-store.mjs`). The README's table "Build" lists what each one checks.
 
 ### The native library
 
@@ -308,7 +312,7 @@ Every file's header says what it holds. These are the doors.
 | **the firmware's pages and keys** | `sfx-forge/sfx-forge.c` (the header: the map of the parts). `fw_state.h` for the pages (`PG_*`, `TAB_OF`, `PAGE_PARAMS`, `SOFT`). `fw_events.h`, `on_event`: it names the function for every pad, key and message. Then `fw_pages.h` (`set_page`, `tab_key`, `encoder`) and `fw_softkeys.h` (`soft_sound`, `soft_seq`, `soft_song`, `soft_auto`, `soft_mix`, `soft_perform`). The sequencer's keys: `fw_sequencer.h`. PERFORM is the page to read for pads that change their job: the table under this one |
 | **the display** | `fw_draw.h`, `on_draw`: seven numbered parts, one branch a page. The pages' pictures: `fw_draw_pages.h` (`draw_seq`, `draw_song`, `draw_auto`, `draw_mix`, `draw_master`, `draw_link`, `draw_perform`) and `fw_draw_sound.h` (`scene`). The pieces: `fw_draw_parts.h` (`hud`, `row`, `dial`, `param_text`). The stage: `fw_stage_draw.h` (`on_stage`) and `fw_stage_input.h` (`stage_event`) |
 | **the link (SysEx)** | README, "The link". `fw_protocol.h` for the bytes. `fw_link.h`: `sysex_in` (in), `out_pump` with `export_pump`, `ident_pump`, `dump_pump` (out), `song_piece` (a song arriving). In C#: `Runtime/Core/SfxProtocol.cs`, then `SfxLink.cs` and `SfxSongTransfer.cs` |
-| **the store** | `fw_store.h`: its header describes the three files; `bank_save`, `bank_load`. The reset: `factory_reset` in `fw_events.h` |
+| **the store** | `fw_store.h`: its header describes the four files (`kits.bin`, `song6.bin`, `meter.bin`, `song.bin`); `bank_save`, `bank_load`. The reset: `factory_reset` in `fw_events.h` |
 | **the Unity runtime** | `Runtime/Core/SfxPatch.cs`, then `SfxNative.cs` (the door to the DLL). Then the components: `SfxPlayer.cs` (one sound, live), `SfxMusicPlayer.cs` (a song), `SfxVariationPlayer.cs`. Assets: `SfxPreset.cs`, `SfxSong.cs`, `SfxVariationSet.cs` |
 | **the Unity editor UI** | `Editor/UI/README.md` (the kit, class by class, and its rules). Then `SfxPresetEditor.cs` (tiny: its static `Build` makes the panel) and `SfxPresetPanel.cs`, the pattern every inspector follows: the constructor builds the controls once, `Refresh` shows the sound, every edit goes through the `SerializedObject`. The comment at the top of the class says how its 110 members are ordered. `Editor/UI/SfxUnits.cs` for every value's text |
 | **the song Inspector** | `Editor/UI/README.md`, "The song". Then `SfxSongPanel.cs` (`Build` with `BuildSteps`, `BuildMix`, `BuildMaster`; `Refresh`), `Editor/UI/SongBits.cs` (`StepRow`: a sound's row of 16, 32 or 64 cells) and `SongViews.cs` (`LaneRow`: an automation lane). The bytes it reads: `Runtime/SfxSong.cs` and `Runtime/Core/SfxPackedSong.cs` (the `Head…` constants are the head's layout) |
@@ -337,6 +341,29 @@ calls what another page already had.
 | `on_draw` | `fw_draw.h` | the page's branch in part 5; the pads' lights in part 4, where each pad mode uses the branch of the page whose pads it copies; the blue key in part 6 |
 
 `tests/check-perform.mjs` holds the page's behaviour: it says at its top what it proves.
+
+**The beat and the time signature (firmware 1.7.0), part by part.** The bar's length is the song's (`SONG.len`,
+1 to 16 sixteenths) and was there before. The beat is new and is the device's: one number, in sixteenths.
+
+| Name | Part | What it is |
+|---|---|---|
+| `beat_len` | `fw_state.h` | the beat in sixteenths: 2 (an eighth), 3, 4 (a quarter, as it comes) or 6 (a dotted quarter). `volatile`: the controls write it, the audio only reads it. It stands with `metro` and `rec_on` |
+| `beat` | `fw_state.h` | reads `beat_len` once and gives 2, 3, 4 or 6 whatever it holds. Everything asks `beat()`, never the variable |
+| `meter_text` | `fw_state.h` | the bar as a time signature, from `bar_len()` and `beat()`: `3/4`, `6/8`, `7/8`, `7/16`, `12/16`. Its comment has the rule |
+| `meter_shown` | `fw_state.h` | the bar is not four quarters: the title says what it is |
+| `bar_turn` | `fw_pages.h` | B. Without SHIFT the bar's length (SONG, PERFORM), said as `BAR: 12/16 = 3/4`. Its SHIFT branch is the beat: one of the four in `BEATS`, a step a click, stopped at the ends, said as `BEAT 3/8: BAR 6/8`. `encoder` calls it for SHIFT + B on SEQ too, where B alone is the scale |
+| `fill` | `fw_softkeys.h` | FILL's levels: the beat, then the eighth where the beat is made of eighths, the sixteenth, at 32 and 64 steps the thirty-second, then none. `SAID` has the words by thirty-seconds between two steps |
+| `shade_at` | `fw_draw_pages.h` | which of the two shades an empty tile of SEQ and AUTO has: by the beat at 16 steps, by the row of pads at 32 and 64 |
+| `bar_strip` | `fw_draw_pages.h` | the whole bar in one line (at 32 and 64 steps): a line at every beat |
+| `header` | `fw_draw_pages.h` | the red REC dot swells on the beat |
+| `draw_perform` | `fw_draw_pages.h` | the two shades of the grid's empty cells, by the beat |
+| `on_stage` | `fw_stage_draw.h` | the same two shades in the stage's two grids (steps and automation) |
+| `vibe_on_audio` | `fw_audio.h` | the click: on every sixteenth that is a whole number of beats from the bar line (`at % beat() == 0`), higher at 0 |
+| `on_draw` | `fw_draw.h` | part 3, the title: `BAR 6/8` after the grid when `meter_shown()`, and ` IN 1/8` with a beat of an eighth, each only where it leaves the six marks alone |
+| `bank_save`, `bank_load` | `fw_store.h` | `meter.bin`: one byte, written while the beat is not a quarter, removed when it is; anything but 2, 3 or 6 in it leaves the quarter |
+| `factory_reset` | `fw_events.h` | puts the quarter back. `HELP_SEQ`, `HELP_SONG`, `HELP_PERFORM` beside it name SHIFT + B |
+
+`tests/check-meter.mjs` holds what is proven: it says at its top what it sees and what it cannot.
 
 The firmware's parts are included once, in a fixed order, and each uses what the parts before it define. That order
 is also the order of the code in the built `.wasm`. Moving a function between parts changes the binary, not what it
@@ -377,8 +404,10 @@ two real threads.
    together.
 4. **Single values, controls → audio.** Two kinds. The host's parameters: the controls call `vibe_param_set`
    (the output volume, the intensity, the telemetry a game sends) and `vibe_on_audio` reads them with
-   `vibe_param_get` in its parts 2 and 6. And two flags the controls write and the audio only reads: `metro`
-   (the metronome is on) and `rec_on` (the audio's copy of `rec`), `volatile` in `fw_state.h`.
+   `vibe_param_get` in its parts 2 and 6. And three values the controls write and the audio only reads: `metro`
+   (the metronome is on), `rec_on` (the audio's copy of `rec`) and `beat_len` (the beat in sixteenths, from
+   firmware 1.7.0), `volatile` in `fw_state.h`. The audio reads `beat_len` through `beat()`, once for a click, and
+   takes a quarter for any value that is none of the four.
 
 What follows from the rule when you write code:
 
@@ -637,6 +666,82 @@ and an old song must play the same samples. Only the newest format is written.
     `docs/UNITY.md`, the texts inside `tools/make_unity_package.py`. A new format is a new firmware version: the
     release recipe below.
 
+### Add a setting that is the device's, not the song's
+
+**The example is the beat** (firmware 1.7.0, `beat_len`). It is the lesson of that change: a setting that changes
+no note does not have to be in the song.
+
+Why it was done so. Format 6 has no spare byte, and `sfx_song_unpack` checks every byte of the head
+(`sfx__head_ok`). A byte for the beat would have been format 7: the whole recipe above, a new store file, another
+identity, new readers in C#, JavaScript and Python, and a song that a firmware up to 1.6.0 and a package of today
+refuse. The beat moves only the click, the shades and FILL's first press. So it stayed out.
+
+What that costs, and what the documents must say each time:
+
+- It is **not in undo**: F2 and F6 keep the song, and the setting is not in it.
+- It is **not on the wire**: SEND, a game and Unity never get it. The same song is 3/4 on one device and 6/8 on
+  another.
+- NEW, DEMO and a song from a game leave it. Only the factory reset puts it back.
+
+The steps:
+
+1. `sfx-forge/fw_state.h`: the variable, at the end of its group. If the audio reads it: one `volatile int`, beside
+   `metro`, `rec_on` and `beat_len`, written by the controls only. Give it a reader that returns a valid value
+   whatever the variable holds (`beat`), and ask the reader everywhere.
+2. The control that sets it (`bar_turn` in `fw_pages.h` is the beat's), with `say("…")`. No `undo_mark`.
+3. `sfx-forge/fw_store.h`: a small file of its own (`meter.bin`), in `bank_save` and `bank_load`, and a line in the
+   header's list of files. Write it only while the value is not the default and remove it otherwise
+   (`vibe_store_delete`): then a device that never chose another stores what it stored before. `bank_load` takes
+   only values it knows.
+4. `sfx-forge/fw_events.h`: `factory_reset` puts the default back before it saves. The `HELP_…` tables name the
+   control.
+5. Leave alone: `core/` (`sfx_song_pack`, `SFX_SONG_VERSION`), `fw_link.h`, `fw_protocol.h`, the identity, the
+   native library, the package.
+6. A check on `tests/host.mjs`, as `tests/check-meter.mjs`: the setting changes no byte of the song; SAVE writes
+   the file and removes it at the default; switched on again it is there; a file with a wrong byte; NEW leaves it;
+   the factory reset puts it back. Then its line in `build.sh`.
+7. Docs: README ("Playing it", the checks, "What the device stores"), `docs/MANUAL.md`, the cheat sheet. Say whose
+   the setting is.
+
+If a setting must sound the same in the game, it is the song's: the recipe above, and a new format.
+
+### Where a beat is four sixteenths no more
+
+Until firmware 1.7.0 a beat was a quarter, and the code said `4`. Now these follow `beat()`. A change to the beat,
+or a fifth beat, touches all of them:
+
+| Place | What follows the beat |
+|---|---|
+| `vibe_on_audio` (`fw_audio.h`) | the click |
+| `header` (`fw_draw_pages.h`) | the pulse of the red REC dot |
+| `shade_at` (`fw_draw_pages.h`), for `draw_seq` and `draw_auto` | the two shades of the tiles at 16 steps |
+| `bar_strip` (`fw_draw_pages.h`) | the lines in the bar strip |
+| `draw_perform` (`fw_draw_pages.h`) | the two shades of the grid's empty cells |
+| `on_stage` (`fw_stage_draw.h`), two places | the two shades of the stage's grids |
+| `fill` (`fw_softkeys.h`) | FILL's first level, and whether an eighth follows it |
+| `bar_turn` (`fw_pages.h`) | the list of beats (`BEATS`, `NAME`) and what the top line says |
+| `meter_text`, `meter_shown` (`fw_state.h`) | the bar's name |
+| `on_draw` (`fw_draw.h`), part 3 | the title: `BAR 6/8`, and ` IN 1/8` |
+| `bank_save`, `bank_load` (`fw_store.h`) | `meter.bin`, and which bytes are a beat |
+
+A fifth beat also needs: its value in `beat()` and in `bank_load`'s test, a den in `meter_text`, a word in `fill`'s
+`SAID` (it is indexed by thirty-seconds, 13 entries), and cases in `tests/check-meter.mjs`.
+
+These still say four, or two, on purpose. Do not make them follow the beat:
+
+| Place | Why it stays |
+|---|---|
+| `tp->beat * 4.0` and `tp->bpm / 60.0 * 4.0` in `vibe_on_audio` (`fw_audio.h`) | `tp->beat` is the host's position in quarter notes, and a DAW's tempo counts quarters. Times 4 gives sixteenths. The name is the SDK's and has nothing to do with `beat()` |
+| the tempo in `sfx_player_render` (`core/sfx_song.h`) | BPM counts quarters whatever the beat is. The beat changes no timing |
+| swing, `sfx__sub` (`core/sfx_song.h`) | swing holds back every other sixteenth: pairs of sixteenths, not beats. With a beat of three sixteenths every second click is on a held-back one and comes late with its step |
+| the factory song's velocities, `demo_song` (`fw_factory.h`, `i % 4`) | the demo song is written in four quarters. Its bytes are compared with the Unity demo's song |
+| the pads' and tiles' 4 × 4 layout: `tile_at` (`fw_draw_parts.h`), the stage's pads (`fw_stage_draw.h`, `fw_stage_input.h`) | four pads a row is the hardware |
+| `shade_at` at 32 and 64 steps (`(s / 4) & 1`) | the 16 tiles show a part of the bar there; the shades are the rows of pads |
+| the delay's TIME (`SIXTEENTHS` in `core/sfx_song.h`) | note values of the tempo, 1/16 to 1/2 |
+| `core/` as a whole, and the native library | the beat is not in the song: the player and a game never know it |
+
+To find a new one: `grep -n "% 4\|/ 4\|\* 4" sfx-forge/*.h` and read every hit.
+
 ### Add a SysEx message
 
 1. `sfx-forge/fw_protocol.h`: the next free number (`0x09`) as `SX_…`, and its line in the table comment. A message
@@ -711,7 +816,7 @@ Then:
    `tests/dotnet/IdentityTests.cs`.
 6. `sh build.sh`. The line to look for is
    `ok    the firmware's defines (1.7.0) and firmware.json ("1.7.0") say the same version`, and `vibe-check`'s
-   `Manifest    SFX FORGE 1.7.0`. Then 23 lines `PASSED`. Write down the new hash (section 2): it is another one
+   `Manifest    SFX FORGE 1.7.0`. Then 24 lines `PASSED`. Write down the new hash (section 2): it is another one
    with every version, because the version is in the code.
 7. `dotnet run -c Release --project tests/dotnet -- .`, and the Unity tests.
 8. If pages or sound changed: the screenshots and figures (`docs/shots.mjs`, `docs/figures.py`) and the two device
@@ -850,11 +955,27 @@ In C# and the scripts:
 - **PERFORM by hand** (firmware 1.7.0). `tests/check-perform.mjs` presses its keys on the built firmware and
   reads the song and the sound. Nobody has played the page, looked at it while it plays, or listened to it; it was
   never on hardware or in the plugin. The check does not see the display, the stage's REC button, or solo.
+- **The beat and the time signature by ear, by eye and by hand** (firmware 1.7.0). `tests/check-meter.mjs`
+  turns SHIFT + B on the built firmware and reads the song, the store and the sound. What nobody and nothing has
+  done:
+  - listened to the click, at any beat;
+  - run the beat on the hardware or in the plugin, or turned SHIFT + B by hand;
+  - read the words: `BAR: 12/16 = 3/4`, `BEAT 3/8: BAR 6/8`, the title's `BAR 6/8` and ` IN 1/8`, FILL's
+    `EVERY 3/8`. The check sees only that the display's picture of a bar of 12 differs with the beat;
+  - looked at the shades of SEQ, AUTO and PERFORM, the lines in the bar strip, or the REC dot;
+  - seen the stage's shades: no check draws the stage with another beat;
+  - tried swing with a beat of three sixteenths. That the click is uneven there is read from the code;
+  - tried a bar that is not a whole number of beats (the short last beat), or SHIFT + B on SONG. The check turns it
+    on PERFORM and on SEQ;
+  - checked that DEMO, a song from a game and UNDO leave the beat. The check tries NEW and the factory reset; the
+    rest is read from the code.
 - **The videos are not a test.** They are made by scripts from the firmware and the game.
   [The videos' README](../videos/README.md) says for each what it was made from; a video made before a page
   existed does not show it.
-- **The link with PERFORM open.** The six link tests and the recorded session passed against the emulator with
-  1.7.0 on 23 Nov 2026, each in one run (`docs/UNITY.md`, section 6). PERFORM was not open in any of them. 1.7.0
+- **The link with PERFORM open, or with another beat.** The six link tests passed against the emulator on
+  24 Nov 2026 with 1.7.0 as it is now (the build `177d05b3…`), in one run (`docs/UNITY.md`, section 6). The recorded
+  session passed on 23 Nov 2026 with the build of that day (`4e59a51f…`, before the beat) and was not run again:
+  the link video is that recording. PERFORM was not open in any of them, and the beat was a quarter. 1.7.0
   changed no message; its identity says 1.7.0.
 - **Two real flows inside the firmware.** Only `song_way.h` was run on two threads. The queue and the `volatile`
   values are correct by reading.
@@ -876,7 +997,7 @@ In C# and the scripts:
   update changes the number, the kit changes there instead. `tests/check-grid-keys.mjs` watches exactly this case:
   if it fails after an SDK update, look here first.
 - **The SDK moves.** The firmware's comments already describe SDK 28 (SHIFT + K1 – K6). Build with
-  `VIBE_SDK=…` against a new checkout before you replace the one in `.tools`, and compare the 23 lines.
+  `VIBE_SDK=…` against a new checkout before you replace the one in `.tools`, and compare the 24 lines.
 - **One SysEx a block.** Anything sent out of turn is lost without an error. Everything goes through `out_pump`.
 - **A full queue drops the message** (`send`, `QN` 64). A burst of more than 64 notes and edits between two blocks
   loses the rest.
@@ -904,6 +1025,8 @@ In C# and the scripts:
 | **slot** | a sound's place in a kit, 0–15; in a message 16–31 means the MUSIC kit's pad whatever is shown |
 | **pattern** | one bar of music over the 16 sounds, A to H (`sfx_pattern`) |
 | **bar** | a pattern's length: 1 to 16 sixteenths, one number for the whole song (`sfx_song.len`) |
+| **beat** | how the bar is counted: 2, 3, 4 or 6 sixteenths (`beat_len`, `beat()`). The device's, not the song's: the click, the shades and FILL follow it. Not `tp->beat`, which is the host's position in quarter notes |
+| **time signature** | the bar's name on the display, made from the bar and the beat (`meter_text`): `3/4`, `6/8`, `7/8` |
 | **grid** | how finely a pattern cuts a sixteenth: 0, 1, 2 = 1, 2 or 4 steps, so 16, 32 or 64 steps a full bar. Each pattern has its own. `div` in the code is the steps a sixteenth. In C#, `Grid(pattern)` returns the steps of a full bar (16, 32, 64) and `GridSteps(pattern)` those the bar plays; the number 0, 1, 2 is only an argument of `SongRegrid` |
 | **step** | one cell of a pattern in its own grid. It may be on for a sound, with a note, a velocity and a length |
 | **window** | the 16 steps of a finer pattern that the pads and tiles show at a time (`view_win`) |
@@ -929,7 +1052,7 @@ In C# and the scripts:
 | **profile** | a device's limits as numbers (`SfxProfile`): formats, sounds, patterns, steps, lanes, bars, voices. Profile 1 is SFX FORGE 1.x on VIBE FM |
 | **format** | the first byte of a packed patch (2) or song (6): which layout wrote it. The asset format of a Unity asset is a separate number (`SfxAssetFormat`, `SfxSong.CurrentFormat`) |
 | **packed song** | a song as bytes 0..127, for the store, SysEx and a game's asset (`sfx_song_pack`) |
-| **store** | the device's small file store: `kits.bin`, `song6.bin`, and `song.bin` of older firmwares |
+| **store** | the device's small file store: `kits.bin`, `song6.bin`, `meter.bin` (the beat, while it is not a quarter), and `song.bin` of older firmwares |
 | **scene** | in `tests/`: a script of key presses (`*.json`) that `wasmtest` plays. In the firmware: `scene()`, the picture of a sound page |
 | **host** | whatever runs the firmware: the hardware, the plugin, the emulator, `wasmtest`, `tests/host.mjs` |
 | **FOCUS** | the SDK's frame that DATA moves from control to control and ENTER presses, for controllers without the keys |

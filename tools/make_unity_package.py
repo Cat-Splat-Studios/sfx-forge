@@ -844,13 +844,16 @@ def make_firmware(target):
         + FIRMWARE_VERSION
         + ") was run without the emulator's page, in the VIBE FM SDK's command-line tools and, for\n"
         "SysEx and stored files, in a small host of the source repository's own: its checks hand the built `.wasm`\n"
-        "events and SysEx and read its sound, its MIDI and what it stores, and all 21 of them pass. A few of them also\n"
+        "events and SysEx and read its sound, its MIDI and what it stores, and all 22 of them pass. A few of them also\n"
         "compare the display, to tell that it changed or that the LINK light is on: what a page shows and what a toast\n"
         "says is not read. Against\n"
-        "Unity, the six link tests of the Unity manual and the recorded session of the link video passed with\n"
-        "firmware 1.7.0 in the SDK's local emulator on 23 Nov 2026, each in one run, with songs of sixteenths only.\n"
-        "It was not run in the plugin or on hardware. Nobody has played its new page, PERFORM, by hand, and nobody\n"
-        "has listened to what is new in it. Its source is not in this package.\n\n"
+        "Unity, the six link tests of the Unity manual passed with this build in the SDK's local emulator on\n"
+        "24 Nov 2026, in one run, with songs of sixteenths only and the beat a quarter. The session of the link video\n"
+        "was recorded with the 1.7.0 build of 23 Nov 2026, before the beat was added; with four quarters the display\n"
+        "is the same, and it was not recorded again.\n"
+        "It was not run in the plugin or on hardware. Nobody has played its new page, PERFORM, by hand, nobody has\n"
+        "set a time signature by hand, and nobody has listened to what is new in it. Its source is not in this\n"
+        "package.\n\n"
         "New in 1.7.0: PERFORM, a fourth page of the K5 key (K5 walks SEQ, SONG, AUTO, PERFORM). It shows the whole\n"
         "pattern as a grid, one row for each of the 16 sounds, and F1 to F4 choose what the pads are: the steps of\n"
         "the selected sound, the kit, mutes, or the patterns and the intensity\n"
@@ -858,6 +861,20 @@ def make_firmware(target):
         "changes nothing in this package's code, in the messages or in the formats: a device with 1.6.0 and one with\n"
         "1.7.0 speak the same song format 6, and the package works with either. The page was tested by a script that\n"
         "presses its keys and does not look at the display.\n\n"
+        "Also new in 1.7.0: a beat and a time signature. The bar's length was the song's already (encoder B on\n"
+        "SONG and PERFORM, 1 to 16 sixteenths). New is the beat: SHIFT + B on SEQ, SONG and PERFORM chooses an\n"
+        "eighth, three sixteenths, a quarter (as the device comes) or a dotted quarter. The click, the shades of\n"
+        "the grids and FILL follow it, and the display names the bar by it: 12 sixteenths are `BAR 3/4` with a\n"
+        "quarter and `BAR 6/8` with a dotted quarter ([the device's\n"
+        "manual](../Documentation~/MANUAL.md#the-bar-and-the-beat-34-68-78)). The beat is the device's, not the\n"
+        "song's: it is not in the packed song and in no message, a game never gets it, and it changes no note.\n"
+        "The device keeps it in a file of its own, `meter.bin`. Nothing in the package's code or formats changes:\n"
+        "the package has nothing to read, and a bar of 12 sixteenths plays the same in Unity whether the device\n"
+        "calls it 3/4 or 6/8. With four quarters, as the device comes, nothing looks, sounds or is stored\n"
+        "differently than before. Not there: a bar longer than 16 sixteenths (no 5/4, 6/4, 9/8 or 12/8),\n"
+        "triplets, a length or a beat for each pattern, groupings like 2+2+3. The beat was tested by a script\n"
+        "that reads what FILL writes, where the click falls, the song's bytes and the store; it does not read the\n"
+        "display's words, and nobody has listened to the click.\n\n"
         "New in 1.6.0: each pattern has its own grid of 1/16, 1/32 or 1/64, which is 16, 32 or 64 steps a bar (SHIFT+F5\n"
         "and SHIFT+F6 on the SEQ and AUTO pages: coarser and finer; SHIFT+LEFT and SHIFT+RIGHT: the 16 steps before and\n"
         "after). With it the song is in format 6, which has no fixed length (the factory song is 2487 bytes), the song\n"
@@ -1211,16 +1228,21 @@ Tested, on one machine (Windows 11, Unity {unity_tested}), in the repository thi
   bars; with it off the arrangement goes on. The run was headless and muted: nobody heard it.
 - The link, end to end against the VIBE FM SDK's emulator over a virtual MIDI cable (loopMIDI): patches and the song
   from the device to Unity, a song and its sounds from Unity to the device, the game's messages leaving for the
-  device, and the device saying what it is. That was done with firmware 1.7.0, the one in this package, on
-  23 Nov 2026: six tests, all passed, in one run, with songs of sixteenths only (and with 1.6.0 the day before).
+  device, and the device saying what it is. That was done with firmware 1.7.0, the build in this package, on
+  24 Nov 2026: six tests, all passed, in one run, with songs of sixteenths only (on 23 Nov 2026 with the 1.7.0
+  build of that day, which did not have the beat yet, and with 1.6.0 the day before that).
   SEND and EXPORT pressed on the device arriving in a running game were seen in the recorded session of the link
-  video, run once on the same day with 1.7.0; in its pictures the device's INTENSITY follows the game's.
-- The firmware in this package (1.7.0): all 21 of its own checks pass. They run the built `.wasm` in the SDK's
+  video, run once; in its pictures the device's INTENSITY follows the game's. The session was recorded with the
+  1.7.0 build of 23 Nov 2026, before the beat was added; with four quarters the display is the same. It was not
+  run again with the build in this package.
+- The firmware in this package (1.7.0): all 22 of its own checks pass. They run the built `.wasm` in the SDK's
   command-line tools and in a small host of the source repository's own (for SysEx and stored files), without the
   emulator's page and without Unity, and read its sound, its MIDI, what it stores
   and the song it sends: 27 messages, the 16 sounds and then 2487 bytes of format 6 in 11 pieces. They also hand it
-  songs in both shapes of the song message, out of order, doubled and one straight after another. One of the 21
-  presses the keys of PERFORM, the page that is new in 1.7.0; it does not look at the display.
+  songs in both shapes of the song message, out of order, doubled and one straight after another. One of the 22
+  presses the keys of PERFORM, the page that is new in 1.7.0; it does not look at the display. Another is about
+  the beat, which is new in 1.7.0 too: what FILL writes with each beat, where the click falls, that the song's
+  bytes stay as they were, and what the device stores. It does not read the display's words.
 - The finer grid and song format 6 on the Unity side, without Unity and without a device (the checks of the
   engine-independent code, below): a format-5 song renders bit for bit as it did before; the songs of formats 1 to
   5, converted to format 6, play the same samples; a pattern made finer and coarser again; where the player is in a
@@ -1257,7 +1279,7 @@ Tested, on one machine (Windows 11, Unity {unity_tested}), in the repository thi
 Tested on this package as generated, on the same machine, with the editor run headless. Most of it was done
 before the tools for designing sounds, `loopPattern` and firmware 1.5.0 were added. One run was repeated with
 them in the package: the sample's editor checks and Play mode tests, at the end of "The sample" below. The rest
-was not. **With firmware 1.7.0 and song format 6 in the package, one more run was made**, on 23 Nov 2026: the
+was not. **With firmware 1.7.0 and song format 6 in the package, one more run was made**, last on 24 Nov 2026: the
 sample's editor checks and Play mode tests, at the very end of "The sample" below. Everything else in this list was
 run on a generated package from before firmware 1.6.0, whose sample held the demo song in format 5:
 
@@ -1301,12 +1323,19 @@ Not tested:
 - A device that speaks another format. Refusing to send to one was only tried with identities made up by the
   tests, also for the one case that exists now: a firmware up to 1.5.0, which speaks song format 5.
 - **Firmware 1.7.0 against Unity, beyond the six link tests and the recorded session.** They passed with 1.7.0 in
-  the emulator, but every pattern of the songs that crossed has 16 steps: a song with a pattern at 1/32 or 1/64 has
+  the emulator (the recorded session with the build of 23 Nov 2026 only), but every pattern of the songs that
+  crossed has 16 steps and every bar 16 sixteenths: a song with a pattern at 1/32 or 1/64 has
   not travelled through a MIDI port, only through the firmware's checks and the package's checks, which each read
   the other's bytes. Not in the plugin, not on hardware.
 - **The PERFORM page of firmware 1.7.0, by hand.** A check in the source repository presses its keys in a host of
   its own and reads what the firmware then holds, plays and sends; it does not look at the display. Nobody has
   played the page or listened to it, and it was not open in any run of the link.
+- **The beat and the time signature of firmware 1.7.0, by hand or by ear.** A check in the source repository
+  chooses each beat and reads what FILL writes, where the click falls, the song's bytes and the store. It does not
+  read what the display says (`BAR 6/8`), and it does not try the click with swing or a bar that is not a whole
+  number of beats. Nobody has listened to the click. In Unity there is nothing of it: the beat is not in the song,
+  and the song's Inspector shades its cells in fours whatever the device's beat is. A song with a bar of 12 or 14
+  sixteenths was not played in a game.
 - **An older firmware or an older package with this one.** That a firmware up to 1.5.0 drops the new song message
   without a word, and what a package from before firmware 1.6.0 does with a format-6 song asset (the banner of a newer
   asset, then NO SONG YET and silence), is read from their code. Neither was run.
@@ -1347,7 +1376,7 @@ Not tested:
 - **Firmware 1.6.0 or 1.7.0 for songs.** A song of this version is in format 6. A firmware up to 1.5.0 does not
   take it; the package says so before it sends. A package from before firmware 1.6.0 does not read it.
 - Live players are not spatialized (for 3D, bake a clip); one patch per `SfxPlayer`; a song is made on the device and
-  only played and shaped in Unity: a pattern's grid too is chosen on the device. A variation set must be baked to play where the native library is not, and
+  only played and shaped in Unity: a pattern's grid too is chosen on the device. The device's beat (firmware 1.7.0) is not in the song: the package does not read or show it. A variation set must be baked to play where the native library is not, and
   nothing checks that at build time. [The manual's list of limits](Documentation~/UNITY.md#limits).
 
 ## License
@@ -1479,8 +1508,11 @@ and the Unity code live there) by `tools/make_unity_package.py`; nothing in it i
 - **Documentation~**: the Unity manual, the device's manual with the cheat sheet, the link's protocol, five videos.
 - **Firmware~**: the built instrument, firmware {firmware}, without debug information. Firmware 1.7.0 adds the
   PERFORM page on the device: the whole pattern as a grid, and the pads as steps, the kit, mutes or patterns.
-  Nothing in the package's code or formats changes with it: a device with 1.6.0 and one with 1.7.0 speak the same
-  song format 6.
+  It also adds a beat and a time signature: SHIFT + B on the device chooses an eighth, three sixteenths, a quarter
+  or a dotted quarter, and the click, the grids' shades, FILL and the bar's name on the display (`BAR 3/4`,
+  `BAR 6/8`) follow it. The beat is the device's and is not in the song: a game never gets it.
+  Nothing in the package's code or formats changes with either: a device with 1.6.0 and one with 1.7.0 speak the
+  same song format 6.
 - The native library's import settings name the editor and Windows x64 only.
 
 The code is the package that was `{old_id}` 0.1.0 inside the source repository. The id, the display name and the
@@ -1503,9 +1535,13 @@ version are new; namespaces, assembly names and asset GUIDs are unchanged.
 - The identity was not asked of a device by the package's own tests, only built and read. There is one device and
   one profile id; nothing can be targeted at another, and nothing converts a newer patch, song or asset.
 - `loopPattern` is tested in the engine through the native library, and inside Unity by one Play mode test of the
-  sample, headless and muted; nobody has listened to it. Firmware {firmware} passes its own checks; the link was
-  last run against it in the emulator (six tests and the recorded session, songs of sixteenths only). Its PERFORM
-  page was tested by a script only: nobody has played it by hand, and it was not run on hardware or in the plugin.
+  sample, headless and muted; nobody has listened to it. Firmware {firmware} passes its own checks; the six link
+  tests were last run against it in the emulator (songs of sixteenths only), and the session of the link video
+  was recorded with the {firmware} build of 23 Nov 2026, before the beat was added. Its PERFORM page and its beat
+  were tested by scripts only: nobody has played them by hand or listened to the click, and it was not run on
+  hardware or in the plugin.
+- The device's beat and time signature (firmware {firmware}) are not in the song. The package does not read or
+  show them, and the song's Inspector shades its cells in fours whatever the device's beat is.
 - The tools for designing sounds are measured, not heard: nobody has listened to a generated sound, a variant or
   a baked file. A variation set that is not baked plays only where the native library is, and nothing checks at
   build time that a set is baked or up to date.

@@ -109,6 +109,18 @@ class Scene {
     return this;
   }
 
+  // SHIFT held, an encoder turned
+  shiftTurn(enc, detents, gap = 0.2) {
+    const n = Math.abs(detents);
+    this.ev(this.t, 3, BUTTON.SHIFT, 1);
+    for (let k = 0; k < n; k++) {
+      this.ev(this.t + 0.03 + k * 0.006, 4, ENCODER[enc], 0, Math.sign(detents));
+    }
+    this.ev(this.t + 0.06 + n * 0.006, 3, BUTTON.SHIFT, 0);
+    this.t += n * 0.006 + gap;
+    return this;
+  }
+
   // a step's pad held, a key played: the step gets that note
   padKey(n, note, gap = 0.3) {
     this.ev(this.t, 1, n - 1, 1, 0.9);
@@ -395,6 +407,50 @@ scene('song').btn('K5').btn('K5').turn('DATA', 6).at(1.0).btn('PLAY').at(1.0 + B
     s.pad(p, 0.1);
   }
   s.wait(0.3).shot('perform-32');
+}
+
+// ---- the bar and the beat on SEQ: a bar of 12 sixteenths is 3/4, a kick on its three beats - and SHIFT + B makes
+// the same bar 6/8
+{
+  // B is the bar's length on SONG (on SEQ it is the scale): 12 sixteenths. Then K5 three times more, for SEQ
+  const s = scene('meter-seq').btn('K5').btn('K5').turn('B', -4).btn('K5').btn('K5').btn('K5');
+
+  // G, the first empty pattern
+  for (let k = 0; k < 6; k++) {
+    s.btn('RIGHT', 0.08);
+  }
+  // prettier-ignore
+  s.wait(2.6).turn('DATA', 2).btn('F3').wait(0.3).shot('meter-34').wait(2.6)  // the kick: F3 FILL, every quarter
+    .shiftTurn('B', 1).wait(0.3).shot('meter-beat'); // SHIFT + B: BEAT 3/8: BAR 6/8
+}
+
+// ---- PERFORM in 6/8 while it plays: 12 sixteenths, a beat of a dotted quarter, kick on the beats, hats on the
+// eighths
+{
+  const s = scene('meter-68').btn('K5').btn('K5').btn('K5').btn('K5');
+  for (let k = 0; k < 6; k++) {
+    s.btn('RIGHT', 0.08);
+  }
+  // prettier-ignore
+  s.turn('B', -4).shiftTurn('B', 1)                 // B: 12 sixteenths. SHIFT + B: a dotted quarter
+    .turn('DATA', 2).btn('F5', 0.3)                 // the kick on every beat (EVERY 3/8)
+    .shiftPad(13).btn('F5', 0.3).btn('F5', 0.3)     // the hi-hat on every eighth
+    .wait(2.6);
+
+  // PLAY: G repeats. A bar is 12 sixteenths now; the picture in the second beat of the second round
+  const t0 = s.t + 0.1;
+  // prettier-ignore
+  s.at(t0).btn('PLAY').at(t0 + 12 * STEP + 8 * STEP + 0.06).shot('meter-68');
+}
+
+// ---- PERFORM in 7/8: a kick on every quarter, then B two clicks down. The last beat is a short one ----------------
+{
+  const s = scene('meter-78').btn('K5').btn('K5').btn('K5').btn('K5');
+  for (let k = 0; k < 6; k++) {
+    s.btn('RIGHT', 0.08);
+  }
+  // prettier-ignore
+  s.turn('DATA', 2).btn('F5').wait(2.6).turn('B', -2).wait(0.3).shot('meter-78');
 }
 
 // ==== the pictures =================================================================================================

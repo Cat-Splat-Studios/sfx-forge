@@ -28,19 +28,34 @@ instruments in that style, not recordings of an orchestra. The wavetables are co
 Built with the VIBE FM SDK. Status: v1.0, firmware 1.7.0. The synth, the device UI and the device side of the link are
 tested in the SDK's tools; the Unity package is tested in Unity 6.3 with the demo project's editor and Play mode tests.
 Not tried yet: the hardware and the plugin. The link was run against the SDK's emulator over a virtual MIDI cable, last
-with firmware 1.7.0 on 23 Nov 2026 (the six link tests and the recorded session, each once; PERFORM was not open in
-them).
+with firmware 1.7.0 on 24 Nov 2026 (the six link tests, once; the recorded session once the day before, with the
+1.7.0 build of that day, before the beat was added; PERFORM was not open in them).
 
 **New in firmware 1.7.0: PERFORM.** A fourth page of K5: K5 now walks SEQ, SONG, AUTO, PERFORM and SEQ again. The
 display shows the whole pattern as a grid, as a drum machine shows it: a row a sound, a cell a step, the playhead a
 column that moves. F1 to F4 choose what the 16 pads are: STEPS of the selected sound, the kit's SOUNDS, MUTES, or
 PATTERN and intensity. F5 is FILL and F6 is UNDO; with SHIFT the keys are LOOP or SONG, CLEAR, ALL ON, COPY and the
-grid. The encoders are VOLUME, PAN, INTENSITY and LAYER. Nothing else changed: the song is format 6 and the patch
-format 2 as before, the messages of the link are the same, and the identity says 1.7.0.
+grid. The encoders are VOLUME, PAN, INTENSITY and LAYER.
 
-The page is tested by a script only: `tests/check-perform.mjs` presses its keys on the built firmware and reads the
-song and the sound (26 lines of `ok`). The script does not see the display. Nobody has played the page by hand or
-listened to it, and it was not run on the hardware or in the plugin.
+**Also new in firmware 1.7.0: a beat and a time signature.** The bar's length was the song's already: encoder B on
+SONG and PERFORM, 1 to 16 sixteenths. New is the beat: **SHIFT + B** on SEQ, SONG and PERFORM chooses an eighth,
+three sixteenths, a quarter (as the device comes) or a dotted quarter. The metronome's click, the two shades of the
+grids, the lines in the bar strip and FILL follow it, and the display names the bar by it: 12 sixteenths are
+`BAR 3/4` with a quarter and `BAR 6/8` with a dotted quarter, 14 are `BAR 7/8`. The beat is the device's, not the
+song's: it is not in the packed song, a game never gets it, and it changes no note. SAVE keeps it in a small file of
+its own, `meter.bin`. With four quarters, as the device comes, nothing looks, sounds or is stored differently than
+before. Still not there: a bar longer than 16 sixteenths (no 5/4, 6/4, 9/8 or 12/8), triplets, a length or a beat
+for each pattern, and groupings like 2+2+3.
+
+Nothing else changed: the song is format 6 and the patch format 2 as before, the messages of the link are the same,
+and the identity says 1.7.0.
+
+Both are tested by scripts only. `tests/check-perform.mjs` presses the page's keys on the built firmware and reads
+the song and the sound (26 lines of `ok`). `tests/check-meter.mjs` does the same for the beat: what FILL writes,
+where the click falls, that the song's bytes stay as they were, and what SAVE stores (21 lines of `ok`). The scripts
+do not read the display: the second one sees only that the picture changes with the beat, not the words or the
+shades. Nobody has played the page by hand, listened to it or to the click, and neither was run on the hardware or
+in the plugin.
 
 **New in firmware 1.6.0: a finer grid.** Each pattern has its own grid: 1/16, 1/32 or 1/64, which is 16, 32 or 64
 steps for a full bar. SHIFT + F5 and SHIFT + F6 on SEQ and AUTO make it coarser or finer; finer changes nothing you
@@ -57,8 +72,8 @@ package refuses in words before it sends a format-6 song to one; and a Unity pac
 a format-6 song. Update both together.
 
 All of it is tested by scripts against the built firmware (below, "Build"). Over MIDI against the emulator the six
-link tests passed with 1.6.0, and again with 1.7.0, with songs of sixteenths only: a pattern at 1/32 or 1/64 has not
-crossed a MIDI port.
+link tests passed with 1.6.0, and again with 1.7.0 (last on 24 Nov 2026, with the build that has PERFORM and the beat), with
+songs of sixteenths only: a pattern at 1/32 or 1/64 has not crossed a MIDI port.
 It was not run on the hardware or in the plugin, and nobody has played or listened to it yet.
 
 **New in firmware 1.5.0: the sequencer.** PLAY plays what the top line says, LOOP (the pattern repeats) or SONG (the
@@ -76,7 +91,7 @@ song's pages; F4 held erases during a take; the keys that throw a whole song or 
 | `native/` | the same engine as a native library (Windows x64 so far), for game engines |
 | `unity/com.catsplat.sfxforge/` | the Unity package: the link, presets, a player, telemetry, the tools for designing sounds (generators, variants, variation sets, batch bake, levels, a sound as text), and an editor UI drawn like the device's display (`Editor/UI` is its kit) |
 | `unity/Demo/` | a Unity 6.3 project using the package: a hovercraft whose every sound is synthesized live |
-| `tests/` | a scripted performance (`tour.json`) and its checks (`check.mjs`); more scripts of key presses, each with its check (`loop`, `modes`, `take`, `edit`, `undo`, `retake` for the sequencer, `grid`, `regrid`, `take64` for the finer grid, `song-export` for what SEND gives: the list is under "Build"); six checks on a small host of their own, `host.mjs`, which hands the built firmware keys, SysEx and a store (`check-identity.mjs`, `check-grid-keys.mjs`, `check-perform.mjs`, `check-atomic.mjs`, `check-wire.mjs`, `check-store.mjs`); `stress-song-way.c`, two threads over the song's way from the controls to the audio; `make-grid-scenes.mjs` writes the three grid performances; `dotnet/` tests the Unity package's core without Unity |
+| `tests/` | a scripted performance (`tour.json`) and its checks (`check.mjs`); more scripts of key presses, each with its check (`loop`, `modes`, `take`, `edit`, `undo`, `retake` for the sequencer, `grid`, `regrid`, `take64` for the finer grid, `song-export` for what SEND gives: the list is under "Build"); seven checks on a small host of their own, `host.mjs`, which hands the built firmware keys, SysEx and a store (`check-identity.mjs`, `check-grid-keys.mjs`, `check-perform.mjs`, `check-meter.mjs`, `check-atomic.mjs`, `check-wire.mjs`, `check-store.mjs`); `stress-song-way.c`, two threads over the song's way from the controls to the audio; `make-grid-scenes.mjs` writes the three grid performances; `dotnet/` tests the Unity package's core without Unity |
 | `tests/mix-report.mjs` | measures the demo song's mix: every instrument soloed in turn – its level, its peak, how much of it is high |
 | `tests/unity-inspectors/` | a small Unity project that tests the package's editor UI (the sound inspector with its tools, the song inspector, the variation set's inspector, the SFX Forge window and the bake window; 169 EditMode tests) and writes pictures of it to `out/inspector-shots/`. The pictures are the Inspector's element tree and stylesheet rendered in a panel to a texture, not photographs of the Inspector. Its README has the command |
 | `docs/` | the manual, and `figures.py`, which builds its pictures from the firmware's own screenshots |
@@ -121,6 +136,7 @@ sent. Each writes into its own folder in `out/` and ends with a line `… PASSED
 | `take64.json` | `check-take64.mjs` | a take at 64 steps keeps the player's timing: hits 100, 290 and 1010 ms after the bar line land on their steps; a pad switches the step it shows; F4 held erases |
 | – | `check-grid-keys.mjs` | the question before a step is dropped is asked again when the number it named is no longer true; SHIFT + LEFT / RIGHT go only through the 16s that hold a step of a short bar |
 | – | `check-perform.mjs` | the PERFORM page (firmware 1.7.0): the pads as STEPS, SOUNDS, MUTES and PATTERN after F1 to F4; REC makes them the kit and a take is recorded; F5 FILL and F6 UNDO; with SHIFT: LOOP or SONG, CLEAR, ALL ON, COPY, the grid; the four encoders, A and B; K5 once more is SEQ again |
+| – | `check-meter.mjs` | the beat and the time signature (firmware 1.7.0): SHIFT + B walks the four beats and stops at the ends on PERFORM, and is the beat on SEQ too (one click); FILL begins with the beat, also at 32 steps; in a bar of 12 sixteenths the click is a quarter apart (3/4) or a dotted quarter apart (6/8), with the bar line's click told apart; SHIFT + B changes no byte of the song, B only the bar's length; the display of that bar differs with the beat; SAVE keeps the beat in `meter.bin` (one byte) and removes the file with a quarter; a `meter.bin` with 2, 3 or 5; NEW leaves the beat, the factory reset puts the quarter back |
 | – | `check-atomic.mjs` | a pattern or a song rewritten while it plays reaches the player whole: the grid changed, F2, COPY and a song over SysEx leave every sample as it was |
 | – | `stress-song-way.sh` | two real threads over `sfx-forge/song_way.h`, built natively: the player never gets half a song. It prints no `ok` lines, only its last one |
 | `song-export.json` | `check-song-export.mjs` | the factory sounds and song as SEND gives them are, byte for byte, the file the Unity demo's song was built from: 16 sounds, then 2487 bytes of format 6 in 11 pieces |
@@ -128,16 +144,21 @@ sent. Each writes into its own folder in `out/` and ends with a line `… PASSED
 | – | `check-wire.mjs` | the song on the wire: both shapes of the song message, pieces out of order and doubled, one song straight after another, the longest song |
 | – | `check-store.mjs` | what the device stores: `song6.bin` is written, `song.bin` is read and never written, a `song.bin` saved later by an older firmware wins and F2 brings the other back, a full store is not called SAVED |
 
-All 23 pass on firmware 1.7.0 (`vibe-check` and the 22 above): the output of `sh build.sh` has 23 lines that say
-`PASSED`. The 21 checks that print `ok` lines print 218 of them, counted in the output of the last run (15, 1, 4, 1,
-1, 7, 6, 8, 11, 7, 7, 7, 8, 7, 20, 26, 23, 1, 27, 15 and 16, in the order of the table, which is the order they
+All 24 pass on firmware 1.7.0 (`vibe-check` and the 23 above): the output of `sh build.sh` has 24 lines that say
+`PASSED`. The 22 checks that print `ok` lines print 239 of them, counted in the output of the last run (15, 1, 4, 1,
+1, 7, 6, 8, 11, 7, 7, 7, 8, 7, 20, 26, 21, 23, 1, 27, 15 and 16, in the order of the table, which is the order they
 run in); the stress test prints none and `vibe-check` prints marks of its own. They hear the output
-and read the song the device sends. Six checks have no performance and run the firmware on `tests/host.mjs`; some
-of them also compare the display's pixels, to tell that it changed or that the LINK light is on. None of the 23
-reads what a page or a toast says, and none sees how PERFORM's grid is drawn. Not checked at all: the stage's buttons
-(its REC button on PERFORM among them), the stage's GRID chip, solo on PERFORM, ERASE across a change of
-pattern, a DAW's song position at a finer grid, and undo of RAMP and a song loaded from a game. Undo of FILL is
-checked on PERFORM only (F6).
+and read the song the device sends. Seven checks have no performance and run the firmware on `tests/host.mjs`; some
+of them also compare the display's pixels, to tell that it changed or that the LINK light is on. None of the 24
+reads what a page or a toast says, and none sees how PERFORM's grid is drawn. Of the beat the checks see what FILL
+writes, where the click falls, the song's bytes, the store, and that the display's picture changes with it. They do
+not read the words (`BAR 6/8`, `BEAT 3/8: BAR 6/8`) or see the shades and the bar strip's lines, and they try
+neither the click with swing, nor a bar that is not a whole number of beats, nor SHIFT + B on SONG, nor that DEMO,
+a song from a game and UNDO leave the beat (NEW and the factory reset are tried). Not checked at all: the stage's buttons
+(its REC button on PERFORM among them), the stage's GRID chip and the shades of its grids, solo on PERFORM, ERASE
+across a change of pattern, a DAW's song position at a finer grid, and undo of RAMP and a song loaded from a game.
+Undo of FILL is checked on PERFORM only (F6). Nobody has listened to the click or played any of it by hand, and
+nothing was run on the hardware or in the plugin.
 
 ## Playing it
 
@@ -182,7 +203,8 @@ The short version; [the manual](docs/MANUAL.md) is the long one.
   grid nearest to each hit and as hard as it was hit, round after round – on the SEQ page the pads are then the kit and the keys the
   notes, like on a groovebox (REC off: the pads are the steps again). On PERFORM, REC makes the pads SOUNDS, and F1
   makes them steps again with REC still lit. The display stays on the pattern that plays. A
-  metronome clicks on every beat while REC is on (SHIFT + REC: off); there is no count-in. **F4 held is ERASE** while a
+  metronome clicks on every beat while REC is on, higher on the bar line (SHIFT + REC: off); the beat is a quarter
+  unless SHIFT + B chose another. There is no count-in. **F4 held is ERASE** while a
   take runs: the selected sound's steps go as the bar passes them, a tap takes only the step under the playhead. With
   F1 at SONG the take goes along the arrangement, and each hit lands in the pattern of its bar. Only the MUSIC kit is
   recorded. ERASE is on SEQ only: PERFORM has none.
@@ -196,8 +218,8 @@ The short version; [the manual](docs/MANUAL.md) is the long one.
   patterns as a strip of letters (every sound's steps at once: the stage). The pads are those 16 steps (a step switched on is heard); SHIFT + pad hears and selects that
   pad's sound, DATA walks the sounds. A step may carry a note: hold its pad and play a key, or turn NOTE (it moves along
   the scale chosen with encoder B). Encoders: STEP · NOTE · VELOCITY (1–8: a step is drawn as high as it is hard) ·
-  LENGTH (AUTO, or a number of steps up to one less than the grid: `>3` in the step's corner says it holds 3). A: the tempo, SHIFT + A: the swing. F1 LOOP or SONG ·
-  F2 UNDO · F3 FILL: every 1/4, every 1/8, every 1/16, in a finer pattern also every 1/32, none · F4 CLEAR the sound's steps (ERASE while a take
+  LENGTH (AUTO, or a number of steps up to one less than the grid: `>3` in the step's corner says it holds 3). A: the tempo, SHIFT + A: the swing. SHIFT + B: the beat. F1 LOOP or SONG ·
+  F2 UNDO · F3 FILL: every beat (1/4 as the device comes), every 1/8, every 1/16, in a finer pattern also every 1/32, none · F4 CLEAR the sound's steps (ERASE while a take
   runs) · F5 COPY the pattern into the next empty one, and on to it: a variation to make · F6 SAVE. A sustained sound
   holds until it plays again or the bar ends.
 - **The grid** (firmware 1.6.0) – each pattern has its own: 1/16, 1/32 or 1/64, so a full bar has 16, 32 or 64 steps.
@@ -207,15 +229,44 @@ The short version; [the manual](docs/MANUAL.md) is the long one.
   At 1/32 and 1/64 the pads and the tiles are 16 steps of the bar, and **SHIFT + LEFT / RIGHT** move to the 16 before
   or after (`STEPS 17-32`); a strip in the footer shows the whole bar and which part is shown. The numbers of the
   steps that begin a sixteenth are brighter. COPY copies the grid, CLR PAT keeps it, NEW sets every pattern to 1/16.
-  The song's bar is still counted in sixteenths, 1 to 16, and the click stays four to the bar.
+  The song's bar is still counted in sixteenths, 1 to 16, and the click is on the beat whatever the grid is.
+- **The bar and the beat** (firmware 1.7.0) – a time signature in two parts.
+
+  | Control | What it sets | Whose it is |
+  |---|---|---|
+  | B on SONG and PERFORM | the bar's length, 1 to 16 sixteenths: 3/4 is 12, 6/8 is 12, 7/8 is 14, 5/8 is 10 | the song's: saved and sent with it |
+  | SHIFT + B on SEQ, SONG and PERFORM | the beat: 1/8, 3/16, 1/4 (as the device comes) or 3/8. A click of B is one beat further; it stops at 1/8 and at 3/8 | the device's: SAVE keeps it in `meter.bin` |
+
+  What follows the beat: the click (on every beat, higher on the bar line; a bar that is not a whole number of beats
+  ends with a short one), the pulse of the red REC dot, the two shades of the empty cells on PERFORM and on the
+  stage, the two shades of SEQ's and AUTO's tiles at 1/16 (at 1/32 and 1/64 they stay the rows of pads), the lines
+  in the bar strip, and FILL. FILL's first press is every beat (`EVERY 3/8`, `EVERY 1/4`, `EVERY 3/16` or
+  `EVERY 1/8`), then every eighth where the beat is made of eighths (a quarter, a dotted quarter), then every
+  sixteenth, at 1/32 and 1/64 also every thirty-second, then `SOUND CLEARED`.
+
+  The display names the bar. Turning B says `BAR: 12/16 = 3/4` (a bar counted in sixteenths anyway says only
+  `BAR: 7/16`); SHIFT + B says `BEAT 3/8: BAR 6/8`. When the bar is not four quarters, the second line of SEQ, SONG,
+  AUTO and PERFORM says it after the grid: `PATTERN A  1/16  BAR 6/8`, and with a beat of an eighth `BAR 6/8 IN 1/8`
+  (left out when there is no room). A quarter beat counts quarters when the bar comes out whole (12 is 3/4), else
+  eighths (14 is 7/8), else sixteenths (7 is 7/16). An eighth or a dotted quarter counts eighths (12 is 6/8), else
+  sixteenths. Three sixteenths count sixteenths (12 is 12/16).
+
+  The beat is not in the song. A game or Unity never gets it, F2 and F6 UNDO do not take it back, and NEW, DEMO and
+  a song from a game leave it as it is; only the factory reset puts the quarter back. So a song of 12 sixteenths is
+  3/4 on one device and 6/8 on another. In a game it sounds the same either way: the beat changes no note. With
+  swing a beat of three sixteenths gives an uneven click: swing holds back every other sixteenth, and every second
+  such beat is on one.
+
+  What it does not do: a bar longer than 16 sixteenths (no 5/4, 6/4, 9/8, 12/8), triplets, a length or a beat for
+  each pattern, and groupings like 2+2+3 (the beats are all the same length; only the last may be short).
 - **K5 again: SONG** – what makes it game music. The display shows the eight patterns (what is in each, and the
   chain), and the layers: INTENSITY as a level that rises over each sound's mark.
   - **LAYER**: every sound has a threshold and plays only while **INTENSITY** is at or above it. Low intensity: the
     kick alone. High: bass, snare, strings, lead, effects.
   - **PATTERN** A–H (also pads 1–8): a chosen pattern takes over on the next bar line. **CHAIN**: walk patterns A…n by
     itself (not used while there is an arrangement). Pads 9–16 set the intensity. A: the tempo, SHIFT + A: the swing.
-    Encoder B: the bar in sixteenths, 1–16, for every pattern. A pattern with a finer grid has a small `32` or `64`
-    in the corner of its tile.
+    Encoder B: the bar in sixteenths, 1–16, for every pattern (SHIFT + B: the beat). A pattern with a finer grid
+    has a small `32` or `64` in the corner of its tile.
   - F1 LOOP or SONG · F2 UNDO · F3 CLR PAT: the shown pattern empty · F4 NEW: an empty song (SHIFT + F4: the DEMO
     song again) – both ask twice, leave the sounds as they are, and F2 brings the song back · F6 SAVE.
   - **SEND** (F5): the 16 sounds and the song to the game.
@@ -251,7 +302,7 @@ The short version; [the manual](docs/MANUAL.md) is the long one.
 
   | Control | What it does |
   |---|---|
-  | F5 FILL | the selected sound: every 1/4, 1/8, 1/16 …, then none (F3 on SEQ) |
+  | F5 FILL | the selected sound: every beat (1/4 as the device comes), 1/8, 1/16 …, then none (F3 on SEQ) |
   | F6 UNDO | one step back; again: redo (F2 on SEQ) |
   | SHIFT + F1 | TO SONG / TO LOOP: what PLAY plays |
   | SHIFT + F2 CLEAR | the selected sound's steps in this pattern |
@@ -259,7 +310,7 @@ The short version; [the manual](docs/MANUAL.md) is the long one.
   | SHIFT + F4 COPY | the pattern into the next empty one |
   | SHIFT + F5 / F6 | the grid coarser / finer |
   | Encoders 1–4 | VOLUME and PAN of the selected sound (the mixer's), INTENSITY, the selected sound's LAYER |
-  | A, B | the tempo (SHIFT + A: the swing); the bar's length in sixteenths |
+  | A, B | the tempo (SHIFT + A: the swing); the bar's length in sixteenths (SHIFT + B: the beat) |
   | DATA | selects a sound |
   | LEFT / RIGHT | the pattern before / after |
 
@@ -297,7 +348,8 @@ The short version; [the manual](docs/MANUAL.md) is the long one.
     arrangement) with the arrangement under them (click a bar: its pattern; SHIFT or right-click: the arrangement
     ends before it – UNDO brings it back), TOUR.
 - **HOME** – what every control does on the page open now.
-- **SHIFT + MENU, twice** – factory reset: both kits and the song as they came, and saved so.
+- **SHIFT + MENU, twice** – factory reset: both kits and the song as they came, the beat a quarter again, and
+  saved so.
 
 ## The link (device ⇄ game engine)
 
@@ -380,9 +432,12 @@ The whole answer today, 24 bytes: `F0 7D 56 42 08 01 01 07 00 01 02 06 10 02 08 
   `NewerReceived` for a patch or a song that arrives in a higher format, the SFX Forge window writes it to the
   Console, a song asset that holds one says A NEWER SONG, and the music player warns instead of staying silent
   without a word. A game that got an identity knows the formats a device takes (bytes 5 and 6) before it sends.
-- **What the device stores** (`kits.bin`, `song6.bin`) has no format number of its own: the kits are 32 patches, each
-  with its format byte and checksum, and the song is a packed song with its format byte. A stored patch of another
-  format keeps its pad's factory sound, and the next SAVE writes this firmware's format over it.
+- **What the device stores** (`kits.bin`, `song6.bin`, `meter.bin`) has no format number of its own: the kits are 32
+  patches, each with its format byte and checksum, and the song is a packed song with its format byte. A stored
+  patch of another format keeps its pad's factory sound, and the next SAVE writes this firmware's format over it.
+  `meter.bin` (firmware 1.7.0) is one byte, the beat in sixteenths: 2, 3 or 6. It is there only while the beat is
+  not a quarter: SAVE with a quarter removes it, and any other byte in it leaves the quarter. It is the device's
+  and never crosses the link.
 - **Two song files.** From firmware 1.6.0 on the song is saved to `song6.bin`: the format-6 song and two check bytes of the
   `song.bin` beside it. `song.bin`, the file of the firmwares up to 1.5.0, is read and never written, so an older
   firmware put back on the device still finds its song. If that older firmware then saves, its `song.bin` is the
@@ -391,7 +446,7 @@ The whole answer today, 24 bytes: `F0 7D 56 42 08 01 01 07 00 01 02 06 10 02 08 
   factory reset deletes `song.bin` and saves.
 
 `tests/check-identity.mjs`, `check-wire.mjs` and `check-store.mjs` (run by `build.sh`) send these messages into the
-built firmware, read what it sends and look at what it stores. A firmware up to 1.5.0 was not run against any of
+built firmware, read what it sends and look at what it stores; `check-meter.mjs` looks at `meter.bin`. A firmware up to 1.5.0 was not run against any of
 this: what is said of it is read from its code.
 
 ## Unity
@@ -460,7 +515,8 @@ device. Tested in `tests/dotnet` (a format-5 song renders bit for bit as before;
 same samples; both shapes of the song message) and by eight EditMode tests of the song's Inspector. Nobody has
 listened to a finer pattern in Unity, and the demo song and the showcase use sixteenths only.
 
-The numbers, as last run, all with firmware 1.7.0 on 23 Nov 2026: `sh build.sh` 23 lines `PASSED`, none failing;
+The numbers, as last run, all with firmware 1.7.0 as it is now (with PERFORM and the beat) on 24 Nov 2026:
+`sh build.sh` 24 lines `PASSED`, none failing;
 `tests/dotnet` 205 checks, all passing with the
 package's own `sfxforge.dll`; `tests/unity-inspectors` 169 of 169 EditMode tests; the demo project, headless on a
 copy, the showcase's 32 editor checks and 41 Play mode tests, of which 26 passed and 15 were skipped (the takes that
@@ -468,12 +524,15 @@ need a device or the emulator or that record, and only run when asked for by nam
 and its probe were last run before the tools, `loopPattern` and the firmwares 1.5, 1.6 and 1.7, and not again.
 
 The link is tested end to end against the SDK's emulator over a virtual MIDI cable, last with firmware 1.7.0 on
-23 Nov 2026: the six link tests passed, in one run (with 1.6.0 they passed the day before). Firmware 1.7.0 changed
+24 Nov 2026: the six link tests passed, in one run, with the build that has PERFORM and the beat (on 23 Nov they
+passed with the 1.7.0 build of that day, before the beat; with 1.6.0 on 22 Nov). Firmware 1.7.0 changed
 no message but the version in the identity. What was run: a patch and the song from the device, the identity, a song
 and its sounds to the device, the game's messages leaving for the device. Every pattern in those songs has 16 steps: a song with
 a pattern at 1/32 or 1/64 was only handed to the built firmware and to the package's receiver by tests, not sent
-through a MIDI port. The recorded session, with SEND and EXPORT pressed on the device, was run with 1.7.0 on the
-same day, once, and passed; nobody heard it. PERFORM was not open in any of these runs.
+through a MIDI port. The recorded session, with SEND and EXPORT pressed on the device, was run once, on 23 Nov 2026,
+and passed; nobody heard it. It was recorded with the 1.7.0 build of 23 Nov 2026, before the beat was added; with
+four quarters the display is the same, and it was not run again. PERFORM was not open in any of these runs, and the
+beat was a quarter.
 Not tested: the hardware, the plugin,
 pads and encoders coming from the device, and the window's and the Inspectors' keys against a device (their tests
 show them a model, not a link; nobody has opened the real window or Inspector). See
