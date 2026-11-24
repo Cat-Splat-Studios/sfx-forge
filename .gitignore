@@ -12,3 +12,6 @@ tests/unity-inspectors/obj/
 # ... and what its tests make while they run (they delete it afterwards; a run that is stopped does not)
 tests/unity-inspectors/Assets/*Temp/
 tests/unity-inspectors/Assets/*Temp.meta
+# ... and the wiki's C# samples as files Unity can compile: tools/check_wiki_code.py writes them, and removes them with --clean
+tests/unity-inspectors/Assets/WikiSamples/
+tests/unity-inspectors/Assets/WikiSamples.meta

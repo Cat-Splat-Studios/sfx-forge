@@ -10,6 +10,7 @@ It describes the repository at firmware 1.7.0, song format 6, patch format 2.
 |---|---|
 | know what a folder is | [1. The map](#1-the-map) |
 | build it and run the tests | [2. Build and test](#2-build-and-test) |
+| change or publish the wiki | [The wiki](#the-wiki) |
 | format the code again | [The formatters](#the-formatters) · [The house style](#the-house-style) |
 | find the code for a thing | [3. Reading order](#3-reading-order) |
 | understand audio and controls | [4. The two flows](#4-the-two-flows) |
@@ -241,6 +242,24 @@ python docs/figures.py       # the manual's pictures into docs/img (needs Pillow
 
 Run both and `git diff --stat docs/img` is empty when nothing visible changed. `docs/unity_figures.py` and the
 video scripts need recorded takes; [the videos' README](../videos/README.md) says which.
+
+### The wiki
+
+`wiki/` holds the wiki: many short pages, each about one thing, that lead a reader into these reference documents.
+It is published to the GitHub wiki by a script; nobody edits it there. A feature is documented in both places now:
+in the reference (README, MANUAL, UNITY or this guide) and on the wiki page that teaches it, with a line in
+`wiki/What-Is-Tested.md` when what is tested changed.
+
+```sh
+python tools/check_wiki.py                                              # links, anchors, pictures, diagrams; exit code 1 on a failure
+python tools/check_wiki.py --sync                                       # first copy again the pictures that changed in docs/img
+python tools/publish_wiki.py --repo-url https://github.com/OWNER/REPO   # writes out/wiki-publish, pushes nothing
+```
+
+Run the checker after any change to a page, to a heading of a reference document (the wiki links to their
+anchors) or to a picture in `docs/img` (the wiki keeps copies in `wiki/img`). The conventions and the steps to add
+a page are in [wiki/Editing-This-Wiki.md](../wiki/Editing-This-Wiki.md); [wiki/README.md](../wiki/README.md) is
+the short version.
 
 ### The formatters
 

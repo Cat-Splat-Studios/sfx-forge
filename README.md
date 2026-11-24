@@ -16,6 +16,11 @@ into a game. In a hurry: **[the cheat sheet](docs/img/cheatsheet.png)** is every
 **[The Unity manual](docs/UNITY.md)** is its sibling for the game's side: the package, the three ways to play a sound,
 adaptive music, the link to the device, recipes, and the showcase game as a worked example.
 
+**[The wiki](wiki/Home.md)** is the easy way in: many short pages, each about one thing, with diagrams and
+step-by-step paths for the device, for Unity and for the code. Its pages are in `wiki/` and are published to the
+GitHub wiki by `tools/publish_wiki.py`; `tools/check_wiki.py` checks every link, picture and diagram
+([wiki/README.md](wiki/README.md)).
+
 **[The videos](videos/README.md)** are in `videos/`: five of them, the current ones, made by scripts from the firmware
 and the game themselves. Start with [the tour of the device](videos/sfx-forge-tour.mp4).
 
