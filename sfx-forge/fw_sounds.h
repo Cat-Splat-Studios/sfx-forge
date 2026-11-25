@@ -1,7 +1,8 @@
 /* fw_sounds.h – what the device can sound like before anybody edits it. A part of sfx-forge.c.
  *
- * Holds:  the six parameters a DAW automates (PARAMS); the named sounds (PRESETS: 16 for the SFX kit, 23 for the
- *         MUSIC kit); the names and colours of the five engines; the names of the scales.
+ * Holds:  the parameters a DAW automates (PARAMS: six of its own, then the mixer's 65); the named sounds (PRESETS:
+ *         16 for the SFX kit, 23 for the MUSIC kit); the names and colours of the five engines; the names of the
+ *         scales.
  * Needs:  core/sfx_core.h (SFX_P_COUNT, the engines), vibe.h (vibe_param).
  * Read:   core/sfx_core.h says what each of a sound's 25 values does, in the order of the columns here.
  */
@@ -14,7 +15,18 @@ enum {
   P_MOD_FM,
   P_MOD_LEVEL,
   P_INTENSITY,
+  /* the mixer, as the SDK's convention names it (SDK 11): four for each of the song's 16 sounds, in the order of
+     MIX_..., then the selected sound. A mixer controller and the DAW work them: fw_pages.h, mix_report */
+  P_MIX,
+  P_MIX_SELECT = P_MIX + 4 * 16,
   P_COUNT
+};
+/* the four of a sound: P_MIX + 4 * sound + one of these */
+enum {
+  MIX_LEVEL,
+  MIX_PAN,
+  MIX_MUTE,
+  MIX_SOLO
 };
 
 // clang-format off
@@ -26,11 +38,29 @@ static const vibe_param PARAMS[P_COUNT] = {
   { "mod_fm",     "Mod Timbre",  0.0f,  1.0f,  0.0f,  "",    0, 0 },
   { "mod_level",  "Mod Level",   0.0f,  1.0f,  1.0f,  "",    0, 0 },
   { "intensity",  "Intensity",   0.0f,  1.0f,  1.0f,  "",    0, 0 },
+  /* the mixer. The ids are the convention's and must stay as they are; a fader starts where a new song has it (100 of
+     127), a pan in the middle. There is no mix_<n>_arm: REC is one key for the song, not one a sound */
+#define MIX_TRACK(n)                                                              \
+  { "mix_" #n "_level", "Level " #n,   0.0f, 1.0f, 100.0f / 127.0f, "", 0, 0 },    \
+  { "mix_" #n "_pan",   "Pan " #n,    -1.0f, 1.0f, 0.0f,            "", 0, 0 },    \
+  { "mix_" #n "_mute",  "Mute " #n,    0.0f, 1.0f, 0.0f,            "", 2, 0 },    \
+  { "mix_" #n "_solo",  "Solo " #n,    0.0f, 1.0f, 0.0f,            "", 2, 0 },
+  MIX_TRACK(1)  MIX_TRACK(2)  MIX_TRACK(3)  MIX_TRACK(4)  MIX_TRACK(5)  MIX_TRACK(6)  MIX_TRACK(7)  MIX_TRACK(8)
+  MIX_TRACK(9)  MIX_TRACK(10) MIX_TRACK(11) MIX_TRACK(12) MIX_TRACK(13) MIX_TRACK(14) MIX_TRACK(15) MIX_TRACK(16)
+#undef MIX_TRACK
+  { "mix_select", "Selected sound", 1.0f, 16.0f, 1.0f, "", 16, 0 },
 };
-// clang-format on
 
 /* the group each of them is listed under in the host */
-static const char *const GROUPS[P_COUNT] = {"OUTPUT", "TELEMETRY", "TELEMETRY", "TELEMETRY", "TELEMETRY", "MUSIC"};
+static const char *const GROUPS[P_COUNT] = {
+  "OUTPUT", "TELEMETRY", "TELEMETRY", "TELEMETRY", "TELEMETRY", "MUSIC",
+#define MIX_GROUP(n) "MIX " #n, "MIX " #n, "MIX " #n, "MIX " #n,
+  MIX_GROUP(1)  MIX_GROUP(2)  MIX_GROUP(3)  MIX_GROUP(4)  MIX_GROUP(5)  MIX_GROUP(6)  MIX_GROUP(7)  MIX_GROUP(8)
+  MIX_GROUP(9)  MIX_GROUP(10) MIX_GROUP(11) MIX_GROUP(12) MIX_GROUP(13) MIX_GROUP(14) MIX_GROUP(15) MIX_GROUP(16)
+#undef MIX_GROUP
+  "MIX",
+};
+// clang-format on
 
 /* ---- the sounds it knows --------------------------------------------------------------------------------------- */
 /* A row: name, engine (0 IMPACT, 1 UI BLIP, 2 SCI-FI FM, 3 FOLEY, 4 WAVETABLE), then the sound's 25 values in the

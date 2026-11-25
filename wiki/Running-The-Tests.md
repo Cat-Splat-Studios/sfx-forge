@@ -15,7 +15,7 @@ flowchart TB
   corecs["Runtime/Core (C#) and sfxforge.dll"]
   editor["the package's Editor code"]
   demo["unity/Demo: the showcase and the first demo"]
-  t1["sh build.sh<br/>vibe-check, then 23 checks:<br/>24 lines PASSED"]
+  t1["sh build.sh<br/>vibe-check, then 24 checks:<br/>25 lines PASSED"]
   t2["sh tests/stress-song-way.sh<br/>two real threads"]
   t3["tests/dotnet<br/>205 checks"]
   t4["tests/unity-inspectors<br/>171 EditMode tests"]
@@ -31,7 +31,7 @@ flowchart TB
 
 | Suite | Command | Time | A pass looks like |
 |---|---|---|---|
-| the firmware | `sh build.sh` | about 30 s | exit code 0; 24 lines say `PASSED`, the last is `store PASSED` |
+| the firmware | `sh build.sh` | about 30 s | exit code 0; 25 lines say `PASSED`, the last is `store PASSED` |
 | the two-thread test alone | `sh tests/stress-song-way.sh` | about 12 s | the last line is `song way stress PASSED` |
 | the package's core, without Unity | `dotnet run -c Release --project tests/dotnet -- .` | about 30 s | 205 lines `  ok    ...`; the last line is `PASSED` |
 | the editor UI (EditMode) | Unity on `tests/unity-inspectors`, below | not recorded | `total="171" passed="171" failed="0"` |
@@ -72,18 +72,19 @@ It builds, then runs these in order. Each ends with a line `... PASSED`; the fir
 | 16 | `grid keys` | the question before a step is dropped; the windows of a short bar |
 | 17 | `perform` | the PERFORM page |
 | 18 | `meter` | the beat and the time signature |
-| 19 | `atomic` | a pattern or song rewritten while it plays reaches the player whole |
-| 20 | `song way stress` | the same hand-over between two real threads |
-| 21 | `song export` | SEND gives, byte for byte, the Unity demo's song file |
-| 22 | `identity` | the identity and the other messages; the two version numbers agree |
-| 23 | `wire` | the song on the wire: both shapes, pieces out of order and doubled, the longest song |
-| 24 | `store` | what the device stores: `song6.bin`, `song.bin`, a full store |
+| 19 | `mixer` | the mixer as the host's parameters: level, pan, mute, solo and the selected sound, both ways; what is not taken; the tour leaves every sound as it was |
+| 20 | `atomic` | a pattern or song rewritten while it plays reaches the player whole |
+| 21 | `song way stress` | the same hand-over between two real threads |
+| 22 | `song export` | SEND gives, byte for byte, the Unity demo's song file |
+| 23 | `identity` | the identity and the other messages; the two version numbers agree |
+| 24 | `wire` | the song on the wire: both shapes, pieces out of order and doubled, the longest song |
+| 25 | `store` | what the device stores: `song6.bin`, `song.bin`, a full store |
 
 Count them:
 
 ```sh
-sh build.sh | grep -c PASSED        # 24
-sh build.sh | grep -c "  ok  "      # 239 in a whole run of firmware 1.7.0
+sh build.sh | grep -c PASSED        # 25
+sh build.sh | grep -c "  ok  "      # 266 in a whole run of firmware 1.7.1
 ```
 
 Every check prints `  ok    ...` lines. A failure prints `  FAIL  ...`. What each check proves is written at its
@@ -129,10 +130,11 @@ node .tools/vibe-fm-sdk/tools/wasmtest.mjs build/sfx-forge.wasm tests/edit.json 
 node tests/check-edit.mjs out/edit        # ok lines, then: edit PASSED
 ```
 
-**A check on the small host.** Seven checks have no scene: `check-identity`, `check-grid-keys`, `check-perform`,
-`check-meter`, `check-atomic`, `check-wire` and `check-store`. They load the `.wasm` themselves through
-`tests/host.mjs`, which can do what `wasmtest` cannot: send SysEx into the firmware and give it stored files. A
-device `d` has `button`, `shift`, `pad`, `turn`, `sysex`, `run`, `listen`, `heard`, `take`, `screen` and `song`.
+**A check on the small host.** Eight checks have no scene: `check-identity`, `check-grid-keys`, `check-perform`,
+`check-meter`, `check-mixer`, `check-atomic`, `check-wire` and `check-store`. They load the `.wasm` themselves
+through `tests/host.mjs`, which can do what `wasmtest` cannot: send SysEx into the firmware, give it stored files,
+and set and read the host's parameters. A device `d` has `button`, `shift`, `pad`, `turn`, `sysex`, `run`, `listen`,
+`heard`, `take`, `screen` and `song`, and for the parameters `params`, `param`, `setParam` and `changed`.
 [Firmware Add A Page Or Key](Firmware-Add-A-Page-Or-Key#how-to-test-it) has a complete small example.
 
 ```sh

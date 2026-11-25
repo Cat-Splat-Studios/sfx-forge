@@ -39,11 +39,13 @@ sequenceDiagram
 
 The same in words:
 
-1. The host calls `vibe_on_event` (end of `sfx-forge.c`), which calls `on_event` (`fw_events.h`) and then
+1. The host calls `vibe_on_event` (end of `sfx-forge.c`), which calls `on_event` (`fw_events.h`), then
+   `mix_report()` ([the mixer as the host's parameters](#the-mixer-as-the-hosts-parameters), below) and then
    `song_hand()`.
 2. `on_event` decides nothing itself. It gives the event to FOCUS first (the SDK's frame for controllers without
    the keys), sends on what waits (`out_pump`), takes in what the audio did (`seq_poll`), and then has one `case`
-   for each kind of event: a pad, a note, MIDI, SysEx, an encoder, the stage, a button.
+   for each kind of event: a pad, a note, MIDI, SysEx, a parameter set by the host, an encoder, the stage, a
+   button.
 3. The pad case asks which page is open. On SEQ it calls `step_toggle` (`fw_sequencer.h`).
 4. `step_toggle` calls `undo_open` so that F2 can take the edit back, flips the step's bit in `SONG`, and, because
    the song stands still, calls `send()` twice so you hear the step.
@@ -58,6 +60,7 @@ To find what any key does, start in `on_event`: it names the function for every 
 | a note | notes 36 to 51 from outside are the pads; else a key plays the selected sound at that pitch |
 | MIDI | the game's telemetry: CC 10 to 15 on channel 2 |
 | SysEx | `sysex_in` (`fw_link.h`) |
+| a parameter set by the host | `mix_from_host` (`fw_pages.h`): one of the mixer's goes into the song |
 | an encoder | `encoder` (`fw_pages.h`) |
 | the stage (the mouse) | `stage_event` (`fw_stage_input.h`) |
 | F1 to F6 | by page: `soft_sound`, `soft_seq`, `soft_song`, `soft_auto`, `soft_mix`, `soft_perform` (`fw_softkeys.h`) |
@@ -83,8 +86,8 @@ The order of the `PG_` enum in `fw_state.h` is used by the code: `page < PG_SEQ`
 
 ## How a frame is drawn
 
-The host calls `vibe_on_draw`, which calls `on_draw` (`fw_draw.h`) and then `song_hand()`. `on_draw` has seven
-numbered parts.
+The host calls `vibe_on_draw`, which calls `on_draw` (`fw_draw.h`), then `mix_report()` and then `song_hand()`.
+`on_draw` has seven numbered parts.
 
 ![The SEQ page of the display while the song plays, with the parts of on_draw marked: 3 the top line, 5 the page, 6 the soft keys; a list under it names all seven](img/in-frame-parts.png)
 
@@ -111,7 +114,7 @@ In include order. That order is also the order of the code in the built `.wasm`.
 | Part | What it holds |
 |---|---|
 | `fw_protocol.h` | the numbers of the link: SysEx messages, the identity, CCs, notes |
-| `fw_sounds.h` | the parameters a DAW automates; the 39 named sounds (`PRESETS`); the engines' names and colours |
+| `fw_sounds.h` | the 71 parameters the host has (`PARAMS`: six of the device's own, then the mixer's 65); the 39 named sounds (`PRESETS`); the engines' names and colours |
 | `fw_state.h` | every variable the parts share, and the smallest helpers |
 | `fw_audio.h` | the queue from the controls to the audio (`send`), and `vibe_on_audio` |
 | `fw_edit.h` | `say` (a word on the display), `changed`, the undo, `confirm` (keys that ask twice) |
@@ -119,7 +122,7 @@ In include order. That order is also the order of the code in the built `.wasm`.
 | `fw_store.h` | what is kept on the device: `bank_save`, `bank_load` |
 | `fw_link.h` | SysEx out and in: `out_pump`, `sysex_in`, `song_piece` |
 | `fw_sequencer.h` | playing and recording, LOOP and SONG, patterns, steps, automation lanes |
-| `fw_pages.h` | `set_page`, `tab_key`, `arrow`, and what the encoders turn on each page (`encoder`) |
+| `fw_pages.h` | `set_page`, `tab_key`, `arrow`, the mixer as the host's parameters (`mix_report`, `mix_from_host`), and what the encoders turn on each page (`encoder`) |
 | `fw_softkeys.h` | F1 to F6 on every page |
 | `fw_tour.h` | the tour (MENU): its script and what runs it |
 | `fw_stage_input.h` | the stage's layout and what the mouse does on it |
@@ -130,6 +133,85 @@ In include order. That order is also the order of the code in the built `.wasm`.
 | `fw_draw.h` | `on_draw`: a whole frame of the display, the pads' lights, FOCUS |
 | `fw_stage_draw.h` | `on_stage`: a whole frame of the stage |
 | `song_way.h` | the song from the control flow to the audio flow. It stands alone, so a test can set two threads on it |
+
+## The mixer as the host's parameters
+
+From firmware 1.7.1 the firmware reports its mixer to the host, as the VIBE FM SDK's mixer convention asks of a
+firmware with tracks (SDK 11; `CONTROLLERS.md` in the SDK, section 2). A mixer controller and a DAW are then the
+host's business: the firmware has no controller code.
+
+`PARAMS` in `fw_sounds.h` declares 71 parameters. The first six are those of before, in their order: `volume`,
+`mod_pitch`, `mod_cutoff`, `mod_fm`, `mod_level`, `intensity`. The mixer's 65 follow from `P_MIX`.
+
+| Parameter | Index | Range | The value behind it |
+|---|---|---|---|
+| `mix_<n>_level` | `P_MIX + 4 * (n - 1) + MIX_LEVEL` | 0 to 1 | `SONG.vol`, 0 to 127: the level is `vol / 127` |
+| `mix_<n>_pan` | `... + MIX_PAN` | -1 to +1 | `SONG.pan`, 0 to 127 with 64 the middle: `(pan - 64) / 64` below it, `(pan - 64) / 63` above |
+| `mix_<n>_mute` | `... + MIX_MUTE` | 0 or 1, `steps` 2 | bit n - 1 of `SONG.mute` |
+| `mix_<n>_solo` | `... + MIX_SOLO` | 0 or 1, `steps` 2 | bit n - 1 of `SONG.solo` |
+| `mix_select` | `P_MIX_SELECT` | 1 to 16, `steps` 16 | `sel + 1` |
+
+n is 1 to 16. The groups (`GROUPS`) are `MIX 1` to `MIX 16`, and `MIX` for `mix_select`. Nothing new is stored: the
+values are the song's and `sel`, as the MIX page shows them. Two functions in `fw_pages.h` do the work, both in the
+control flow.
+
+```mermaid
+flowchart LR
+  host["the host<br/>a mixer controller, a DAW"]
+  from["on_event: VIBE_EV_PARAM<br/>mix_from_host"]
+  song["SONG.vol, .pan, .mute, .solo<br/>and sel"]
+  pages["MIX, PERFORM, UNDO, NEW,<br/>a song from a game"]
+  rep["mix_report<br/>compares with mix_said"]
+  host -->|"sets a parameter"| from --> song
+  pages --> song
+  song --> rep -->|"vibe_param_set, only what differs"| host
+```
+
+- **`mix_report`** compares each of the 65 values with what the host was told last (`mix_said`) and calls
+  `vibe_param_set` for those that differ. It runs after every event and every draw (`vibe_on_event` and
+  `vibe_on_draw` in `sfx-forge.c`) and in `vibe_on_init`, which clears `mix_known` first, so every init tells all
+  65. It does not ask what changed the song, so a new way to change the mix needs no code here. The SDK's text
+  says "compare once per audio block". It is done in the control flow instead: the song as the controls have it is
+  not the audio's to read, and `vibe_param_set` would get a second writer. Every change comes through an event or a
+  draw, so nothing is missed. The comment over `mix_report` says the same.
+- **`mix_from_host`** is called from the `VIBE_EV_PARAM` case of `on_event`. It rounds the value to the song's whole
+  number, writes it into `SONG` or `sel`, and notes it in `mix_said`, so `mix_report` does not say it back to the
+  host. It makes no undo step, as the MIX page's own faders and mutes make none. `song_hand()` then takes the song
+  to the audio as after any edit. The six parameters that are not the mixer's need nothing here: the audio reads
+  them every block.
+- **What is not taken.** A value that is no number (the bits of NaN or infinity: the SDK's clamp lets one through)
+  and, while the tour runs, `mix_select`. `mix_from_host` notes both as not said, so `mix_report` tells the host the
+  real value. The tour's own selections are not reported: `mix_report` skips `mix_select` while `tour_on`. When the
+  tour is over the host is told the sound that is selected then.
+
+The tour changes only the sound it selected itself (`T_PARAM` and `T_MUTATE` in `fw_tour.h` go back to `tour_kept`),
+and puts it back. Before 1.7.1 it changed whichever sound was selected, and did not put that one back, if DATA had
+selected another while it ran. The host is now a second way to select, so this was fixed with 1.7.1.
+
+Four limits:
+
+- **`mix_select` is `sel`**, the selected pad's number in whichever kit is chosen. Levels, pans, mutes and solos are
+  always the song's sounds (the MUSIC kit). The MIX page works the same way.
+- **A pad played, or a note 36 to 51 from outside, selects that sound**, so `mix_select` is told to the host with it.
+- **A value from the host between two steps is rounded and not said back.** The host and the device can then differ
+  by up to half a step of 127.
+- **In the plugin's Editor view** the mixer is 17 more groups, and mute and solo are plain two-step values. Nobody
+  has seen this on a screen.
+
+Three things to keep:
+
+- **The ids are the convention's.** They must stay as they are. The six old parameters stay first and in their
+  order.
+- **There is no `mix_<n>_arm`**, though the convention has one: REC is one key for the whole song.
+- **An automation lane does not write `SONG.vol` or `SONG.pan`**: the player applies it. So a fader that a lane
+  moves is not reported.
+
+`mix_said` and `mix_known` (the host was told at all) are not in `fw_state.h`: they stand beside `mix_report`, which
+alone uses them with `mix_from_host`.
+
+`tests/check-mixer.mjs` checks this on `tests/host.mjs`, the tour and what is not taken included, but not the last
+of the three points and not the four limits. No controller,
+plugin or DAW was tried: [What Is Tested](What-Is-Tested#the-newest-features).
 
 ## The state groups
 
@@ -163,7 +245,8 @@ Two traps:
 - [sfx-forge.c](../sfx-forge/sfx-forge.c): the header comment (the map of the parts) and the three entry points
 - [fw_events.h](../sfx-forge/fw_events.h) (`on_event`), [fw_draw.h](../sfx-forge/fw_draw.h) (`on_draw`),
   [fw_state.h](../sfx-forge/fw_state.h), [fw_audio.h](../sfx-forge/fw_audio.h),
-  [fw_sequencer.h](../sfx-forge/fw_sequencer.h), [fw_pages.h](../sfx-forge/fw_pages.h)
+  [fw_sequencer.h](../sfx-forge/fw_sequencer.h), [fw_pages.h](../sfx-forge/fw_pages.h),
+  [fw_sounds.h](../sfx-forge/fw_sounds.h) (`PARAMS`), [tests/check-mixer.mjs](../tests/check-mixer.mjs)
 - [The maintainer's guide, 3. Reading order](../docs/MAINTAINING.md#3-reading-order) and
   [4. The two flows](../docs/MAINTAINING.md#4-the-two-flows)
 - [The manual, 20. Every control, page by page](../docs/MANUAL.md#20-every-control-page-by-page)

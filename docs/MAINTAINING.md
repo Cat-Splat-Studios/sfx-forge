@@ -4,7 +4,7 @@
 [the Unity manual](UNITY.md) what the package does. This page says where each thing is made, how to build and test
 it, and what must change together.
 
-It describes the repository at firmware 1.7.0, song format 6, patch format 2.
+It describes the repository at firmware 1.7.1, song format 6, patch format 2.
 
 | I want to … | Go to |
 |---|---|
@@ -61,7 +61,7 @@ How the pieces depend on each other:
                   ../unity-sfx-forge   (the package repository: generated, never edited by hand)
 
   tests around them:
-    build.sh ............... the built .wasm: 22 scene and host checks, vibe-check, the two-thread stress test
+    build.sh ............... the built .wasm: 23 scene and host checks, vibe-check, the two-thread stress test
     tests/dotnet ........... Runtime/Core + sfxforge.dll, against what the firmware sent in build.sh's run
     tests/unity-inspectors . the package's Editor code (EditMode)
     unity/Demo ............. the showcase's editor checks and PlayMode tests
@@ -110,17 +110,19 @@ copies out again. Then it strips the debug sections from the `.wasm`: they hold 
 
 When it is right:
 
-- It ends with exit code 0, and 24 lines of the output say `PASSED`. The first is `vibe-check`'s, the last is
+- It ends with exit code 0, and 25 lines of the output say `PASSED`. The first is `vibe-check`'s, the last is
   `store PASSED`. Count them: `sh build.sh | grep -c PASSED`. In order: `vibe-check`'s line, then `tour`, `daw`,
   `guide`, `reset`, `metronome`, `loop`, `modes`, `take`, `edit`, `undo`, `retake`, `grid`, `regrid`, `take64`,
-  `grid keys`, `perform`, `meter`, `atomic`, `song way stress`, `song export`, `identity`, `wire`, `store`.
-- Every check prints `  ok    …` lines: 239 in a whole run of 1.7.0 (`sh build.sh | grep -c "  ok  "`); `meter`
-  prints 21 of them. A failure prints `  FAIL  …` and the run stops there.
+  `grid keys`, `perform`, `meter`, `mixer`, `atomic`, `song way stress`, `song export`, `identity`, `wire`, `store`.
+  (1.7.0 had 24: `mixer` came with 1.7.1.)
+- Every check prints `  ok    …` lines: 266 in a whole run of 1.7.1 (`sh build.sh | grep -c "  ok  "`); `meter`
+  prints 21 of them and `mixer` 27. A whole run of 1.7.0 had 239. A failure prints `  FAIL  …` and the run stops
+  there.
 - `sha256sum build/sfx-forge.wasm` gives the same hash before and after a change that only moves text. This is how
   the readability pass was proved.
 
 **A hash belongs to one state of the source.** It says nothing about a version: any change to the code gives
-another. Compare a hash only with one you took yourself, just before your change. The four that were written down:
+another. Compare a hash only with one you took yourself, just before your change. The five that were written down:
 
 | Firmware | State of the source | sha256 of `build/sfx-forge.wasm` |
 |---|---|---|
@@ -128,19 +130,31 @@ another. Compare a hash only with one you took yourself, just before your change
 | 1.7.0 | with the PERFORM page | `4e59a51fc0257c96a9f43172952d0bb61bc03e3f9f15bf95c988c239c81f27e7` |
 | 1.7.0 | with the PERFORM page and the beat (`meter.bin`, `tests/check-meter.mjs`) | `177d05b39109508ff69db11f3acfeb826e407bc0ec2d0f176a83fe3ddad42da3` |
 | 1.7.0 | the same, with the LINK page's footer corrected (`the knobs send CC 20-25 to it`): one text of the display | `f52354354399d9a6a4d886c1e1b9c22f11ac85d94faa4276a98a7bd0fb78df6e` |
+| 1.7.1 | the mixer as the host's parameters (`tests/check-mixer.mjs`) | `f6469a3600a967374fcbc832434ae1c84a184f452c6ab7ac12141cb5f90f4df8` |
 
 Three rows say 1.7.0: the version was not released between them, so its number stayed, and the hash changed with the
-code. Each hash of 1.7.0 came out the same with the SDK in `.tools` and with SDK 28. Another SDK, or another Zig,
-may give another hash for the same source.
+code. 1.7.0 was then released (25 Nov 2026, the GitHub release `v1.7.0`), so the next change got a number of its
+own: 1.7.1, the mixer and one fix of the tour that came with it ([section 4](#4-the-two-flows)). 1.7.1 is not
+released. Each hash of 1.7.0 came out the same with the SDK in
+`.tools` and with SDK 28. So did that of 1.7.1 (25 Nov 2026: the SDK in `.tools`, SDK 27, and the one in
+`out/sdk-latest`, SDK 28; 25 lines `PASSED` and 266 `ok` lines with each; the file is 283439 bytes). Another SDK,
+or another Zig, may give another hash for the same source.
 
 The manifest is not in the `.wasm`. When the `license` of `sfx-forge/firmware.json` became `GPL-3.0-or-later`
 (24 Nov 2026), the hash stayed `f5235435…`, with the SDK in `.tools` and with the one in `out/sdk-latest`, and
 all 24 lines said `PASSED` both times. `build/sfx-forge.zip` holds the manifest and did become another file.
 
 Each check is a scene `tests/<name>.json` played by the SDK's `wasmtest` into `out/<name>`, then judged by
-`tests/check-<name>.mjs`. A check says at its top what it proves and how to run it alone. Seven checks have no scene:
+`tests/check-<name>.mjs`. A check says at its top what it proves and how to run it alone. Eight checks have no scene:
 they load the `.wasm` themselves through `tests/host.mjs` (`check-identity.mjs`, `check-grid-keys.mjs`,
-`check-perform.mjs`, `check-meter.mjs`, `check-atomic.mjs`, `check-wire.mjs`, `check-store.mjs`). The README's table "Build" lists what each one checks.
+`check-perform.mjs`, `check-meter.mjs`, `check-mixer.mjs`, `check-atomic.mjs`, `check-wire.mjs`, `check-store.mjs`).
+The README's table "Build" lists what each one checks.
+
+`tests/host.mjs` also plays the host's side of the parameters, with the SDK's own functions in the `.wasm`:
+`params()` reads the list (`vibe_wasm_param_count`, `_info`, `_group`), `param(i)` a value (`vibe_wasm_param_value`),
+`setParam(i, value)` sets one as a controller or a DAW would (`vibe_wasm_param_set`: the firmware gets
+`VIBE_EV_PARAM`), and `changed()` gives the numbers of those the firmware itself set since it was asked last
+(`vibe_wasm_param_changed`). `check-mixer.mjs` is built on these four. It is not the plugin and not a controller.
 
 ### The native library
 
@@ -160,7 +174,9 @@ dotnet run -c Release --project tests/dotnet -- .      # after sh build.sh. Abou
 
 It compiles `Runtime/Core/*.cs` with the tests and loads the committed `sfxforge.dll`. It reads `out/midi.json` and
 `out/audio.wav`, which `sh build.sh` wrote, so run that first. When it is right: 205 lines `  ok    …`, and the last
-line is `PASSED` (a failure: `FAILED (n)`, exit code 1). `Program.cs` says which file holds which section.
+line is `PASSED` (a failure: `FAILED (n)`, exit code 1). `Program.cs` says which file holds which section. It was
+run with firmware 1.7.1 on 25 Nov 2026 and passed, with 205 `ok` lines; `IdentityTests.cs` expects the identity of
+1.7.1.
 
 ### The two-thread test alone
 
@@ -340,6 +356,7 @@ Every file's header says what it holds. These are the doors.
 | **the firmware's pages and keys** | `sfx-forge/sfx-forge.c` (the header: the map of the parts). `fw_state.h` for the pages (`PG_*`, `TAB_OF`, `PAGE_PARAMS`, `SOFT`). `fw_events.h`, `on_event`: it names the function for every pad, key and message. Then `fw_pages.h` (`set_page`, `tab_key`, `encoder`) and `fw_softkeys.h` (`soft_sound`, `soft_seq`, `soft_song`, `soft_auto`, `soft_mix`, `soft_perform`). The sequencer's keys: `fw_sequencer.h`. PERFORM is the page to read for pads that change their job: the table under this one |
 | **the display** | `fw_draw.h`, `on_draw`: seven numbered parts, one branch a page. The pages' pictures: `fw_draw_pages.h` (`draw_seq`, `draw_song`, `draw_auto`, `draw_mix`, `draw_master`, `draw_link`, `draw_perform`) and `fw_draw_sound.h` (`scene`). The pieces: `fw_draw_parts.h` (`hud`, `row`, `dial`, `param_text`). The stage: `fw_stage_draw.h` (`on_stage`) and `fw_stage_input.h` (`stage_event`) |
 | **the link (SysEx)** | README, "The link". `fw_protocol.h` for the bytes. `fw_link.h`: `sysex_in` (in), `out_pump` with `export_pump`, `ident_pump`, `dump_pump` (out), `song_piece` (a song arriving). In C#: `Runtime/Core/SfxProtocol.cs`, then `SfxLink.cs` and `SfxSongTransfer.cs` |
+| **the mixer as the host's parameters** | `fw_sounds.h`: the enum `P_…` and `PARAMS`, `GROUPS`. Then `fw_pages.h`: `mix_now`, `mix_report`, `mix_from_host`. Where they are called: `sfx-forge.c` (`vibe_on_event`, `vibe_on_draw`), `fw_events.h` (`vibe_on_init`, and `VIBE_EV_PARAM` in `on_event`). [Section 4](#4-the-two-flows) has the table |
 | **the store** | `fw_store.h`: its header describes the four files (`kits.bin`, `song6.bin`, `meter.bin`, `song.bin`); `bank_save`, `bank_load`. The reset: `factory_reset` in `fw_events.h` |
 | **the Unity runtime** | `Runtime/Core/SfxPatch.cs`, then `SfxNative.cs` (the door to the DLL). Then the components: `SfxPlayer.cs` (one sound, live), `SfxMusicPlayer.cs` (a song), `SfxVariationPlayer.cs`. Assets: `SfxPreset.cs`, `SfxSong.cs`, `SfxVariationSet.cs` |
 | **the Unity editor UI** | `Editor/UI/README.md` (the kit, class by class, and its rules). Then `SfxPresetEditor.cs` (tiny: its static `Build` makes the panel) and `SfxPresetPanel.cs`, the pattern every inspector follows: the constructor builds the controls once, `Refresh` shows the sound, every edit goes through the `SerializedObject`. The comment at the top of the class says how its 110 members are ordered. `Editor/UI/SfxUnits.cs` for every value's text |
@@ -436,6 +453,79 @@ two real threads.
    (the metronome is on), `rec_on` (the audio's copy of `rec`) and `beat_len` (the beat in sixteenths, from
    firmware 1.7.0), `volatile` in `fw_state.h`. The audio reads `beat_len` through `beat()`, once for a click, and
    takes a quarter for any value that is none of the four.
+
+**The mixer as the host's parameters (firmware 1.7.1).** This is a third thing: it runs between the control flow
+and the host, and the audio has no part in it. The SDK's mixer convention (SDK 11; the SDK's `CONTROLLERS.md`,
+section 2, and its house rule 3) asks a firmware with tracks to list its mixer as parameters, so that a mixer
+controller and a DAW can work it and show it. The list is in `fw_sounds.h` (`PARAMS`, `GROUPS`): after the six of
+before (`volume`, `mod_pitch`, `mod_cutoff`, `mod_fm`, `mod_level`, `intensity`, in that order) come 65, which makes
+71.
+
+| Parameter | Index | Range | What it is in the firmware |
+|---|---|---|---|
+| `mix_<n>_level`, n = 1 … 16 | `P_MIX + 4 * (n - 1) + MIX_LEVEL` | 0 … 1 | `SONG.vol[n - 1]` / 127 |
+| `mix_<n>_pan` | `… + MIX_PAN` | -1 … +1 | `SONG.pan[n - 1]`: 0 is -1, 64 is 0, 127 is +1 |
+| `mix_<n>_mute` | `… + MIX_MUTE` | 0 / 1 (`steps` 2) | bit n - 1 of `SONG.mute` |
+| `mix_<n>_solo` | `… + MIX_SOLO` | 0 / 1 (`steps` 2) | bit n - 1 of `SONG.solo` |
+| `mix_select` | `P_MIX_SELECT` (70) | 1 … 16 (`steps` 16) | `sel` + 1, the selected sound |
+
+Their groups are `MIX 1` … `MIX 16`, and `MIX` for `mix_select`. There is no `mix_<n>_arm`: REC is one key for the
+whole song, not one a sound. **Nothing new is stored.** The values are the song's own and `sel`, as the MIX page
+shows them; no format and no SysEx message changed. The audio does not read these 65 with `vibe_param_get`: a mute
+or a fader reaches the player as it always did, inside the song, by the song's way (2).
+
+Three functions in `fw_pages.h` do it, all in the control flow:
+
+- `mix_now(k)` says what value k has now, as the whole number the song keeps: 0 – 127 for a fader and a pan, 0 or 1
+  for a mute and a solo, 0 – 15 for the selected sound. k counts from `P_MIX`.
+- `mix_report()` goes to the host. It compares each `mix_now(k)` with `mix_said[k]`, one byte a parameter: what the
+  host was told last, or told us last. Where they differ it notes the new byte and calls `vibe_param_set`. It does
+  not ask who changed the value. So a fader turned on MIX, a pad that mutes, ALL ON, UNDO, NEW and a song from a
+  game are all reported, and a new way to change the mix needs no line here. It runs after `on_event` and after
+  `on_draw` (`vibe_on_event`, `vibe_on_draw` in `sfx-forge.c`, before `song_hand`), and in `vibe_on_init`, which
+  clears `mix_known` first: so on every init all 65 are told, not only on the first. It does not run after
+  `on_stage`. The SDK's text suggests a compare once an audio block; here it is in the control flow, because `SONG`
+  and `sel` are the controls' and the audio must not read them, and `vibe_param_set` would get a second writer.
+  Every change comes through an event or a draw, so nothing is missed. The comment over `mix_report` says the same.
+- `mix_from_host(index, v)` comes from the host: `VIBE_EV_PARAM` in `on_event` (`fw_events.h`). It rounds the value
+  to the song's whole number, clamps it, writes it into `SONG` or `sel`, and notes the same byte in `mix_said`. An
+  index below `P_MIX` returns at once: the six of before need nothing here, the audio reads them every block.
+
+Two things from the host are not taken, and for both the host is then told the real value:
+
+- **A value that is no number** (NaN or an infinity). The SDK's clamp lets one through. `mix_from_host` looks at
+  the float's bits, not at the value: the build's fast maths may drop a test of the value itself. It writes `0xFF`
+  into `mix_said[k]`, which no value has, so the next `mix_report` finds a difference and tells the host.
+- **`mix_select` while the guided tour runs** (`tour_on`). The tour selects sounds of its own. `mix_from_host`
+  notes `0xFF` and returns; `mix_report` skips `mix_select` while `tour_on` is set, so the tour's own selections are
+  not told either. When the tour is over, the next `mix_report` tells the host the sound that is selected then.
+
+**The tour changes only the sound it selected itself.** This is a bug older than 1.7.1, fixed with it. `T_PARAM`
+and `T_MUTATE` (`fw_tour.h`) wrote to `patches[sel]`, and `T_RESTORE` put back `tour_kept`. If DATA was turned while
+the tour ran and selected another sound – with 1.7.1 the host could have done it too –
+the tour changed that sound and did not put it back. (A pad, a key or a note from outside ends the tour.)
+Now both steps set `sel` to `tour_kept` first.
+`check-mixer.mjs` runs the tour with `mix_select` from the host and DATA turned, and reads every sound after it:
+all as before.
+
+What the mixer's parameters do not do:
+
+- `mix_select` is the selected pad's number in whichever kit is chosen (`sel`). Levels, pans, mutes and solos are
+  always the song's sounds, the MUSIC kit. The MIX page works the same way.
+- A pad played, or a note 36 – 51 from outside, selects that sound, so `mix_select` is told to the host with it.
+- A value from the host between two steps is rounded and not said back (below). The host and the device can then
+  differ by up to half a step of 127.
+- In the plugin's Editor view the mixer is 17 more groups, and mute and solo are plain two-step values. That is
+  read from the SDK; nobody has seen it on a screen.
+
+**Why a value from the host is not said back.** Because `mix_from_host` notes the byte in `mix_said`, the
+`mix_report` that follows the event finds nothing that differs. Without that the firmware would answer every fader
+move of a controller with the value rounded to 127 steps, and the host would hear its own fader come back a little
+off. The price: after a host set a level of 0.5, the host holds 0.5 and the song 64 of 127, until the firmware
+itself moves that fader. A pan below the middle is `(pan - 64) / 64` and above it `(pan - 64) / 63`, so that 0, 64
+and 127 are exactly -1, 0 and +1.
+
+No undo step is made for a value from the host. The MIX page's own faders and mutes make none either.
 
 What follows from the rule when you write code:
 
@@ -611,7 +701,7 @@ finds it.
 
 ### Add an engine
 
-A sixth engine changes no format by itself: the engine is one byte of the patch. But **a device up to 1.7.0 refuses
+A sixth engine changes no format by itself: the engine is one byte of the patch. But **a device up to 1.7.1 refuses
 engine 5** (`sfx_patch_unpack`), so a sound that uses it cannot go to an older firmware.
 
 1. `core/sfx_core.h`, section 2: the entry in `sfx_engine` before `SFX_ENGINE_COUNT`, and what its knobs A and B do
@@ -774,6 +864,47 @@ These still say four, or two, on purpose. Do not make them follow the beat:
 
 To find a new one: `grep -n "% 4\|/ 4\|\* 4" sfx-forge/*.h` and read every hit.
 
+### Add a host parameter
+
+A host parameter is one a DAW automates and a controller moves: a row of `PARAMS` in `sfx-forge/fw_sounds.h`. It is
+not a sound's parameter (the first recipe) and it is in no format. There are 71 today; the SDK takes up to 256
+(`VIBE_MAX_PARAMS`).
+
+Three rules first:
+
+- **An `id` is for ever.** The DAW's automation hangs on it (the SDK's README says so). Change the `name` if you
+  must, never the `id`. The ids `mix_…` are the SDK's convention and not ours to choose.
+- **Only add at the end.** The place of a parameter in the list is its index, and the index is what
+  `vibe_param_set`, `vibe_param_get` and `VIBE_EV_PARAM` carry. Whether a host keeps a parameter by its id or by
+  its place is the host's business, so neither may change.
+- **The old ones do not move.** The six of before stay the first six, in their order, and the mixer stays at
+  6 … 70. `check-mixer.mjs` counts from 6.
+
+Then:
+
+1. `fw_sounds.h`: a name in the enum, after `P_MIX_SELECT` and before `P_COUNT`. A row at the end of `PARAMS` (id,
+   name, lowest, highest, start, unit, steps, choices) and an entry at the end of `GROUPS`. Both tables are
+   `P_COUNT` long: a forgotten entry of `GROUPS` is a null pointer, and the compiler does not say so.
+2. `fw_pages.h`: **`MIX_N` is `P_COUNT - P_MIX`**, that is "everything from `P_MIX` to the end". A parameter after
+   `mix_select` would be taken for a 17th sound's fader, and `mix_now` would read past `SONG.vol`. Make it
+   `P_MIX_SELECT + 1 - P_MIX` with the same change.
+3. Who reads it. If it is the audio: `vibe_param_get` in `vibe_on_audio`, as with `volume` and `intensity`; nothing
+   else is needed, because the SDK has stored the value before the event arrives. If it is the controls:
+   `VIBE_EV_PARAM` in `on_event` (`fw_events.h`) calls `mix_from_host`, which returns for anything that is not the
+   mixer's. Give yours its own lines there.
+4. Who writes it. When the firmware changes the value itself, it calls `vibe_param_set`, or the host shows the old
+   one. If the value lives somewhere else already, as the mixer's do in the song, do not keep a second copy:
+   compare and report, as `mix_report` does, and note what the host set so that it is not said back
+   ([section 4](#4-the-two-flows)).
+5. The test: `tests/check-mixer.mjs`. Its first lines hold the list: the six of before first, 71 in all, no id
+   twice. Raise the 71 and add a case of your own with `params()`, `param()`, `setParam()` and `changed()` of
+   `tests/host.mjs`. `changed()` reads eight words of 32 bits, which is the SDK's 256.
+6. Docs: wherever the documents list the host's parameters (search for `mix_select` and `mod_cutoff`), and the
+   count in this guide.
+7. It is a new firmware version: the recipe below.
+
+Nothing in the Unity package reads the host's parameters. A game moves the telemetry and the intensity over MIDI.
+
 ### Add a SysEx message
 
 1. `sfx-forge/fw_protocol.h`: the next free number (`0x09`) as `SX_…`, and its line in the table comment. A message
@@ -850,14 +981,18 @@ Then:
 5. `tests/check-identity.mjs`: the hex string of the whole answer names the version's three bytes. Same in
    `tests/dotnet/IdentityTests.cs`.
 6. `sh build.sh`. The line to look for is
-   `ok    the firmware's defines (1.7.0) and firmware.json ("1.7.0") say the same version`, and `vibe-check`'s
-   `Manifest    SFX FORGE 1.7.0`. Then 24 lines `PASSED`. Write down the new hash (section 2): it is another one
+   `ok    the firmware's defines (1.7.1) and firmware.json ("1.7.1") say the same version`, and `vibe-check`'s
+   `Manifest    SFX FORGE 1.7.1`. Then 25 lines `PASSED`. Write down the new hash (section 2): it is another one
    with every version, because the version is in the code.
-7. `dotnet run -c Release --project tests/dotnet -- .`, and the Unity tests.
+7. `dotnet run -c Release --project tests/dotnet -- .`, and the Unity tests. (With 1.7.1 the .NET run was made,
+   on 25 Nov 2026: `PASSED`, 205 `ok` lines. The Unity tests were not.)
 8. If pages or sound changed: the screenshots and figures (`docs/shots.mjs`, `docs/figures.py`) and the two device
    videos (`docs/video/make_videos.py`). If a K key got another page: step 9 of the page recipe first.
 9. Say what was run with the new version and what was not. A test made with the version before (the link tests,
-   the Unity runs) keeps its version in the documents until it is run again.
+   the Unity runs) keeps its version in the documents until it is run again. 1.7.1 is the example: its build,
+   its 25 lines and `tests/dotnet` were run, and the link tests, the Unity runs and the videos still say 1.7.0.
+10. A version that is released (a GitHub release, as `v1.7.0` on 25 Nov 2026) is closed: the next change to the
+    code gets the next number, as the mixer got 1.7.1.
 
 The Unity package has its own version: `VERSION` and `RELEASED` in `tools/make_unity_package.py`. The
 `package.json` in this repository (0.1.0, `com.catsplat.sfxforge`) is the source's and is rewritten by the script.
@@ -924,11 +1059,14 @@ version they name are prose in the script. Update them when a count or the versi
 | edit `.tools/`, or the generated package by hand | the next run overwrites it | nothing |
 | add code, a font, a sample or a picture from somewhere else without looking at its licence | the whole is passed on under `GPL-3.0-or-later` ([README, Licence](../README.md#licence)), and what is in it must allow that | nothing. Name it in the package's `Third Party Notices.md` (the text is in `make_unity_package.py`) and ship its licence text |
 | name another licence in one place only | the SPDX lines, `firmware.json`, the two `package.json` files, `LICENSE` and the documents must say the same | `make_unity_package.py` checks `LICENSE` and `ADDITIONAL-PERMISSIONS.md`; `vibe-check` prints the manifest. For the rest: nothing |
+| change the `id` of a host parameter, or move one in the list | a DAW's automation and a controller's mapping hang on it | `check-mixer.mjs`: the six of before are the first six, then the mixer's 65 with the convention's ids. A changed id of one of the six: its first line |
 | rename or move a Unity file that has a `.meta` | scenes and assets name it by GUID | the showcase's `Verify`, the package script's GUID check |
 
 Smaller house rules of the SDK that the firmware keeps and `vibe-check` looks at: HOME shows the page's controls;
 buttons change the display when they are pressed; the firmware plays when the host does not draw (the plugin with its window
-closed) – which is why nothing the audio needs may hang on `on_draw`.
+closed) – which is why nothing the audio needs may hang on `on_draw`. From firmware 1.7.1 it also keeps the rule
+that a firmware with tracks reports its mixer (house rule 3; [section 4](#4-the-two-flows)). That one
+`tests/check-mixer.mjs` looks at, on the tests' own host.
 
 ---
 
@@ -1010,19 +1148,31 @@ In C# and the scripts:
     on PERFORM and on SEQ;
   - checked that DEMO, a song from a game and UNDO leave the beat. The check tries NEW and the factory reset; the
     rest is read from the code.
+- **The mixer with a real host** (firmware 1.7.1). `tests/check-mixer.mjs` drives the SDK's own host functions in
+  the `.wasm` (`vibe_wasm_param_set`, `_value`, `_changed`) through `tests/host.mjs`. Nobody has tried the mixer
+  with a real mixer controller, in the VIBE FM plugin, in a DAW or in the Playground. So nobody has seen a
+  controller's faders and lights follow the MIX page, recorded or played a DAW's automation of a fader, or looked
+  at the 71 parameters and their groups in a host's list. Also unchecked: a song from a game and DEMO as causes of
+  a report (the check tries the encoders, the pads, DATA, ALL ON, NEW and UNDO; the rest is read from the code),
+  a value from the host while the song plays with a solo set, an infinity from the host (the check sends NaN), and
+  a second init (that all 65 are told again is read from the code).
+- **The tour of 1.7.1, by eye.** The tour's fix (section 4) is checked with `mix_select` from the host and DATA
+  turned while the tour runs. Nobody has watched the tour of 1.7.1.
 - **The videos are not a test.** They are made by scripts from the firmware and the game.
   [The videos' README](../videos/README.md) says for each what it was made from; a video made before a page
   existed does not show it.
 - **The link with PERFORM open, or with another beat, or with the build as it is now.** The six link tests passed
   against the emulator on 24 Nov 2026 with the 1.7.0 build `177d05b3…`, in one run (`docs/UNITY.md`, section 6).
-  The build as it is now (`f5235435…`) differs from that one in one text of the display, the LINK page's footer
+  The last build of 1.7.0 (`f5235435…`) differs from that one in one text of the display, the LINK page's footer
   (`CC 20-23` became `CC 20-25`), and the link was not run again with it: on the evening of
   24 Nov 2026 loopMIDI was started, but its two ports did not appear, so the emulator's page had no port to send on.
   (Since then the manifest's `license` field changed too. It is in the zip and not in the `.wasm`: the hash is the
   same, and nothing in the code changed.) The recorded
   session passed on 23 Nov 2026 with the build of that day (`4e59a51f…`, before the beat) and was not run again:
   the link video is that recording. PERFORM was not open in any of them, and the beat was a quarter. 1.7.0
-  changed no message; its identity says 1.7.0.
+  changed no message; its identity says 1.7.0. The build as it is now, 1.7.1 (`f6469a36…`), was never on the link:
+  not against the emulator, not in a Unity run, not in a video. It changed no SysEx message either, and its
+  identity says 1.7.1 (`check-identity.mjs` reads that from the built firmware).
 - **Two real flows inside the firmware.** Only `song_way.h` was run on two threads. The queue and the `volatile`
   values are correct by reading.
 - **A pattern at 1/32 or 1/64 over a MIDI port.** The link tests used songs of sixteenths.
@@ -1043,7 +1193,7 @@ In C# and the scripts:
   update changes the number, the kit changes there instead. `tests/check-grid-keys.mjs` watches exactly this case:
   if it fails after an SDK update, look here first.
 - **The SDK moves.** The firmware's comments already describe SDK 28 (SHIFT + K1 – K6). Build with
-  `VIBE_SDK=…` against a new checkout before you replace the one in `.tools`, and compare the 24 lines.
+  `VIBE_SDK=…` against a new checkout before you replace the one in `.tools`, and compare the 25 lines.
 - **One SysEx a block.** Anything sent out of turn is lost without an error. Everything goes through `out_pump`.
 - **A full queue drops the message** (`send`, `QN` 64). A burst of more than 64 notes and edits between two blocks
   loses the rest.

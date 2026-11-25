@@ -105,7 +105,7 @@ VIBE_PARALLEL_AUDIO
    and compares, so they stay here (the identity that carries them is in fw_protocol.h and fw_link.h). */
 #define FW_MAJOR 1
 #define FW_MINOR 7
-#define FW_PATCH 0
+#define FW_PATCH 1
 
 #include "fw_protocol.h"
 #include "fw_sounds.h"
@@ -129,15 +129,18 @@ VIBE_PARALLEL_AUDIO
 
 /* ---- what the host calls in the control flow ------------------------------------------------------------------- */
 /* After each of them the song as it is now goes on its way to the player: whatever was done to it - one step or all
-   eight patterns - the audio takes whole, with its next block. (vibe_on_init is in fw_events.h, vibe_on_audio in
+   eight patterns - the audio takes whole, with its next block. Before that, after an event and a draw, the host is
+   told what changed in the mix (mix_report, fw_pages.h). (vibe_on_init is in fw_events.h, vibe_on_audio in
    fw_audio.h.) */
 void vibe_on_event(const vibe_event *e) {
   on_event(e);
+  mix_report();
   song_hand();
 }
 
 void vibe_on_draw(uint16_t *fb) {
   on_draw(fb);
+  mix_report();
   song_hand();
 }
 

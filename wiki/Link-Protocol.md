@@ -73,7 +73,7 @@ sequenceDiagram
 | Byte | What | Today |
 |---|---|---|
 | 0 | hardware: 0 unknown, 1 VIBE FM | 1 |
-| 1, 2, 3 | firmware version: major, minor, patch | 1, 7, 0 |
+| 1, 2, 3 | firmware version: major, minor, patch | 1, 7, 1 |
 | 4 | profile | 1 |
 | 5 | patch format | 2 |
 | 6 | song format | 6 |
@@ -84,7 +84,7 @@ sequenceDiagram
 | 16 | values in a patch | 25 |
 | 17 | flags: bit 0 pads, bit 1 encoders for the game, bit 2 takes a song's sounds, bit 3 takes telemetry | 15 |
 
-The whole answer today: `F0 7D 56 42 08 01 01 07 00 01 02 06 10 02 08 40 18 20 10 05 06 19 0F F7`. Fields are only
+The whole answer today: `F0 7D 56 42 08 01 01 07 01 01 02 06 10 02 08 40 18 20 10 05 06 19 0F F7`. Fields are only
 ever added at the end: a reader takes the first 18 bytes and ignores what follows.
 
 ## A patch

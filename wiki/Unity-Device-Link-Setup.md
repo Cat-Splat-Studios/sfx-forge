@@ -76,7 +76,7 @@ This is the only setup that was run end to end. See [What Is Tested](What-Is-Tes
 5. **Choose the ports.** Click the tile **FROM DEVICE** and pick `SFX to Unity`. Click **TO DEVICE** and pick
    `Unity to SFX`. If the ports are missing, press **REFRESH PORTS**.
 6. **Press CONNECT.** The status under the tiles changes to `LINKED` with the two port names. When the device
-   answers, one more line appears: `VIBE FM, firmware 1.7.0, profile 1`. That line is the
+   answers, one more line appears: `VIBE FM, firmware 1.7.1, profile 1`. That line is the
    [identity](#how-you-know-it-is-connected).
 
 The script accepts key names on its standard input while it runs: type `K5` or `F5` and ENTER to press that key of
@@ -148,7 +148,7 @@ sequenceDiagram
 
 | The window shows | It means |
 |---|---|
-| `VIBE FM, firmware 1.7.0, profile 1` | the device answered. Everything works |
+| `VIBE FM, firmware 1.7.1, profile 1` | the device answered. Everything works |
 | `no identity: firmware before 1.4, or nothing answers` | the request went out and nothing answered within a second. Either the firmware is older than 1.4.0, or the output port leads nowhere, or no input is open for the answer. The link cannot tell these apart |
 | `LINKED` and no line under it for longer than a second | no output port is open, so nothing was asked |
 | `NOT CONNECTED` | the ports are closed. Choose the two ports, then CONNECT |
@@ -166,7 +166,7 @@ public class SayWhatIsLinked : MonoBehaviour
     void OnEnable() => SfxLink.Shared.IdentityReceived += Say;
     void OnDisable() => SfxLink.Shared.IdentityReceived -= Say;
 
-    void Say(SfxDeviceInfo device) => Debug.Log(device);      // "VIBE FM, firmware 1.7.0, profile 1"
+    void Say(SfxDeviceInfo device) => Debug.Log(device);      // "VIBE FM, firmware 1.7.1, profile 1"
 }
 ```
 

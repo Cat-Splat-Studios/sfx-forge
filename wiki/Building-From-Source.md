@@ -81,7 +81,7 @@ What `build.sh` does, in order:
 5. With `quick` it stops here. Otherwise it runs `vibe-check` and every check
    ([Running The Tests](Running-The-Tests)).
 
-**What you see when it is right:** exit code 0, and 24 lines of the output say `PASSED`.
+**What you see when it is right:** exit code 0, and 25 lines of the output say `PASSED`.
 
 **What you get:** `build/sfx-forge.wasm`, which you drop onto the SDK's emulator in a browser
 (<https://play.thefirmwarehub.com/>), and `build/sfx-forge.zip`, which you drop onto the VIBE FM plugin's window.

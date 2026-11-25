@@ -47,8 +47,8 @@ const REQ = [...HEAD, 0x07, 0xf7];
 // lanes, bars, voices, engines, wavetables, values, flags
 const WANT = [...HEAD, 0x08, 1, ...ver, 1, 2, 6, 16, 2, 8, 64, 24, 32, 16, 5, 6, 25, 0x0f, 0xf7];
 ok(
-  hex(WANT) === 'F0 7D 56 42 08 01 01 07 00 01 02 06 10 02 08 40 18 20 10 05 06 19 0F F7',
-  `firmware 1.7.0 says: ${hex(WANT)}`,
+  hex(WANT) === 'F0 7D 56 42 08 01 01 07 01 01 02 06 10 02 08 40 18 20 10 05 06 19 0F F7',
+  `firmware 1.7.1 says: ${hex(WANT)}`,
 );
 
 // the factory song in format 6: its pieces on the wire, its bytes

@@ -7,7 +7,7 @@
 #
 # How it reads: 1. where things are, 2. the build, 3. the checks - each a scene (tests/<name>.json) that the SDK's
 # wasmtest plays into out/<name>, and a check (tests/check-<name>.mjs) that judges what came out. A check says at its
-# top what it proves. The run ends at the first check that fails (set -e); when all pass, 24 lines say PASSED.
+# top what it proves. The run ends at the first check that fails (set -e); when all pass, 25 lines say PASSED.
 set -e
 
 # ---- 1. where things are ------------------------------------------------------------------------------------------
@@ -130,6 +130,10 @@ node "$ROOT/tests/check-perform.mjs" "$WASM"
 
 # the beat and the time signature (1.7.0): FILL and the click follow the beat, which is the device's and not the song's
 node "$ROOT/tests/check-meter.mjs" "$WASM"
+
+# the mixer as the host's parameters (1.7.1, the SDK's mixer convention): level, pan, mute and solo of the 16 sounds
+# and the selected sound, from the host and to it
+node "$ROOT/tests/check-mixer.mjs" "$WASM"
 
 # a whole pattern or song rewritten while it plays (a grid change, COPY, UNDO, CLR PAT, a song over SysEx) reaches the
 # player whole, in time, with the playhead where it was; edits with no block between them. Then the same hand-over

@@ -56,7 +56,7 @@ unity/
 
 tests/
   *.json + check*.mjs      scenes of key presses and their checks (run by build.sh)
-  host.mjs                 a small host for checks that need SysEx or a store
+  host.mjs                 a small host for checks that need SysEx, a store or the host's parameters
   song-read.mjs            reads a packed song in JavaScript (shared by the checks)
   make-grid-scenes.mjs     writes grid.json, regrid.json and take64.json
   make-demo-song.mjs       writes the demo song's files from what the firmware sends

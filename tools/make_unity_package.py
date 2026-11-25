@@ -53,7 +53,7 @@ RELEASED = "2026-11-20"
 DISPLAY_NAME = "SFX Forge"
 UNITY = "6000.3"
 UNITY_TESTED = "6000.3.8f1"
-FIRMWARE_VERSION = "1.7.0"
+FIRMWARE_VERSION = "1.7.1"
 AUTHOR = {"name": "Cat Splat Studios", "url": "https://github.com/Cat-Splat-Studios"}
 # Unity names the imported folder after this (Assets/Samples/<package name>/<version>/<this>) and turns characters
 # a file name cannot hold into "_": a colon here gave the folder "Showcase_ Brio - First Harmonic". Keep it plain.
@@ -878,18 +878,43 @@ def make_firmware(target):
         + FIRMWARE_VERSION
         + ") was run without the emulator's page, in the VIBE FM SDK's command-line tools and, for\n"
         "SysEx and stored files, in a small host of the source repository's own: its checks hand the built `.wasm`\n"
-        "events and SysEx and read its sound, its MIDI and what it stores, and all 22 of them pass. A few of them also\n"
+        "events and SysEx and read its sound, its MIDI and what it stores, and all 24 of them pass, as does the SDK's\n"
+        "own `vibe-check` (25 Nov 2026). A few of them also\n"
         "compare the display, to tell that it changed or that the LINK light is on: what a page shows and what a toast\n"
-        "says is not read. Against\n"
-        "Unity, the six link tests of the Unity manual passed in the SDK's local emulator on 24 Nov 2026, in one run,\n"
-        "with songs of sixteenths only and the beat a quarter. That was the build before this one: this one differs\n"
-        "in one text of the display, the LINK page's footer (`CC 20-23` became `CC 20-25`), and the link tests were\n"
-        "not run again with it. The session of the link video\n"
+        "says is not read.\n\n"
+        "This build was not run against Unity. The package's checks without Unity were run with it and pass\n"
+        "(25 Nov 2026). What was run against Unity is firmware 1.7.0: the six link tests of\n"
+        "the Unity manual passed in the SDK's local emulator on 24 Nov 2026, in one run,\n"
+        "with songs of sixteenths only and the beat a quarter. That was the 1.7.0 build before one text of the\n"
+        "display was corrected, the LINK page's footer (`CC 20-23` became `CC 20-25`), and the link tests were\n"
+        "not run again after that, nor with 1.7.1. The session of the link video\n"
         "was recorded with the 1.7.0 build of 23 Nov 2026, before the beat was added; with four quarters the display\n"
         "is the same, and it was not recorded again.\n"
-        "It was not run in the plugin or on hardware. Nobody has played its new page, PERFORM, by hand, nobody has\n"
-        "set a time signature by hand, and nobody has listened to what is new in it. Its source is not in this\n"
-        "package.\n\n"
+        "No build was run in the plugin or on hardware. Nobody has played the PERFORM page by hand, nobody has\n"
+        "set a time signature by hand, and nobody has listened to what came with 1.7.0. Nobody has tried the mixer\n"
+        "of 1.7.1 with a mixer controller, in the VIBE FM plugin, in a DAW or in the Playground. The source is not in\n"
+        "this package.\n\n"
+        "New in 1.7.1: the device reports its mixer to the host as parameters, as the VIBE FM SDK's mixer convention\n"
+        "asks of an instrument with tracks. After the six parameters of before (`volume`, `mod_pitch`, `mod_cutoff`,\n"
+        "`mod_fm`, `mod_level`, `intensity`, unchanged and in the same order) there are 65 more, 71 in all: for each\n"
+        "of the song's 16 sounds `mix_<n>_level` (0 to 1), `mix_<n>_pan` (-1 to +1), `mix_<n>_mute` and\n"
+        "`mix_<n>_solo` (0 or 1), with n from 1 to 16, and then `mix_select` (1 to 16, the selected sound). There is\n"
+        "no `mix_<n>_arm`: REC is one key for the whole song, not one for each sound. Nothing new is stored. The\n"
+        "values are the song's own, as the MIX page shows them: a level is the song's volume of 0 to 127 divided by\n"
+        "127, and a pan's middle is the song's 64. The host is told whatever changes them: a fader turned on MIX, a\n"
+        "pad that mutes, ALL ON, UNDO, NEW, a song from a game. A value the host sets goes into the song or selects\n"
+        "the sound, is not said back to the host and makes no undo step (the MIX page's own faders and mutes make none\n"
+        "either). Not taken from the host: a value that is no number, and `mix_select` while the device's tour\n"
+        "runs; the host is then told what the value really is. The tour's own selections are not told to the host,\n"
+        "and when it is over the host is told the sound that is selected then. A bug older than 1.7.1 is fixed with\n"
+        "it: the tour now changes only the sound it selected itself and puts that one back, also when another sound\n"
+        "was selected while it ran.\n"
+        "1.7.1 changes nothing in this package's code, in the messages or in the formats: the song is in\n"
+        "format 6 and a patch in format 2 as before, no SysEx message changed, and only the identity's version says\n"
+        "1.7.1. It was tested by a script that works the SDK's own host functions for parameters in the source\n"
+        "repository's small host: the list, both directions, that a mute and a fader set from the host are\n"
+        "heard in the measured output, what is not taken, and that the tour leaves every sound as it was. No real\n"
+        "host or controller was tried.\n\n"
         "New in 1.7.0: PERFORM, a fourth page of the K5 key (K5 walks SEQ, SONG, AUTO, PERFORM). It shows the whole\n"
         "pattern as a grid, one row for each of the 16 sounds, and F1 to F4 choose what the pads are: the steps of\n"
         "the selected sound, the kit, mutes, or the patterns and the intensity\n"
@@ -1278,21 +1303,29 @@ Tested, on one machine (Windows 11, Unity {unity_tested}), in the repository thi
   from the device to Unity, a song and its sounds from Unity to the device, the game's messages leaving for the
   device, and the device saying what it is. That was done with firmware 1.7.0 on 24 Nov 2026: six tests, all
   passed, in one run, with songs of sixteenths only (on 23 Nov 2026 with the 1.7.0 build of that day, which did
-  not have the beat yet, and with 1.6.0 the day before that). The build in this package differs from the one of
-  that run in one text of the display, the LINK page's footer (`CC 20-23` became `CC 20-25`); the six tests were
-  not run again with it.
+  not have the beat yet, and with 1.6.0 the day before that). After that run one text of the display was
+  corrected in 1.7.0, the LINK page's footer (`CC 20-23` became `CC 20-25`), and the six tests were not run again.
+  **The firmware in this package is 1.7.1, and it was not run against Unity**: not in the link tests, not in the
+  recorded session, not in the sample's runs below. It adds the mixer as parameters for the host and changes no
+  message and no format.
   SEND and EXPORT pressed on the device arriving in a running game were seen in the recorded session of the link
   video, run once; in its pictures the device's INTENSITY follows the game's. The session was recorded with the
   1.7.0 build of 23 Nov 2026, before the beat was added; with four quarters the display is the same. It was not
-  run again with the build in this package.
-- The firmware in this package (1.7.0): all 22 of its own checks pass. They run the built `.wasm` in the SDK's
+  run again with a later build.
+- The firmware in this package (1.7.1): all 24 of its own checks pass, and the SDK's `vibe-check` with them
+  (25 Nov 2026). They run the built `.wasm` in the SDK's
   command-line tools and in a small host of the source repository's own (for SysEx and stored files), without the
   emulator's page and without Unity, and read its sound, its MIDI, what it stores
   and the song it sends: 27 messages, the 16 sounds and then 2487 bytes of format 6 in 11 pieces. They also hand it
-  songs in both shapes of the song message, out of order, doubled and one straight after another. One of the 22
+  songs in both shapes of the song message, out of order, doubled and one straight after another. One of the 24
   presses the keys of PERFORM, the page that is new in 1.7.0; it does not look at the display. Another is about
   the beat, which is new in 1.7.0 too: what FILL writes with each beat, where the click falls, that the song's
-  bytes stay as they were, and what the device stores. It does not read the display's words.
+  bytes stay as they were, and what the device stores. It does not read the display's words. A third is about
+  the mixer that 1.7.1 reports to the host: the list of 71 parameters, a level, a pan, a mute, a solo and the
+  selected sound set from the host and changed on the device, and that every sound muted or every fader down from
+  the host is silent in the measured output; that a value that is no number is not taken; and that the device's
+  tour, with the selected sound set from the host and DATA turned while it runs, leaves every sound as it was. It
+  works the SDK's own host functions for parameters in that small host, not a real host.
 - The finer grid and song format 6 on the Unity side, without Unity and without a device (the checks of the
   engine-independent code, below): a format-5 song renders bit for bit as it did before; the songs of formats 1 to
   5, converted to format 6, play the same samples; a pattern made finer and coarser again; where the player is in a
@@ -1309,7 +1342,7 @@ Tested, on one machine (Windows 11, Unity {unity_tested}), in the repository thi
   arithmetic in 32-bit floats. They also render the pictures of the editor UI on this page and
   in the manual; those are not photographs of the editor.
 - The engine-independent code, with plain .NET and without Unity: 205 checks, all passing with the native library
-  that is in this package. Among them the loop switch of the music player's engine (`loopPattern`): on, the
+  that is in this package (last run on 25 Nov 2026, with the identity of firmware 1.7.1). Among them the loop switch of the music player's engine (`loopPattern`): on, the
   pattern stays; a cue changes it on the bar line and that one stays; off, the arrangement goes on.
 - The tools for designing sounds. Without Unity: every kind of generated sound over 300 seeds is a valid patch
   inside its ranges, and 100 of each bake audible and unclipped; variants, locks and the shuffle; levels, the LEVEL
@@ -1378,6 +1411,14 @@ Not tested:
   crossed has 16 steps and every bar 16 sixteenths: a song with a pattern at 1/32 or 1/64 has
   not travelled through a MIDI port, only through the firmware's checks and the package's checks, which each read
   the other's bytes. Not in the plugin, not on hardware.
+- **Firmware 1.7.1, the one in this package, against Unity.** The link tests, the sample's runs, the editor UI's
+  tests and the videos were made with 1.7.0 and not again. 1.7.1 changes no message and no format, and that is read
+  from its code, from its own checks and from the checks with plain .NET, not from a run with Unity.
+- **The mixer of firmware 1.7.1 in a host.** The device reports the levels, pans, mutes and solos of its 16 sounds
+  and the selected sound to the host as parameters. A check in the source repository works the SDK's own host
+  functions for parameters in a host of its own. Nobody has tried it with a mixer controller, in the VIBE FM
+  plugin, in a DAW or in the Playground. The package has no part in it: the parameters are for the device's host,
+  not for the link.
 - **The PERFORM page of firmware 1.7.0, by hand.** A check in the source repository presses its keys in a host of
   its own and reads what the firmware then holds, plays and sends; it does not look at the display. Nobody has
   played the page or listened to it, and it was not open in any run of the link.
@@ -1424,7 +1465,7 @@ Not tested:
   warning (`SfxNative.Available` is false); that was not tried.
 - **MIDI on Windows only** (winmm), and only needed for the link. Playing sounds and songs needs no device.
 - **Unity {unity}**: developed and tested with {unity_tested}, nothing older.
-- **Firmware 1.6.0 or 1.7.0 for songs.** A song of this version is in format 6. A firmware up to 1.5.0 does not
+- **Firmware 1.6.0, 1.7.0 or 1.7.1 for songs.** A song of this version is in format 6. A firmware up to 1.5.0 does not
   take it; the package says so before it sends. A package from before firmware 1.6.0 does not read it.
 - Live players are not spatialized (for 3D, bake a clip); one patch per `SfxPlayer`; a song is made on the device and
   only played and shaped in Unity: a pattern's grid too is chosen on the device. The device's beat (firmware 1.7.0) is not in the song: the package does not read or show it. A variation set must be baked to play where the native library is not, and
@@ -1584,6 +1625,9 @@ permissions under its section 7 (the Unity engine; the hosts of VIBE FM firmware
   `BAR 6/8`) follow it. The beat is the device's and is not in the song: a game never gets it.
   Nothing in the package's code or formats changes with either: a device with 1.6.0 and one with 1.7.0 speak the
   same song format 6.
+  Firmware 1.7.1 reports the device's mixer to its host as parameters: level, pan, mute and solo of each of the
+  16 sounds and the selected sound, 65 parameters after the six of before. Nothing in the package's code or
+  formats changes with it either, and no message of the link changed.
 - The native library's import settings name the editor and Windows x64 only.
 
 The code is the package that was `{old_id}` 0.1.0 inside the source repository. The id, the display name and the
@@ -1606,13 +1650,17 @@ version are new; namespaces, assembly names and asset GUIDs are unchanged.
 - The identity was not asked of a device by the package's own tests, only built and read. There is one device and
   one profile id; nothing can be targeted at another, and nothing converts a newer patch, song or asset.
 - `loopPattern` is tested in the engine through the native library, and inside Unity by one Play mode test of the
-  sample, headless and muted; nobody has listened to it. Firmware {firmware} passes its own checks; the six link
-  tests were last run in the emulator against the build before one text of its LINK page was corrected (songs of
-  sixteenths only), and the session of the link video
-  was recorded with the {firmware} build of 23 Nov 2026, before the beat was added. Its PERFORM page and its beat
-  were tested by scripts only: nobody has played them by hand or listened to the click, and it was not run on
+  sample, headless and muted; nobody has listened to it. Firmware {firmware} passes its own checks. It was not run
+  against Unity: the six link
+  tests were last run in the emulator against firmware 1.7.0, the build before one text of its LINK page was
+  corrected (songs of sixteenths only), and the session of the link video
+  was recorded with the 1.7.0 build of 23 Nov 2026, before the beat was added. The PERFORM page and the beat
+  were tested by scripts only: nobody has played them by hand or listened to the click, and no build was run on
   hardware or in the plugin.
-- The device's beat and time signature (firmware {firmware}) are not in the song. The package does not read or
+- The mixer that firmware 1.7.1 reports to its host was tested by a script that works the SDK's own host functions
+  for parameters. Nobody has tried it with a mixer controller, in the VIBE FM plugin, in a DAW or in the
+  Playground.
+- The device's beat and time signature (firmware 1.7.0) are not in the song. The package does not read or
   show them, and the song's Inspector shades its cells in fours whatever the device's beat is.
 - The tools for designing sounds are measured, not heard: nobody has listened to a generated sound, a variant or
   a baked file. A variation set that is not baked plays only where the native library is, and nothing checks at
@@ -1625,7 +1673,7 @@ version are new; namespaces, assembly names and asset GUIDs are unchanged.
 - Tried on the generated package, headless: added to an empty project from disk, the sample imported with the
   Package Manager's import call, with and without the Test Framework, its checks, tests, Windows build and the
   build's probe (the README, "What is tested", has the numbers, and which of it was repeated with the tools,
-  `loopPattern` and firmware 1.5.0, and again with firmware {firmware} and song format 6: the sample's checks and
+  `loopPattern` and firmware 1.5.0, and again with firmware 1.7.0 and song format 6: the sample's checks and
   tests, not the import call and not the build). Not tried: the Package Manager's buttons clicked
   by hand, a git URL, a project with another render pipeline or the Input System alone.
 - Straight after the import, one of the sample's 32 editor checks fails (the scene is not in the build settings)

@@ -13,31 +13,39 @@ flowchart LR
   emu["the link, against the SDK's emulator<br/>over a virtual MIDI cable"]
   hw["the hardware"]
   plugin["the VIBE FM plugin"]
+  surface["a mixer controller or a DAW<br/>on the mixer's parameters"]
   ears["by ear, by eye, by hand"]
   other["the Unity package on other platforms<br/>than Windows x64"]
   code -->|"done"| scripts
   code -->|"done, songs of sixteenths only"| emu
   code -.->|"never"| hw
   code -.->|"never"| plugin
+  code -.->|"never"| surface
   code -.->|"never, for the newest features"| ears
   code -.->|"never"| other
 ```
 
-- **Tested by scripts:** the firmware (24 checks), the Unity package's core (205 checks), its editor UI (171
+- **Tested by scripts:** the firmware (25 checks), the Unity package's core (205 checks), its editor UI (171
   EditMode tests), the showcase (32 editor checks, 41 PlayMode tests).
 - **Tested against the emulator:** the link, with songs whose patterns all have 16 steps.
 - **Never:** the hardware, the VIBE FM plugin, any platform but Windows x64, any Unity but 6000.3.8f1. Nobody has
-  listened to the newest features (PERFORM, the beat) or played them by hand.
+  listened to the newest features (PERFORM, the beat) or played them by hand. Nobody has worked the mixer from a
+  mixer controller or a DAW (firmware 1.7.1).
 
 ## The numbers, as last run
 
-All with firmware 1.7.0 as it is now (with PERFORM and the beat), as the reference documents record the last run.
-The link runs have their dates further down.
+`sh build.sh` was run on 25 Nov 2026 with firmware 1.7.1, the firmware as it is now: 1.7.0 with the mixer reported
+to the host as parameters, and one fix to the tour (it changes only the sound it selected itself). It was run with
+the SDK in `.tools` (SDK 27) and with a newer one (SDK 28), with the same result; the built `.wasm` was the same file
+both times. `tests/dotnet` was run the same day with 1.7.1: its identity checks expect the identity of 1.7.1. The
+other three rows are as the reference documents record their last run, made with firmware 1.7.0 (with PERFORM and
+the beat): they were not run again with 1.7.1. The package's code did not change with 1.7.1. The link runs have
+their dates further down.
 
 | Suite | Result | What it runs on |
 |---|---|---|
-| `sh build.sh` | 24 lines `PASSED`, none failing; 239 `ok` lines | the built `.wasm`, in the SDK's `wasmtest` and on `tests/host.mjs` |
-| `tests/dotnet` | 205 checks, all passing | `Runtime/Core` and the package's own `sfxforge.dll`, without Unity |
+| `sh build.sh` | 25 lines `PASSED`, none failing; 266 `ok` lines (1.7.0 had 239) | the built `.wasm`, in the SDK's `wasmtest` and on `tests/host.mjs` |
+| `tests/dotnet` | 205 checks, all passing (25 Nov 2026, with 1.7.1) | `Runtime/Core` and the package's own `sfxforge.dll`, without Unity |
 | `tests/unity-inspectors` | 171 of 171 EditMode tests | Unity 6000.3.8f1, Windows x64 |
 | the showcase's `Verify` | 32 editor checks | the demo project, headless, on a copy |
 | PlayMode | 41 tests: 26 passed, 15 skipped | the same. The skipped ones need a device or the emulator, or record, and run only when asked for by name |
@@ -65,6 +73,7 @@ the real Inspector or the real windows, opened their menus, or typed into a fiel
 
 | Feature | Checked by | Not done |
 |---|---|---|
+| **the mixer as the host's parameters** (firmware 1.7.1) | `tests/check-mixer.mjs`, on `tests/host.mjs`: it reads the list of 71 parameters, sets levels, pans, mutes, solos and the selected sound with the SDK's own host functions (`vibe_wasm_param_set`, `_value`, `_changed`), presses MIX's keys and reads what the host is told, and reads from the samples that the song is silent when every sound is muted from the host. It also sets values that are no number, and runs the tour with `mix_select` from the host and DATA turned: every sound is as it was after it (27 `ok` lines) | nobody has tried it with a real mixer controller, in the VIBE FM plugin, in a DAW or in the Playground. The check does not see a controller's faders and lights, or how a host lists the parameters. That a fader moved by an automation lane is not reported is read from the code |
 | **PERFORM** (firmware 1.7.0) | `tests/check-perform.mjs`: it presses the page's keys on the built firmware and reads the song and the sound (26 `ok` lines) | nobody has played the page, looked at it while it plays, or listened to it. The check does not see the display, the stage's REC button, or solo |
 | **the beat and the time signature** (firmware 1.7.0) | `tests/check-meter.mjs`: what FILL writes, where the click falls, that the song's bytes stay as they were, what SAVE stores (21 `ok` lines) | nobody has listened to the click at any beat, turned SHIFT + B by hand, or read the words (`BAR 6/8`, `BEAT 3/8: BAR 6/8`). Not tried: swing with a beat of three sixteenths, a bar that is not a whole number of beats, SHIFT + B on SONG, and that DEMO, a song from a game and UNDO leave the beat |
 | **a finer grid** (firmware 1.6.0) | the firmware's grid checks; `tests/dotnet`; eight EditMode tests of the song's Inspector | a pattern at 1/32 or 1/64 has not crossed a MIDI port. Nobody has listened to a finer pattern in Unity |
@@ -76,7 +85,8 @@ two loopMIDI ports, headless.
 
 | When | Firmware | What ran | Result |
 |---|---|---|---|
-| 24 Nov 2026 | 1.7.0, the build with PERFORM and the beat, before the LINK page's footer was corrected (`CC 20-23` became `CC 20-25`). That text is all the build of now differs in; the link was not run again with it | the six link tests (`Tests/LinkTakes.cs`), one run | all six passed |
+| 25 Nov 2026 | 1.7.1 | nothing of the link. Only the firmware's own checks (`sh build.sh`) and `tests/dotnet` ran | the link, the Unity suites, the showcase's `Verify` and the videos were not run or made again with 1.7.1. No SysEx message changed in 1.7.1; the identity says 1.7.1 |
+| 24 Nov 2026 | 1.7.0, the build with PERFORM and the beat, before the LINK page's footer was corrected (`CC 20-23` became `CC 20-25`). That text is all the last 1.7.0 differs from it in; 1.7.1 has the mixer's parameters and one fix to the tour besides. The link was not run again with either | the six link tests (`Tests/LinkTakes.cs`), one run | all six passed |
 | 23 Nov 2026 | 1.7.0, the build of that day, before the beat | the six link tests, one run; the recorded session (`Tests/LinkSession.cs`), once | passed. The link video is that recording; it was not run again |
 | 22 Nov 2026 | 1.6.0 | the six link tests, four times; the recorded session | passed |
 
@@ -109,6 +119,8 @@ These are believed correct because someone read the code, not because a test ran
 
 - **The hardware and the plugin.** Everything ran in the SDK's `wasmtest`, on `tests/host.mjs`, or in the SDK's
   emulator. Nobody has held a VIBE with this firmware.
+- **A mixer controller or a DAW.** The mixer's parameters (firmware 1.7.1) were set and read only by a script,
+  through the SDK's host functions. No control surface, no plugin, no DAW and not the Playground.
 - **Listening.** The tests read numbers from rendered samples. Nobody listened to a generated sound, a variant, a
   baked file, or the click.
 - **Any Unity but 6000.3.8f1, any platform but Windows x64.** MIDI is implemented for Windows only (winmm), and

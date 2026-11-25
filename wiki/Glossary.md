@@ -49,7 +49,7 @@ Words for what a game says when it plays a sound. The Unity pages use them in ev
 | Word | Meaning | Taught on |
 |---|---|---|
 | **the device** | SFX FORGE as a player meets it: the firmware running on a VIBE FM, in its plugin, or in a browser | [Device Quick Start](Device-Quick-Start) |
-| **firmware** | the program that SFX FORGE is on the VIBE FM: `sfx-forge.wasm`, version 1.7.0 | [Building From Source](Building-From-Source) |
+| **firmware** | the program that SFX FORGE is on the VIBE FM: `sfx-forge.wasm`, version 1.7.1 | [Building From Source](Building-From-Source) |
 | **host** | whatever runs the firmware: the hardware, the plugin, the emulator, or a test tool | [Architecture Overview](Architecture-Overview) |
 | **Playground** | a web page that runs a firmware file in the browser | [Device Quick Start](Device-Quick-Start) |
 | **emulator** | the VIBE FM SDK's picture of the device in a browser. The link was tested against it | [What Is Tested](What-Is-Tested) |

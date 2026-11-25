@@ -33,12 +33,35 @@ instruments in that style, not recordings of an orchestra. The wavetables are co
 
 ![SFX FORGE](sfx-forge/icon.png)
 
-Built with the VIBE FM SDK. Status: v1.0, firmware 1.7.0. The synth, the device UI and the device side of the link are
+Built with the VIBE FM SDK. Status: v1.0, firmware 1.7.1 (1.7.0 is the last one released, on 25 Nov 2026; 1.7.1 is
+not released). The synth, the device UI and the device side of the link are
 tested in the SDK's tools; the Unity package is tested in Unity 6.3 with the demo project's editor and Play mode tests.
-Not tried yet: the hardware and the plugin. The link was run against the SDK's emulator over a virtual MIDI cable, last
+Not tried yet: the hardware, the plugin and a mixer controller. The link was run against the SDK's emulator over a
+virtual MIDI cable, last
 with firmware 1.7.0 on 24 Nov 2026 (the six link tests, once, with the build before one text of the LINK page's
 footer was corrected; the recorded session once the day before, with the 1.7.0 build of that day, before the beat
-was added; PERFORM was not open in them).
+was added; PERFORM was not open in them). It was not run with 1.7.1.
+
+**New in firmware 1.7.1: the mixer for the host.** The firmware now reports its mixer to the host as parameters, as
+the VIBE FM SDK's mixer convention asks of a firmware with tracks (SDK 11): for each of the song's 16 sounds
+`mix_<n>_level`, `mix_<n>_pan`, `mix_<n>_mute` and `mix_<n>_solo`, and `mix_select`, the selected sound. That is 65
+parameters after the six of before, 71 in all. A mixer controller or a DAW can show and move them; what it sets is
+what the MIX page shows, and what is changed on the device is told to the host. There is no `mix_<n>_arm`: REC is one
+key for the whole song. Nothing new is stored and nothing else changed: the song is format 6 and the patch format 2,
+the messages of the link are the same, the Unity package's code is the same, and the identity says 1.7.1. The list
+and the ranges are under [The host's parameters](#the-hosts-parameters).
+
+Two things from the host are not taken, and the host is then told what the value really is: a value that is no
+number, and `mix_select` while the guided tour runs (the tour selects sounds of its own and does not tell the host
+of them; when it is over the host is told the sound that is selected then). A bug older than 1.7.1 is fixed with it:
+if DATA was turned while the tour ran and selected another sound, the tour changed that sound and did not put it
+back. Now the tour changes only the sound it selected itself, and puts that one back.
+
+The mixer is tested by one script only. `tests/check-mixer.mjs` (27 lines of `ok`) runs the built firmware on
+`tests/host.mjs` and calls the SDK's own host functions for parameters (`vibe_wasm_param_set`, `_value`, `_changed`).
+Nobody has tried it with a real mixer controller, in the VIBE FM plugin, in a DAW or in the Playground. The checks
+of the package's core without Unity (`tests/dotnet`) were run with 1.7.1 and pass. The link
+tests against the emulator, the Unity runs and the videos were not run again with 1.7.1.
 
 **New in firmware 1.7.0: PERFORM.** A fourth page of K5: K5 now walks SEQ, SONG, AUTO, PERFORM and SEQ again. The
 display shows the whole pattern as a grid, as a drum machine shows it: a row a sound, a cell a step, the playhead a
@@ -57,7 +80,7 @@ before. Still not there: a bar longer than 16 sixteenths (no 5/4, 6/4, 9/8 or 12
 for each pattern, and groupings like 2+2+3.
 
 Nothing else changed: the song is format 6 and the patch format 2 as before, the messages of the link are the same,
-and the identity says 1.7.0.
+and the identity said 1.7.0.
 
 Both are tested by scripts only. `tests/check-perform.mjs` presses the page's keys on the built firmware and reads
 the song and the sound (26 lines of `ok`). `tests/check-meter.mjs` does the same for the beat: what FILL writes,
@@ -100,7 +123,7 @@ song's pages; F4 held erases during a take; the keys that throw a whole song or 
 | `native/` | the same engine as a native library (Windows x64 so far), for game engines |
 | `unity/com.catsplat.sfxforge/` | the Unity package: the link, presets, a player, telemetry, the tools for designing sounds (generators, variants, variation sets, batch bake, levels, a sound as text), and an editor UI drawn like the device's display (`Editor/UI` is its kit) |
 | `unity/Demo/` | a Unity 6.3 project using the package: a hovercraft whose every sound is synthesized live |
-| `tests/` | a scripted performance (`tour.json`) and its checks (`check.mjs`); more scripts of key presses, each with its check (`loop`, `modes`, `take`, `edit`, `undo`, `retake` for the sequencer, `grid`, `regrid`, `take64` for the finer grid, `song-export` for what SEND gives: the list is under "Build"); seven checks on a small host of their own, `host.mjs`, which hands the built firmware keys, SysEx and a store (`check-identity.mjs`, `check-grid-keys.mjs`, `check-perform.mjs`, `check-meter.mjs`, `check-atomic.mjs`, `check-wire.mjs`, `check-store.mjs`); `stress-song-way.c`, two threads over the song's way from the controls to the audio; `make-grid-scenes.mjs` writes the three grid performances; `dotnet/` tests the Unity package's core without Unity |
+| `tests/` | a scripted performance (`tour.json`) and its checks (`check.mjs`); more scripts of key presses, each with its check (`loop`, `modes`, `take`, `edit`, `undo`, `retake` for the sequencer, `grid`, `regrid`, `take64` for the finer grid, `song-export` for what SEND gives: the list is under "Build"); eight checks on a small host of their own, `host.mjs`, which hands the built firmware keys, SysEx, a store and the host's parameters (`check-identity.mjs`, `check-grid-keys.mjs`, `check-perform.mjs`, `check-meter.mjs`, `check-mixer.mjs`, `check-atomic.mjs`, `check-wire.mjs`, `check-store.mjs`); `stress-song-way.c`, two threads over the song's way from the controls to the audio; `make-grid-scenes.mjs` writes the three grid performances; `dotnet/` tests the Unity package's core without Unity |
 | `tests/mix-report.mjs` | measures the demo song's mix: every instrument soloed in turn – its level, its peak, how much of it is high |
 | `tests/unity-inspectors/` | a small Unity project that tests the package's editor UI (the sound inspector with its tools, the song inspector, the variation set's inspector, the SFX Forge window and the bake window; 171 EditMode tests, two of them of `SfxMusicPlayer.Play()` with a song assigned from a script) and writes pictures of it to `out/inspector-shots/`. The pictures are the Inspector's element tree and stylesheet rendered in a panel to a texture, not photographs of the Inspector. Its README has the command |
 | `docs/` | the manual, and `figures.py`, which builds its pictures from the firmware's own screenshots |
@@ -146,6 +169,7 @@ sent. Each writes into its own folder in `out/` and ends with a line `… PASSED
 | – | `check-grid-keys.mjs` | the question before a step is dropped is asked again when the number it named is no longer true; SHIFT + LEFT / RIGHT go only through the 16s that hold a step of a short bar |
 | – | `check-perform.mjs` | the PERFORM page (firmware 1.7.0): the pads as STEPS, SOUNDS, MUTES and PATTERN after F1 to F4; REC makes them the kit and a take is recorded; F5 FILL and F6 UNDO; with SHIFT: LOOP or SONG, CLEAR, ALL ON, COPY, the grid; the four encoders, A and B; K5 once more is SEQ again |
 | – | `check-meter.mjs` | the beat and the time signature (firmware 1.7.0): SHIFT + B walks the four beats and stops at the ends on PERFORM, and is the beat on SEQ too (one click); FILL begins with the beat, also at 32 steps; in a bar of 12 sixteenths the click is a quarter apart (3/4) or a dotted quarter apart (6/8), with the bar line's click told apart; SHIFT + B changes no byte of the song, B only the bar's length; the display of that bar differs with the beat; SAVE keeps the beat in `meter.bin` (one byte) and removes the file with a quarter; a `meter.bin` with 2, 3 or 5; NEW leaves the beat, the factory reset puts the quarter back |
+| – | `check-mixer.mjs` | the mixer as the host's parameters (firmware 1.7.1): the list is the six of before, then `mix_<n>_level`, `_pan`, `_mute`, `_solo` for 16 sounds and `mix_select`, 71 with the convention's ids, ranges and steps, no id twice; at the start the host is told all 65 of the mixer, and nothing more while nothing is touched; a level, a pan, a mute, a solo and the selected sound set by the host land where MIX has them (the next click of an encoder goes on from there) and are not said back; a fader and a pan turned on MIX, a pad that mutes, SHIFT + pad, DATA, F4 ALL ON, NEW and F2 after it are each told, and nothing else is; with every sound muted by the host, or every fader down, the song is silent; a value that is no number is not taken and the host is told the real one; the tour, left alone and with `mix_select` from the host and DATA turned while it runs, leaves every sound as it was, and after it the host has the selected sound |
 | – | `check-atomic.mjs` | a pattern or a song rewritten while it plays reaches the player whole: the grid changed, F2, COPY and a song over SysEx leave every sample as it was |
 | – | `stress-song-way.sh` | two real threads over `sfx-forge/song_way.h`, built natively: the player never gets half a song. It prints no `ok` lines, only its last one |
 | `song-export.json` | `check-song-export.mjs` | the factory sounds and song as SEND gives them are, byte for byte, the file the Unity demo's song was built from: 16 sounds, then 2487 bytes of format 6 in 11 pieces |
@@ -153,12 +177,12 @@ sent. Each writes into its own folder in `out/` and ends with a line `… PASSED
 | – | `check-wire.mjs` | the song on the wire: both shapes of the song message, pieces out of order and doubled, one song straight after another, the longest song |
 | – | `check-store.mjs` | what the device stores: `song6.bin` is written, `song.bin` is read and never written, a `song.bin` saved later by an older firmware wins and F2 brings the other back, a full store is not called SAVED |
 
-All 24 pass on firmware 1.7.0 (`vibe-check` and the 23 above): the output of `sh build.sh` has 24 lines that say
-`PASSED`. The 22 checks that print `ok` lines print 239 of them, counted in the output of the last run (15, 1, 4, 1,
-1, 7, 6, 8, 11, 7, 7, 7, 8, 7, 20, 26, 21, 23, 1, 27, 15 and 16, in the order of the table, which is the order they
-run in); the stress test prints none and `vibe-check` prints marks of its own. They hear the output
-and read the song the device sends. Seven checks have no performance and run the firmware on `tests/host.mjs`; some
-of them also compare the display's pixels, to tell that it changed or that the LINK light is on. None of the 24
+All 25 pass on firmware 1.7.1 (`vibe-check` and the 24 above): the output of `sh build.sh` has 25 lines that say
+`PASSED`. The 23 checks that print `ok` lines print 266 of them, counted in the output of the last run (15, 1, 4, 1,
+1, 7, 6, 8, 11, 7, 7, 7, 8, 7, 20, 26, 21, 27, 23, 1, 27, 15 and 16, in the order of the table, which is the order
+they run in); the stress test prints none and `vibe-check` prints marks of its own. They hear the output
+and read the song the device sends. Eight checks have no performance and run the firmware on `tests/host.mjs`; some
+of them also compare the display's pixels, to tell that it changed or that the LINK light is on. None of the 25
 reads what a page or a toast says, and none sees how PERFORM's grid is drawn. Of the beat the checks see what FILL
 writes, where the click falls, the song's bytes, the store, and that the display's picture changes with it. They do
 not read the words (`BAR 6/8`, `BEAT 3/8: BAR 6/8`) or see the shades and the bar strip's lines, and they try
@@ -166,8 +190,10 @@ neither the click with swing, nor a bar that is not a whole number of beats, nor
 a song from a game and UNDO leave the beat (NEW and the factory reset are tried). Not checked at all: the stage's buttons
 (its REC button on PERFORM among them), the stage's GRID chip and the shades of its grids, solo on PERFORM, ERASE
 across a change of pattern, a DAW's song position at a finer grid, and undo of RAMP and a song loaded from a game.
-Undo of FILL is checked on PERFORM only (F6). Nobody has listened to the click or played any of it by hand, and
-nothing was run on the hardware or in the plugin.
+Undo of FILL is checked on PERFORM only (F6). Of the mixer for the host the check sees the parameters through the
+SDK's host functions only: not a controller's faders and lights, not the plugin's view of them, and not that a song
+from a game or a mute on PERFORM is told to the host. Nobody has listened to the click or played any of it by hand,
+and nothing was run on the hardware or in the plugin.
 
 ## Playing it
 
@@ -332,7 +358,9 @@ The short version; [the manual](docs/MANUAL.md) is the long one.
   turned is written large across the middle for a moment.
 - **K4 again: MIX** – the mixer: a fader and a pan for every sound (encoders 1 and 2, for the selected one), DRIVE
   on the sum, the OUTPUT volume. The pads mute a sound, SHIFT + pad solos it; F1 MUTE, F2 SOLO, F3 RESET, F4 ALL ON,
-  F5 PLAY.
+  F5 PLAY. From firmware 1.7.1 the host has the faders, the pans, the mutes, the solos and the selected sound as
+  parameters ([The host's parameters](#the-hosts-parameters)): a mixer controller or a DAW moves what this page
+  shows, and is told what is moved here. DRIVE is not among them.
 - **K4 a third time: MASTER** – the effects every sound sends to: the delay's TIME (1/16 to 1/2) and FEEDBACK, the reverb's ROOM
   SIZE and DAMPING, drawn as the echoes and the fading they give.
   The mix belongs to the song: it is saved with it, sent with it, and is the mix in the game.
@@ -386,6 +414,52 @@ Plain MIDI, so it works over USB, the plugin's MIDI ports and Web MIDI. SysEx us
 `<slot>` is 0–15, a pad of the kit the device shows. SEND and the request `06` always give the MUSIC kit: the song's
 sounds. A game plays sound effects beside the song with slots 16–31 of the player (`sfx_player_note_on`). Telemetry also arrives as the DAW parameters Mod Pitch / Cutoff / FM / Level and Intensity.
 
+### The host's parameters
+
+What the host (the plugin in a DAW, a mixer controller) sees of the device: 71 parameters, in this order. The first
+six are as they were before firmware 1.7.1; the mixer's 65 came with 1.7.1 and follow the VIBE FM SDK's mixer
+convention (SDK 11; the SDK's `CONTROLLERS.md`, section 2).
+
+| Parameter (id) | Name | Group | Range |
+|---|---|---|---|
+| `volume` | Volume | OUTPUT | 0…1 |
+| `mod_pitch` | Mod Pitch | TELEMETRY | 0…24 st |
+| `mod_cutoff` | Mod Cutoff | TELEMETRY | −4…+4 oct |
+| `mod_fm` | Mod Timbre | TELEMETRY | 0…1 |
+| `mod_level` | Mod Level | TELEMETRY | 0…1 |
+| `intensity` | Intensity | MUSIC | 0…1 |
+| `mix_<n>_level`, n = 1…16 | Level n | MIX n | 0…1: the fader of sound n, the song's 0–127 divided by 127 |
+| `mix_<n>_pan` | Pan n | MIX n | −1…+1: all left, 0 the middle, all right (the song's 0, 64 and 127) |
+| `mix_<n>_mute` | Mute n | MIX n | 0 or 1 (two steps): 1 is muted |
+| `mix_<n>_solo` | Solo n | MIX n | 0 or 1 (two steps): 1 is solo |
+| `mix_select` | Selected sound | MIX | 1…16 (16 steps): the selected sound |
+
+The mixer's parameters stand four a sound (level, pan, mute, solo: sound 1's, then sound 2's, up to sound 16's), then
+`mix_select`. There is no `mix_<n>_arm`: REC is one key for the whole song, not one for each sound.
+
+- **Nothing new is kept for them.** The values are the song's own mix and the selected sound, as the MIX page shows
+  them.
+- **To the host.** After every event and every draw the firmware compares each value with what the host was told
+  last and tells it those that differ; at the start, on every init, it tells all 65. So it does not matter what
+  moved a value: a fader turned on MIX, a pad that mutes, ALL ON, UNDO, NEW, a song from a game. (The SDK's text
+  suggests comparing once per audio block; it is done in the control flow instead, and the comment over `mix_report`
+  in `sfx-forge/fw_pages.h` says why.) A pad played, or a note 36–51 from outside, selects that sound, so
+  `mix_select` is told with it.
+- **From the host.** A value the host sets goes into the song (`mix_select`: it selects the sound) and is not said
+  back to the host. A level is rounded to the song's 0–127 and a pan to 0–127 with 64 the middle; a mute or a solo
+  is on from 0.5. No undo step is made for it, as none is made for the MIX page's own faders and mutes. A value
+  between two steps is rounded and not said back, so the host and the device can differ by up to half a step of 127.
+- **Not taken.** A value that is no number (NaN or an infinity), and `mix_select` while the tour runs. The host is
+  then told what the value really is; in the tour's case that is when the tour is over. The tour's own selections are
+  not told to the host.
+- **Which sounds.** Levels, pans, mutes and solos are always the song's sounds (the MUSIC kit). `mix_select` is the
+  selected pad's number in whichever kit is chosen, as on the MIX page.
+
+Tested by `tests/check-mixer.mjs` on the built firmware, through the SDK's own host functions (`vibe_wasm_param_set`,
+`_value`, `_changed`). Not tried: a real mixer controller, the VIBE FM plugin, a DAW, the Playground. In the
+plugin's Editor view the mixer is 17 more groups, and a mute or a solo is a plain value of two steps: that is read
+from the list, nobody has seen it on a screen.
+
 **Patch bytes** (28, each 0–127): `version(2) engine(0–4)`, then 25 parameters, then `checksum` = the sum of the
 first 27 bytes `& 0x7F`. The parameters, in order: `base_freq pitch_env_amt pitch_env_time a b noise_mix filter_cutoff
 filter_res decay bitcrush attack sustain release filter_env filter_env_time lfo_rate lfo_pitch lfo_filter lfo_timbre
@@ -406,7 +480,7 @@ version wrote it. Nothing about the sound or the messages above changes.
 | Byte | | Today |
 |---|---|---|
 | 0 | hardware: 0 unknown, 1 VIBE FM (the SDK's host – emulator, plugin, VIBE Box; the firmware cannot tell them apart) | 1 |
-| 1 2 3 | firmware version: major, minor, patch | 1 7 0 |
+| 1 2 3 | firmware version: major, minor, patch | 1 7 1 |
 | 4 | profile: 1 = what SFX FORGE 1.x offers on VIBE FM | 1 |
 | 5 | patch format (`SFX_PATCH_VERSION`) | 2 |
 | 6 | song format (`SFX_SONG_VERSION`) | 6 (firmware 1.4 and 1.5: 5) |
@@ -417,7 +491,7 @@ version wrote it. Nothing about the sound or the messages above changes.
 | 16 | values in a patch (`SFX_P_COUNT`) | 25 |
 | 17 | flags: bit 0 has pads, bit 1 has encoders for the game (LINK page), bit 2 takes a song's sounds (`02` with slot 16–31), bit 3 takes telemetry (CC 10–17, ch 2) | 15 |
 
-The whole answer today, 24 bytes: `F0 7D 56 42 08 01 01 07 00 01 02 06 10 02 08 40 18 20 10 05 06 19 0F F7`.
+The whole answer today, 24 bytes: `F0 7D 56 42 08 01 01 07 01 01 02 06 10 02 08 40 18 20 10 05 06 19 0F F7`.
 
 - **Fields are only ever added at the end.** A reader takes the first 18 bytes and ignores what follows. A message
   with fewer than 18, or with a byte above 127, is not an identity.
@@ -524,10 +598,16 @@ device. Tested in `tests/dotnet` (a format-5 song renders bit for bit as before;
 same samples; both shapes of the song message) and by eight EditMode tests of the song's Inspector. Nobody has
 listened to a finer pattern in Unity, and the demo song and the showcase use sixteenths only.
 
-The numbers, as last run, all with firmware 1.7.0 as it is now (with PERFORM and the beat) on 24 Nov 2026:
-`sh build.sh` 24 lines `PASSED`, none failing;
-`tests/dotnet` 205 checks, all passing with the
-package's own `sfxforge.dll`; `tests/unity-inspectors` 171 of 171 EditMode tests; the demo project, headless on a
+The numbers, as last run. With firmware 1.7.1 as it is now, on 25 Nov 2026, the firmware's own and the checks
+without Unity:
+`sh build.sh` 25 lines `PASSED`, none failing, with 266 lines of `ok` (1.7.0 had 239; `check-mixer.mjs` prints the
+27 more), the same with the SDK in `.tools` (SDK 27) and
+with SDK 28; `build/sfx-forge.wasm` is 283439 bytes, sha256
+`f6469a3600a967374fcbc832434ae1c84a184f452c6ab7ac12141cb5f90f4df8`, the same with both SDKs;
+`tests/dotnet` (`dotnet run -c Release --project tests/dotnet -- .`) `PASSED` with 205 lines of `ok`, with the
+package's own `sfxforge.dll` and the identity of 1.7.1. The rest was last run
+with firmware 1.7.0 (with PERFORM and the beat) on 24 Nov 2026, and not again with 1.7.1:
+`tests/unity-inspectors` 171 of 171 EditMode tests; the demo project, headless on a
 copy, the showcase's 32 editor checks and 41 Play mode tests, of which 26 passed and 15 were skipped (the takes that
 need a device or the emulator or that record, and only run when asked for by name). The showcase's standalone build
 and its probe were last run before the tools, `loopPattern` and the firmwares 1.5, 1.6 and 1.7, and not again.
@@ -535,9 +615,9 @@ and its probe were last run before the tools, `loopPattern` and the firmwares 1.
 The link is tested end to end against the SDK's emulator over a virtual MIDI cable, last with firmware 1.7.0 on
 24 Nov 2026: the six link tests passed, in one run, with the build that has PERFORM and the beat (on 23 Nov they
 passed with the 1.7.0 build of that day, before the beat; with 1.6.0 on 22 Nov). After that run one text of the
-display was corrected, the LINK page's footer (`CC 20-23` became `CC 20-25`): the link was not run again with the
-build as it is now. Firmware 1.7.0 changed
-no message but the version in the identity. What was run: a patch and the song from the device, the identity, a song
+display was corrected, the LINK page's footer (`CC 20-23` became `CC 20-25`): the link was not run again, neither
+with that corrected 1.7.0 build nor with firmware 1.7.1. Firmware 1.7.0 changed
+no message but the version in the identity, and neither did 1.7.1. What was run: a patch and the song from the device, the identity, a song
 and its sounds to the device, the game's messages leaving for the device. Every pattern in those songs has 16 steps: a song with
 a pattern at 1/32 or 1/64 was only handed to the built firmware and to the package's receiver by tests, not sent
 through a MIDI port. The recorded session, with SEND and EXPORT pressed on the device, was run once, on 23 Nov 2026,

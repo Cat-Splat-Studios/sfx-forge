@@ -26,6 +26,10 @@ void vibe_on_init(float sample_rate) {
   vibe_notes(VIBE_NOTES);
   vibe_params(PARAMS, P_COUNT);
   vibe_param_groups(GROUPS);
+  /* the mixer as the song that was loaded has it: all of it is told (vibe_params has just put the host's values to
+     where a new song has them) */
+  mix_known = 0;
+  mix_report();
   vibe_stage(stage_fb, SW, SH, 0x180F0B, 0);
   /* DATA chooses the sound; ENTER held = FOCUS */
   vf_mode(VF_ON_HOLD);
@@ -265,6 +269,7 @@ static void perform_pad(int id, int down, float vel) {
                       gives a held step its note, or is recorded
           MIDI        the game's telemetry: CC 10-15 on channel 2
           SysEx       sysex_in (fw_link.h)
+          a parameter set by the host: one of the mixer's goes where MIX has it (mix_from_host, fw_pages.h)
           an encoder  encoder (fw_pages.h)
           the stage   stage_event (fw_stage_input.h)
           a button    SHIFT; F4 held (ERASE); then on the press: HOME, RETURN, PLAY, STOP, REC, MENU, the arrows,
@@ -443,6 +448,11 @@ static void on_event(const vibe_event *e) {
 
   case VIBE_EV_SAVE:
     bank_save();
+    break;
+
+  case VIBE_EV_PARAM:
+    /* the host set a parameter: one of the mixer's is put where MIX has it */
+    mix_from_host(e->id, e->value);
     break;
 
   case VIBE_EV_STAGE:

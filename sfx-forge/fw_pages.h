@@ -2,6 +2,7 @@
  *
  * Holds:  set_page (a page is opened), tab_key (K1-K6), window_step and arrow (LEFT / RIGHT),
  *         mix_value (the byte behind a value of MIX or MASTER),
+ *         mix_report / mix_from_host (the mixer as the host's parameters, both ways),
  *         param_nudge / param_put (one of a page's four values, by steps or to a place),
  *         encoder (every encoder, on every page).
  * Needs:  fw_state.h (the pages, PAGE_PARAMS), fw_edit.h, fw_sequencer.h (the steps and the lanes).
@@ -138,6 +139,122 @@ static uint8_t *mix_value(int pg, int i, int *hi) {
                 : i == 2 ? SFX_M_REVERB_SIZE
                 :          SFX_M_REVERB_DAMP];
   // clang-format on
+}
+
+/* ---- the mixer as the host's parameters (the SDK's mixer convention, SDK 11) -------------------------------------
+   Each of the song's 16 sounds has a fader, a pan, a mute and a solo, and one sound is selected. The host has them as
+   parameters (fw_sounds.h, P_MIX ...): a mixer controller's faders and keys, and a DAW, work them, and show them.
+   Nothing new is kept for it: the values are the song's (SONG.vol, .pan, .mute, .solo) and sel, as MIX shows them.
+
+   k: which of them, counted from P_MIX. Each is a whole number here, as the song keeps it: a fader and a pan 0-127
+   (a pan's middle is 64), a mute and a solo 0 or 1, the selected sound 0-15. */
+#define MIX_N (P_COUNT - P_MIX)
+
+/* what k is now */
+static int mix_now(int k) {
+  if (k == P_MIX_SELECT - P_MIX) {
+    return sel;
+  }
+  int s = k / 4;
+  switch (k % 4) {
+  case MIX_LEVEL:
+    return SONG.vol[s];
+  case MIX_PAN:
+    return SONG.pan[s];
+  case MIX_MUTE:
+    return (SONG.mute >> s) & 1;
+  default:
+    return (SONG.solo >> s) & 1;
+  }
+}
+
+/* what the host was told last, or told us last - mix_known: it was told at all */
+static uint8_t mix_said[MIX_N];
+static int mix_known;
+
+/* The host is told what changed since it was told last: a fader turned on MIX, a pad that mutes, UNDO, a new song, a
+   song from a game - whatever did it. Called after every event and every draw (sfx-forge.c), and once at the start,
+   when everything is told (vibe_on_init clears mix_known). A value the host set itself is not said back to it
+   (mix_from_host notes it here). The tour selects sounds of its own: those are not told, the one it ends on is.
+
+   (The SDK's documents say "compare once per audio block". It is done here instead, in the control flow: the song as
+   the controls have it is not the audio's to read, and vibe_param_set would get a second writer. Every change comes
+   through an event or a draw, so nothing is missed.) */
+static void mix_report(void) {
+  for (int k = 0; k < MIX_N; k++) {
+    int b = mix_now(k);
+    if (mix_known && b == mix_said[k]) {
+      continue;
+    }
+    if (tour_on && mix_known && k == P_MIX_SELECT - P_MIX) {
+      continue;
+    }
+    mix_said[k] = (uint8_t)b;
+    float v;
+    if (k == P_MIX_SELECT - P_MIX) {
+      v = (float)(b + 1);
+    } else if (k % 4 == MIX_LEVEL) {
+      v = (float)b / 127.0f;
+    } else if (k % 4 == MIX_PAN) {
+      /* 0 is all left, 64 the middle, 127 all right */
+      v = b < 64 ? (float)(b - 64) / 64.0f : (float)(b - 64) / 63.0f;
+    } else {
+      v = (float)b;
+    }
+    vibe_param_set(P_MIX + k, v);
+  }
+  mix_known = 1;
+}
+
+/* VIBE_EV_PARAM: the host set parameter `index` to v (a fader of a mixer controller, a DAW's automation). The six
+   that are not the mixer's need nothing here: the audio reads them every block.
+   Not taken: a value that is no number (the SDK's clamp lets one through; its bits are looked at, since the build's
+   fast maths may drop a test of the value itself), and the selected sound while the tour runs, which selects its own.
+   Both are noted as not said, so mix_report tells the host what the value really is (the selected sound when the
+   tour is over). */
+static void mix_from_host(int index, float v) {
+  int k = index - P_MIX;
+  if (k < 0 || k >= MIX_N) {
+    return;
+  }
+  union {
+    float f;
+    uint32_t u;
+  } bits = {v};
+  if ((bits.u & 0x7F800000u) == 0x7F800000u) {
+    mix_said[k] = 0xFF;
+    return;
+  }
+  if (tour_on && k == P_MIX_SELECT - P_MIX) {
+    mix_said[k] = 0xFF;
+    return;
+  }
+  int b;
+  if (k == P_MIX_SELECT - P_MIX) {
+    b = clampi((int)(v + 0.5f) - 1, 0, SLOTS - 1);
+    sel = b;
+  } else {
+    int s = k / 4;
+    switch (k % 4) {
+    case MIX_LEVEL:
+      b = clampi((int)(v * 127.0f + 0.5f), 0, 127);
+      SONG.vol[s] = (uint8_t)b;
+      break;
+    case MIX_PAN:
+      b = clampi(v < 0.0f ? 64 - (int)(-v * 64.0f + 0.5f) : 64 + (int)(v * 63.0f + 0.5f), 0, 127);
+      SONG.pan[s] = (uint8_t)b;
+      break;
+    case MIX_MUTE:
+      b = v >= 0.5f;
+      SONG.mute = (uint16_t)((SONG.mute & ~(1u << s)) | ((unsigned)b << s));
+      break;
+    default:
+      b = v >= 0.5f;
+      SONG.solo = (uint16_t)((SONG.solo & ~(1u << s)) | ((unsigned)b << s));
+      break;
+    }
+  }
+  mix_said[k] = (uint8_t)b;
 }
 
 /* one of the four values of a page (pg: AUTO, MIX, MASTER or a sound page), by steps: an encoder, the wheel.

@@ -211,10 +211,17 @@ static void tour_pump(void) {
       tour_keep = patches[sel];
       break;
     case T_PARAM:
+      /* (the sound the tour selected, should DATA have selected another since: only that one is put back) */
+      if (tour_kept >= 0) {
+        sel = tour_kept;
+      }
       patches[sel].p[st->a] = st->b;
       changed(sel);
       break;
     case T_MUTATE:
+      if (tour_kept >= 0) {
+        sel = tour_kept;
+      }
       rng ^= vd_rand();
       sfx_patch_mutate(&patches[sel], &rng);
       changed(sel);

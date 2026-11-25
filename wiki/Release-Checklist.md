@@ -52,7 +52,7 @@ lie. That is why a check compares them.
    - the line `ok    the firmware's defines (1.8.0) and firmware.json ("1.8.0") say the same version`, with your
      number;
    - `vibe-check`'s line `Manifest    SFX FORGE 1.8.0`;
-   - 24 lines that say `PASSED`.
+   - 25 lines that say `PASSED`.
 7. Write down the new hash: `sha256sum build/sfx-forge.wasm`. It is another one with every version, because the
    version is in the code.
 8. `sh native/build.sh` if `core/` or `native/` changed, then

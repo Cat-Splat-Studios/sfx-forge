@@ -81,7 +81,13 @@ flowchart LR
 | 1 | **the queue** | controls to audio | `send()` in `fw_audio.h` is the only way the controls make the player do anything: a note, an edited patch, PLAY, STOP, a cue, LOOP or SONG. A ring of 64 messages (`QN`), one writer, one reader. A full queue drops the message |
 | 2 | **the song's way** | controls to audio | after every event and every draw, `song_hand()` copies what differs in `SONG` into a third song inside `WAY`. At the start of a block `song_way_take` copies it on into `P.song`. The player has the song before an edit or after it, never half of one |
 | 3 | **single values** | audio to controls | a few 32-bit values that only the audio writes, marked `volatile` in `fw_state.h`: `seq_pos`, `seq_pattern`, `seq_arr`, `play_k`, `scope_w`. `seq_pos` packs the step, the grid and the fraction into one word, so they are read together |
-| 4 | **single values** | controls to audio | the host's parameters (`vibe_param_set` in the controls, `vibe_param_get` in the audio: volume, telemetry, intensity), and three values the controls write and the audio only reads: `metro`, `rec_on`, `beat_len` |
+| 4 | **single values** | controls to audio | the host's parameters (`vibe_param_set` in the controls, `vibe_param_get` in the audio: volume, telemetry, intensity; these are six of the host's 71 parameters), and three values the controls write and the audio only reads: `metro`, `rec_on`, `beat_len` |
+
+The host has 71 parameters. Six are the single values of crossing 4. The other 65 are the song's mixer, reported
+to the host so that a mixer controller or a DAW can work it (from firmware 1.7.1). They are not a crossing of their
+own: `mix_from_host` writes a value from the host into `SONG`, `mix_report` tells the host what changed in it, both
+run in the control flow, and the mix reaches the audio with the song, by crossing 2.
+[Firmware Internals](Firmware-Internals#the-mixer-as-the-hosts-parameters) has the table.
 
 A message that starts or changes what plays (START, STOP, CUE, LOOP) must find the song as it was when the message
 was sent. `send()` asks `song_way_need` for a number, the message carries it, and the audio leaves the message in

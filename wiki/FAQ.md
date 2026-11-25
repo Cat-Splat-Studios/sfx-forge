@@ -118,6 +118,13 @@ See [Unity Device Link Setup](Unity-Device-Link-Setup) and [Unity Send And Recei
 No. It was tested against the SDK's emulator in a browser, joined to Unity by two virtual MIDI ports, and never
 against the hardware. See [Unity Device Link Setup](Unity-Device-Link-Setup).
 
+### Does a control surface or a DAW work the mixer?
+
+It is built to, and nobody has tried it. From firmware 1.7.1 the device reports each sound's level, pan, mute and
+solo, and the selected sound, to its host as parameters with the names of the VIBE FM SDK's mixer convention. By
+the SDK's documents a mixer controller and, in the plugin, a DAW then work them. A script checks the firmware's side
+only. See [Device Mixer And Effects](Device-Mixer-And-Effects#from-a-mixer-controller-or-a-daw).
+
 ### It is silent. Why?
 
 Start at the two charts on [Unity Troubleshooting](Unity-Troubleshooting).
@@ -163,8 +170,10 @@ decides.
 
 ### How finished is it?
 
-Version 1.0, firmware 1.7.0. It passes its scripted tests. It has not been run on the hardware or in the VIBE FM
-plugin, and nobody has listened to the newest features. The whole list is on [What Is Tested](What-Is-Tested).
+Version 1.0. The firmware in this repository is 1.7.1; the last one released is 1.7.0 (25 Nov 2026). The firmware
+passes its scripted tests; the Unity suites and the link tests were last run with 1.7.0. It has not been run on the
+hardware or in the VIBE FM plugin, and nobody has listened to the newest features. The whole list is on
+[What Is Tested](What-Is-Tested).
 
 ### Do the device and the package have to be the same version?
 

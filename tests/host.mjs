@@ -166,6 +166,51 @@ export function load(wasmFile) {
         d.run(2);
       },
 
+      // the host's parameters, as the firmware declared them (the SDK's vibe_param in memory: eight 4-byte fields)
+      params() {
+        const text = (p) => {
+          const bytes = new Uint8Array(e.memory.buffer, p);
+          return p ? Buffer.from(bytes.subarray(0, bytes.indexOf(0))).toString() : '';
+        };
+        return [...Array(e.vibe_wasm_param_count()).keys()].map((i) => {
+          const view = new DataView(e.memory.buffer);
+          const p = e.vibe_wasm_param_info(i);
+          return {
+            id: text(view.getUint32(p, true)),
+            name: text(view.getUint32(p + 4, true)),
+            min: view.getFloat32(p + 8, true),
+            max: view.getFloat32(p + 12, true),
+            start: view.getFloat32(p + 16, true),
+            steps: view.getInt32(p + 24, true),
+            group: text(e.vibe_wasm_param_group(i)),
+          };
+        });
+      },
+
+      // parameter i as it is now
+      param(i) {
+        return e.vibe_wasm_param_value(i);
+      },
+
+      // the host sets parameter i (a controller's fader, a DAW's automation): the firmware gets VIBE_EV_PARAM
+      setParam(i, value) {
+        e.vibe_wasm_param_set(i, value);
+      },
+
+      // the parameters the firmware itself changed since this was asked last, as their numbers
+      changed() {
+        const list = [];
+        for (let word = 0; word < 8; word++) {
+          const bits = e.vibe_wasm_param_changed(word);
+          for (let b = 0; b < 32; b++) {
+            if ((bits >>> b) & 1) {
+              list.push(word * 32 + b);
+            }
+          }
+        }
+        return list;
+      },
+
       // n audio blocks (a draw every 12 blocks, as wasmtest)
       run(n) {
         for (let i = 0; i < n; i++) {

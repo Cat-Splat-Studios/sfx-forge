@@ -13,7 +13,7 @@ and what it must print. The wiki has the same as short pages:
 The short form, from the repository's root:
 
 ```sh
-sh build.sh                                          # the firmware and its checks: 24 lines say PASSED
+sh build.sh                                          # the firmware and its checks: 25 lines say PASSED
 sh native/build.sh                                   # only if core/ or native/ changed: the native library
 dotnet run -c Release --project tests/dotnet -- .    # the package's core without Unity: the last line is PASSED
 python tools/check_wiki.py                           # after a change to a wiki page or to a heading it links to
