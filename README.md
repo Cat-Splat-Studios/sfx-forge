@@ -620,5 +620,6 @@ sentence to add.
 
 **Other people's parts** stay under their own licences. The VIBE FM SDK is Apache-2.0 (Sven Trogus / zvenson); its
 runtime and its display fonts (SIL OFL 1.1) are compiled into the firmware. `sfxforge.dll` holds start-up code of the
-mingw-w64 C runtime, linked by Zig. The generated Unity package names them in its `Third Party Notices.md` and ships
-their licence and notice texts unchanged (`Documentation~/licenses`). "VIBE FM" is its owner's trademark.
+mingw-w64 C runtime, linked by Zig. [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) names them, and their licence and
+notice texts are in [`licenses/`](licenses), unchanged. The generated Unity package names them in its
+`Third Party Notices.md` and ships the same texts (`Documentation~/licenses`). "VIBE FM" is its owner's trademark.
