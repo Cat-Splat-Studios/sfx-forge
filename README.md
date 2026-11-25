@@ -220,6 +220,11 @@ address or thread sanitizer. `tests/midi-torture` sends heavy and hostile MIDI t
 [--level 1..3]`. It sends and does not hear: you watch the plugin. It was built and its ports were listed; nothing
 was ever sent with it.
 
+`tests/emulator-torture.mjs` pours that tool's stream into the SDK's emulator page in a Chrome of its own, through a
+stand-in for Web MIDI, so it needs no MIDI port: `node tests/emulator-torture.mjs --seed 1 --level 1 --seconds 120`.
+It was run with 1.7.2 on 25 Nov 2026 (seeds 1 to 4 at level 1, seeds 1 and 5 at level 2) and passed. That is the
+Playground's host code, not the plugin's native half.
+
 All 26 pass on firmware 1.7.2 (`vibe-check`, the 24 checks and the short run of `stress-fuzz.mjs`): the output of
 `sh build.sh` has 26 lines that say `PASSED`. The 24 rows that print `ok` lines print 274 of them, counted in the
 output of the last run (15, 1, 4, 1, 1, 7, 6, 8, 11, 7, 7, 7, 8, 7, 20, 26, 21, 27, 8, 23, 1, 27, 15 and 16, in the

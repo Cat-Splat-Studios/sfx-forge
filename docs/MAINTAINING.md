@@ -208,6 +208,7 @@ dotnet run -c Release --project tests/midi-torture -- --port "name" [--minutes 5
 | `tests/stress-fuzz.mjs` | a seeded fuzzer as the host of the built `.wasm`, in one flow: every event, the parameters, the transport, SysEx, the store, restarts, blocks of 1 to 256 frames at six sample rates. `--level 0` is a correct host, `1` adds values out of range and a store that lies, `2` (the default) adds NaN and the infinities. The same seed gives the same run. `sh build.sh` runs it short: 8 seeds of 1 device-minute, level 2 | a trap, a sample that is not written, is no number or is over full scale, a memory that grew, a seed that stands still (a watchdog) | two flows; an index that stays inside the firmware's own memory; whether it sounds right; the plugin |
 | `tests/stress-flows.sh`, `stress-flows.c` | the whole firmware built for this computer with the SDK's own runtime and the undefined-behaviour sanitizer: the audio in one real thread, the controls in another. The word `hostile` adds parameters that are no numbers, `wild` adds such values in events, `one` runs both flows in one thread. Last line: `flows stress PASSED` | a sanitizer's hit, a crash, a hang, a sample that is no number or beyond -1 … 1 | a write past a buffer, and a race that does no harm that shows: the run has no address and no thread sanitizer. The `.wasm`. A NaN parameter as the `.wasm` treats it. Run on Windows only, in Git Bash |
 | `tests/midi-torture/` | a .NET tool that sends heavy and hostile MIDI to a MIDI port, for the real plugin while it plays SFX FORGE. Five phases: notes, controllers, valid SysEx, hostile SysEx, all at once. Last line: `midi-torture PASSED` | with `--in`, whether the plugin still answers the identity request. Without it, only that the port took every message | a crash, a NaN, wrong sound: you watch and listen. What the cable dropped |
+| `tests/emulator-torture.mjs` | the stream of `midi-torture` (made with `--dry --dump`) poured into the SDK's emulator page in a Chrome of its own, through a stand-in for Web MIDI: `node tests/emulator-torture.mjs --seed 1 --level 1 --seconds 120`, and `--selftest` | the page's real MIDI path and its worklet, the host code the Playground uses: no exception or crash, the identity answered all through, frames and audio running, a song read back byte for byte | no MIDI driver or cable, not Chrome's own Web MIDI code, not the plugin's native half; the sound is measured, not judged |
 
 **What they found, fixed in 1.7.2.** A host's tempo or song position that was an infinity while the song played
 made the player read past the song: a trap. A parameter set to NaN made the sound NaN until a restart. A velocity
@@ -224,6 +225,11 @@ traps, hangs). `stress-flows` on the same code: seeds 1 – 5 of 20 seconds pass
 nothing in its default mode before the fixes either. With the final 1.7.2 build the short run in `sh build.sh`
 passed. **`midi-torture` was built and asked for `--list`, no more: it has never sent a byte to a port, and the
 plugin was never under it.** It is the owner's tool to run.
+
+`emulator-torture` was run on 25 Nov 2026 with firmware 1.7.2: its self-test, seeds 1 to 4 at level 1 and seeds 1 and
+5 at level 2 (up to 790,000 messages in 129 s), all passed, with every identity probe answered. Two runs spoiled by
+hand (the audio closed, the input made deaf) failed, as they must. It needs no MIDI port: on the machine it was
+written on, the virtual cable's ports did not show.
 
 **Two known matters, not fixed.**
 
