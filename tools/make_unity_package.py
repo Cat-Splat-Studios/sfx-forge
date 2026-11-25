@@ -529,7 +529,9 @@ def make_manuals(target):
     )
     text = replace_once(
         text,
-        "You need Windows x64 and Unity. The package says Unity 2022.3 or newer; it is developed and tested with Unity 6.3\n(6000.3.8f1) only.",
+        "You need Windows x64 and Unity. The package is developed and tested with Unity 6.3 (6000.3.8f1) only. Its manifest\n"
+        "in this repository (`unity/com.catsplat.sfxforge/package.json`) says Unity 2022.3 or newer, which nobody has tried;\n"
+        "the manifest of the generated package says 6000.3.",
         "You need Windows x64 and Unity "
         + UNITY
         + ". The package is developed and tested with Unity 6.3 ("
@@ -606,13 +608,14 @@ def make_manuals(target):
     )
     text = replace_once(
         text,
-        "ten files of `Scripts/Core`, and the song `Assets/SfxDemo/DemoSong.asset` | below |",
+        "ten files of `Scripts/Core`, and the showcase's song `Assets/Showcase/Song/DemoSong.asset` | below |",
         "ten files of `Scripts/Core`, and the song `Song/DemoSong.asset` | below |",
         where,
     )
     text = replace_once(
         text,
-        "Copy `unity/Demo/Assets/SfxDemo/DemoSong.asset` with its `.meta` and pass it\nto `Install`.",
+        "Copy the showcase's own `unity/Demo/Assets/Showcase/Song/DemoSong.asset` with its `.meta` and pass it\n"
+        "to `Install`. (`Assets/SfxDemo/DemoSong.asset`, the older demo's, holds the same song.)",
         "Copy the showcase's `Song/DemoSong.asset` with its `.meta` and pass it\nto `Install`.",
         where,
     )
@@ -847,8 +850,10 @@ def make_firmware(target):
         "events and SysEx and read its sound, its MIDI and what it stores, and all 22 of them pass. A few of them also\n"
         "compare the display, to tell that it changed or that the LINK light is on: what a page shows and what a toast\n"
         "says is not read. Against\n"
-        "Unity, the six link tests of the Unity manual passed with this build in the SDK's local emulator on\n"
-        "24 Nov 2026, in one run, with songs of sixteenths only and the beat a quarter. The session of the link video\n"
+        "Unity, the six link tests of the Unity manual passed in the SDK's local emulator on 24 Nov 2026, in one run,\n"
+        "with songs of sixteenths only and the beat a quarter. That was the build before this one: this one differs\n"
+        "in one text of the display, the LINK page's footer (`CC 20-23` became `CC 20-25`), and the link tests were\n"
+        "not run again with it. The session of the link video\n"
         "was recorded with the 1.7.0 build of 23 Nov 2026, before the beat was added; with four quarters the display\n"
         "is the same, and it was not recorded again.\n"
         "It was not run in the plugin or on hardware. Nobody has played its new page, PERFORM, by hand, nobody has\n"
@@ -1034,8 +1039,8 @@ the rows draw 16, 32 or 64 steps, and a finer pattern's tile carries `32` or `64
 ![The SFX Forge window, shown with a filled-in model](Documentation~/img/unity-inspector-window.png)
 
 **The window.** The link's state and the two MIDI ports, what the device's knobs send, its 16 pads as tiles that
-play or fetch, a text for the device's top line, the patches that arrived as tiles with their waveform, the last
-messages, and CONNECT, REFRESH PORTS, FETCH SONG.
+play or fetch, a text for the bottom line of the device's LINK page, the patches that arrived as tiles with their
+waveform, the last messages, and CONNECT, REFRESH PORTS, FETCH SONG.
 
 **Tools for designing sounds**, without the device ([section 11 of the manual](Documentation~/UNITY.md#11-tools-for-designing-sounds)
 has each of them with its keys, its API, its limits and what was tested):
@@ -1060,7 +1065,7 @@ string text = SfxPatchText.ToText(zap);                              // 62 chara
 ```
 
 **These pictures are not photographs of the Unity editor.** They are the same element tree and stylesheet
-the Inspector hosts, rendered in a panel to a texture by the editor UI's tests (169 EditMode tests, in the source
+the Inspector hosts, rendered in a panel to a texture by the editor UI's tests (171 EditMode tests, in the source
 repository). Nobody has opened the real Inspector or either of the two windows yet, and nobody has listened to a
 sound the tools made. The window's picture shows a model the
 test filled in: its ports, patches and messages are the test's, and no device was connected. Also not tried: the
@@ -1228,9 +1233,11 @@ Tested, on one machine (Windows 11, Unity {unity_tested}), in the repository thi
   bars; with it off the arrangement goes on. The run was headless and muted: nobody heard it.
 - The link, end to end against the VIBE FM SDK's emulator over a virtual MIDI cable (loopMIDI): patches and the song
   from the device to Unity, a song and its sounds from Unity to the device, the game's messages leaving for the
-  device, and the device saying what it is. That was done with firmware 1.7.0, the build in this package, on
-  24 Nov 2026: six tests, all passed, in one run, with songs of sixteenths only (on 23 Nov 2026 with the 1.7.0
-  build of that day, which did not have the beat yet, and with 1.6.0 the day before that).
+  device, and the device saying what it is. That was done with firmware 1.7.0 on 24 Nov 2026: six tests, all
+  passed, in one run, with songs of sixteenths only (on 23 Nov 2026 with the 1.7.0 build of that day, which did
+  not have the beat yet, and with 1.6.0 the day before that). The build in this package differs from the one of
+  that run in one text of the display, the LINK page's footer (`CC 20-23` became `CC 20-25`); the six tests were
+  not run again with it.
   SEND and EXPORT pressed on the device arriving in a running game were seen in the recorded session of the link
   video, run once; in its pictures the device's INTENSITY follows the game's. The session was recorded with the
   1.7.0 build of 23 Nov 2026, before the beat was added; with four quarters the display is the same. It was not
@@ -1252,8 +1259,9 @@ Tested, on one machine (Windows 11, Unity {unity_tested}), in the repository thi
   song with patterns of 32 and 64 steps.
 - The code in the manual was compiled against the package, except what firmware 1.6.0 added to it: the two
   snippets of "A finer grid" and the changed lines of "A song without MIDI" were not compiled.
-- The editor UI: 169 EditMode tests in a project of their own build the Inspectors and the two windows as elements,
-  call what their knobs and keys call, send them mouse and wheel events, check the asset and Undo afterwards, and
+- The editor UI: 171 EditMode tests in a project of their own. Two of them are of `SfxMusicPlayer.Play()` taking a
+  song that a script assigned; the others build the Inspectors and the two windows as elements, call what their
+  knobs and keys call, send them mouse and wheel events, check the asset and Undo afterwards, and
   compare the value texts with 46 values read off the device's own pictures and with a table of the firmware's
   arithmetic in 32-bit floats. They also render the pictures of the editor UI on this page and
   in the manual; those are not photographs of the editor.
@@ -1263,14 +1271,14 @@ Tested, on one machine (Windows 11, Unity {unity_tested}), in the repository thi
 - The tools for designing sounds. Without Unity: every kind of generated sound over 300 seeds is a valid patch
   inside its ranges, and 100 of each bake audible and unclipped; variants, locks and the shuffle; levels, the LEVEL
   law and matching; the text and `.syx` forms, both ways; bake options and the resampler. In the editor UI's
-  project, 45 of the 169 tests: what each key of NEW, VARY, LEVEL and SHARE does to the asset, with Undo; a
+  project, 45 of the 171 tests: what each key of NEW, VARY, LEVEL and SHARE does to the asset, with Undo; a
   variation set's BAKE on real asset files (written next to the asset, out of date after an edit, nothing written
   when a file that is there cannot be written over); a batch bake's files, names and bytes; the Bake window over a model.
 - The identity and the format numbers, on the Unity side and without a device: the bytes of the two messages,
   what is an identity and what is not, an identity arriving in the middle of a song, and when a patch or a song is
   not sent, a patch and a song of a higher format arriving and being said to be newer (the checks of the
   engine-independent code, run with plain .NET); asset files without a format line and with a higher one,
-  imported by Unity, and the banner the Inspectors show for them (11 of the 169 tests above). A song asset counts
+  imported by Unity, and the banner the Inspectors show for them (11 of the 171 tests above). A song asset counts
   its own format since firmware 1.6.0: 2 when it holds a format-6 song, 1 with an older one.
 - The firmware's side of the identity, on the built `.wasm` without the emulator: a check of the source
   repository hands it the request and reads the answer, and a pad's patch asked for right after the request
@@ -1312,8 +1320,8 @@ run on a generated package from before firmware 1.6.0, whose sample held the dem
   looked up by its GUID, not by a path), and the 51 pictures the tests rendered are byte for byte the ones rendered
   from the source. That is still a test panel: the Inspector and the window themselves were not opened. This was
   done before the identity, the format numbers, the tools for designing sounds and the finer grid were added (the
-  project has 169 tests and renders 90 pictures since) and was not repeated with them: the 169 were run against the
-  package's folder in the source repository only, where all 169 pass.
+  project has 171 tests and renders 90 pictures since) and was not repeated with them: the 171 were run against the
+  package's folder in the source repository only, where all 171 pass.
 
 Not tested:
 
@@ -1536,7 +1544,8 @@ version are new; namespaces, assembly names and asset GUIDs are unchanged.
   one profile id; nothing can be targeted at another, and nothing converts a newer patch, song or asset.
 - `loopPattern` is tested in the engine through the native library, and inside Unity by one Play mode test of the
   sample, headless and muted; nobody has listened to it. Firmware {firmware} passes its own checks; the six link
-  tests were last run against it in the emulator (songs of sixteenths only), and the session of the link video
+  tests were last run in the emulator against the build before one text of its LINK page was corrected (songs of
+  sixteenths only), and the session of the link video
   was recorded with the {firmware} build of 23 Nov 2026, before the beat was added. Its PERFORM page and its beat
   were tested by scripts only: nobody has played them by hand or listened to the click, and it was not run on
   hardware or in the plugin.
@@ -1545,7 +1554,7 @@ version are new; namespaces, assembly names and asset GUIDs are unchanged.
 - The tools for designing sounds are measured, not heard: nobody has listened to a generated sound, a variant or
   a baked file. A variation set that is not baked plays only where the native library is, and nothing checks at
   build time that a set is baked or up to date.
-- The Inspectors and the two windows were tested as elements in a test panel (169 EditMode tests in the source
+- The Inspectors and the two windows were tested as elements in a test panel (171 EditMode tests in the source
   repository), and the pictures of them in these pages were rendered there. Nobody has opened them in the editor
   itself; their menus, typing into a value, and their keys against a device were not tried. No keys: the arrow
   keys on a tile, ENTER in the window's text field and the double-click that opens a value's field were never

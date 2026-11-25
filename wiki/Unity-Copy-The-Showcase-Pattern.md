@@ -137,7 +137,7 @@ void OnJumped() => PlayBaked(GameSound.Jump);
 
 | Object | Components | Set |
 |---|---|---|
-| `Audio/Music` | `AudioSource`, `SfxMusicPlayer`, your music script | the `SfxSong`; `playOnEnable` on. In code, set the song before the component is enabled (the installer builds `Audio` inactive), or call `Reload()` and `Play()` after you set it |
+| `Audio/Music` | `AudioSource`, `SfxMusicPlayer`, your music script | the `SfxSong`; `playOnEnable` on. In code, set the song before the component is enabled (the installer builds `Audio` inactive), or call `Play()` after you set it: it takes the song that was assigned |
 | `Audio/Effects` | `AudioSource`, your one-shot script | the presets to bake |
 | `Audio/Effects/Live Voice 1 … 3` | `AudioSource`, `SfxPlayer` | no preset: the pool assigns one per play |
 | `Audio/Continuous` | your script that bends the held sounds | the players below, and the MIDI note of each |

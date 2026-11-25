@@ -64,7 +64,7 @@
  *   fw_audio.h        the queue from the controls to the audio, and vibe_on_audio
  *   fw_edit.h         what the display says for a moment (say), one step back for the song (F2), keys that ask twice
  *   fw_factory.h      the sounds and the song a new device holds
- *   fw_store.h        what is kept on the device: kits.bin, song6.bin (and song.bin of the firmwares before)
+ *   fw_store.h        what is kept on the device: kits.bin, song6.bin, meter.bin (and song.bin of the firmwares before)
  *   fw_link.h         SysEx out (dumps, the song in pieces, the identity) and in (patches, a song, requests)
  *   fw_sequencer.h    playing and recording, LOOP and SONG, patterns, steps, automation lanes
  *   fw_pages.h        the pages and what the encoders turn on each of them
@@ -74,7 +74,7 @@
  *   fw_events.h       vibe_on_init; the HOME texts; factory reset; on_event: every pad, key, note and MIDI message
  *   fw_draw_parts.h   the display's colours, a value as text, and the pieces a page is drawn from (dial, hud, row)
  *   fw_draw_sound.h   the picture of the selected sound
- *   fw_draw_pages.h   the top line and the pages SEQ, SONG, AUTO, MIX, MASTER, LINK
+ *   fw_draw_pages.h   the top line and the pages SEQ, SONG, AUTO, MIX, MASTER, LINK, PERFORM
  *   fw_draw.h         on_draw: a whole frame of the display, the pads' lights, FOCUS
  *   fw_stage_draw.h   on_stage: a whole frame of the stage
  *   song_way.h        the song from the control flow to the audio flow (it stands alone: tests/stress-song-way.c)

@@ -9,8 +9,9 @@
  * A port may bring faster maths: define SFX_SIN(turns), SFX_EXP2(x) and SFX_TANH(x) before including.
  *
  * A patch is 28 bytes, every one 0..127, so it travels through MIDI SysEx as it is. Five engines share one chain:
- * source -> noise -> filter (with its own envelope) -> drive -> bitcrush -> loudness (attack, decay, sustain, release),
- * with an LFO on pitch, filter and timbre. Three of the bytes are sends to the player's chorus, delay and reverb.
+ * source -> noise -> filter (with its own envelope) -> grains (FOLEY only) -> drive -> bitcrush -> loudness (attack,
+ * decay, sustain, release), with an LFO on pitch, filter and timbre. Three of the bytes are sends to the player's
+ * chorus, delay and reverb.
  *
  * WHAT THIS FILE HOLDS, in its order:
  *   1. Maths without libc        sfx_sin, sfx_exp2, sfx_tanh and the SFX_SIN / SFX_EXP2 / SFX_TANH macros

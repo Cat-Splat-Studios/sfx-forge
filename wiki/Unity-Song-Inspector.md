@@ -54,8 +54,8 @@ Three things to know:
 - **INTENSITY is not in the song.** Dragging the strip only shows you the song at that intensity (rows whose layer is
   silent go dim, as do muted ones) and sets what PLAY BAR plays. Your game sets the real one:
   [Unity Adaptive Music](Unity-Adaptive-Music).
-- **A player that is already playing keeps the song it took.** It hears your change after its next `Reload()` or
-  start.
+- **A player that is already playing keeps the song it took.** It hears your change after its next `Reload()`, or
+  when it is enabled again. `Play()` alone does not read the same asset a second time.
 - **VOLUME and PAN only show** in a song from before the device had a mixer (`SfxSong.HasMix` is false).
 
 ## The other three pages

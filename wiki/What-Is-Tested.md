@@ -23,7 +23,7 @@ flowchart LR
   code -.->|"never"| other
 ```
 
-- **Tested by scripts:** the firmware (24 checks), the Unity package's core (205 checks), its editor UI (169
+- **Tested by scripts:** the firmware (24 checks), the Unity package's core (205 checks), its editor UI (171
   EditMode tests), the showcase (32 editor checks, 41 PlayMode tests).
 - **Tested against the emulator:** the link, with songs whose patterns all have 16 steps.
 - **Never:** the hardware, the VIBE FM plugin, any platform but Windows x64, any Unity but 6000.3.8f1. Nobody has
@@ -38,7 +38,7 @@ The link runs have their dates further down.
 |---|---|---|
 | `sh build.sh` | 24 lines `PASSED`, none failing; 239 `ok` lines | the built `.wasm`, in the SDK's `wasmtest` and on `tests/host.mjs` |
 | `tests/dotnet` | 205 checks, all passing | `Runtime/Core` and the package's own `sfxforge.dll`, without Unity |
-| `tests/unity-inspectors` | 169 of 169 EditMode tests | Unity 6000.3.8f1, Windows x64 |
+| `tests/unity-inspectors` | 171 of 171 EditMode tests | Unity 6000.3.8f1, Windows x64 |
 | the showcase's `Verify` | 32 editor checks | the demo project, headless, on a copy |
 | PlayMode | 41 tests: 26 passed, 15 skipped | the same. The skipped ones need a device or the emulator, or record, and run only when asked for by name |
 
@@ -76,7 +76,7 @@ two loopMIDI ports, headless.
 
 | When | Firmware | What ran | Result |
 |---|---|---|---|
-| 24 Nov 2026 | 1.7.0, the build with PERFORM and the beat | the six link tests (`Tests/LinkTakes.cs`), one run | all six passed |
+| 24 Nov 2026 | 1.7.0, the build with PERFORM and the beat, before the LINK page's footer was corrected (`CC 20-23` became `CC 20-25`). That text is all the build of now differs in; the link was not run again with it | the six link tests (`Tests/LinkTakes.cs`), one run | all six passed |
 | 23 Nov 2026 | 1.7.0, the build of that day, before the beat | the six link tests, one run; the recorded session (`Tests/LinkSession.cs`), once | passed. The link video is that recording; it was not run again |
 | 22 Nov 2026 | 1.6.0 | the six link tests, four times; the recorded session | passed |
 

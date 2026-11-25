@@ -88,7 +88,7 @@ semitones is 12) and its FM is deeper. A sender reads the Rigidbody on its own o
 ## 13. A knob on the device tunes a game value
 
 **Goal:** during a tuning session, turn encoder 1 of the device to change a number in the running game, and read
-the number on the device's top line. The scene needs an **SFX Forge Link** component (`SfxForgeLink`): it opens
+the number in the bottom line of the device's LINK page. The scene needs an **SFX Forge Link** component (`SfxForgeLink`): it opens
 the MIDI ports and polls the link every frame ([Unity Device Link Setup](Unity-Device-Link-Setup)).
 
 ```mermaid
@@ -101,7 +101,7 @@ sequenceDiagram
     L->>S: EncoderChanged(0, value01)
     S->>S: topPitch between 4 and 24
     S->>L: SendText with TOP PITCH and the number
-    L->>D: text for the top line
+    L->>D: text for the LINK page
     D->>L: pad 1 played
     L->>S: PadDown(0, velocity)
     S->>E: Play(velocity)
@@ -144,7 +144,7 @@ public class TuneFromDevice : MonoBehaviour
 ```
 
 **Look and listen for:** turn encoder 1 on the device's LINK page: `topPitch` moves between 4 and 24 in the
-Inspector, and the device's top line shows `TOP PITCH` and the number. Play pad 1: the `engine` player plays its
+Inspector, and the bottom line of the device's LINK page shows `TOP PITCH` and the number. Play pad 1: the `engine` player plays its
 preset at the pad's velocity. Without code, the component **SFX Forge > SFX Encoder Binding** sends an encoder to
 an AudioMixer parameter or a UnityEvent.
 

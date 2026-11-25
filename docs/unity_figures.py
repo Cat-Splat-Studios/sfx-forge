@@ -294,7 +294,7 @@ def routes():
                 ("AudioSource.PlayOneShot(clip, volume)", "every time"),
             ],
             "The cheapest. Always the same. Works in 3D.",
-            "Jump  ·  Land  ·  Footsteps  ·  Woofer  ·  11 more",
+            "Jump  ·  Land  ·  Footsteps  ·  Woofer  ·  9 more",
         ),
         (
             LIVE,
@@ -896,7 +896,7 @@ def link():
         [
             ("loads a pad  ·  replaces kit and song", "SysEx", "SendPatch  ·  SendSong"),
             ("plays a pad", "notes 36 – 51", "PlayPad  ·  ReleasePad"),
-            ("shows it on its top line", "SysEx, 24 characters", "SendText"),
+            ("shows it in the bottom line of its LINK page", "SysEx, 24 characters", "SendText"),
             (
                 "bends the held sound: pitch, cutoff, timbre, level",
                 "CC 10 – 13, channel 2",

@@ -148,7 +148,7 @@ four), and under them the seed and the call that gives the same sound again.*
    the time. What a recipe does not name keeps the plain patch's value (`SfxPatch.Create`), so LEVEL stays 100. (The
    numbers above only show the form; choose ranges by ear.)
 4. If the kind is a held sound, give `Sustain` a range above 0 in both recipes and add it to `IsSustained`.
-5. In `SfxPresetPanel.cs`, find the comment `(ten keys: twelve places make rows of six, four or three)`. The loop
+5. In `SfxPresetPanel.cs`, find the comment that begins `(ten keys: twelve places make rows of six, four or three`. The loop
    adds a key for every kind by itself; the two `kinds.AddBlank()` after it fill the row to twelve. With eleven keys
    keep one.
 

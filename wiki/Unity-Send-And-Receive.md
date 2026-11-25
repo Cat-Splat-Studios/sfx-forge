@@ -7,8 +7,8 @@ cross, and which asset you end up with. It assumes the link is up
 ![Everything that travels between the device and Unity](img/unity-link.png)
 
 *Every line is one kind of traffic: what happens on the device, the MIDI message, and the call or event in Unity.
-Orange goes to Unity, blue goes to the device. One line is not what the firmware does: a text sent with `SendText`
-shows on the device's LINK page under LINKED, not on its top line.*
+Orange goes to Unity, blue goes to the device. A text sent with `SendText` shows on the device's LINK page under
+LINKED, and only while that page is open.*
 
 ## The short version
 
@@ -191,7 +191,7 @@ public class TakeTheSong : MonoBehaviour
 ```
 
 `Reload()` makes an enabled music player take its song again without stopping. If it is not playing yet, call
-`music.Play()` after it.
+`music.Play()` instead: `Play()` takes a song asset that was assigned since the player took its song, and starts it.
 
 Put an `SfxForgeLink` in the scene: events fire from `SfxLink.Poll()`, and that component opens the ports and
 polls every frame. `SfxLink.Shared.RequestSong()` asks for the song; `RequestPatch(0)` asks for pad 1.

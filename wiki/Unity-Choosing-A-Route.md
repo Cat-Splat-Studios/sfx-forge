@@ -26,9 +26,8 @@ played in a shuffled order: see [Unity Variations](Unity-Variations).
 ![The three routes for a sound, side by side](img/unity-routes.png)
 
 *Read each column from the top: what you start with, what you call, what plays. Yellow is baked, blue is a live
-voice, green is held. The last line of each column names showcase sounds that use it. Count the baked ones as 14, not as
-the picture's "11 more" suggests: the showcase has 19 sounds, 14 baked (the two footsteps counted apart), 2 live
-and 3 held. Music, the fourth route, is not in the picture.*
+voice, green is held. The last line of each column names showcase sounds that use it: the showcase has 19 sounds,
+14 baked (the two footsteps counted apart), 2 live and 3 held. Music, the fourth route, is not in the picture.*
 
 Three words in the tables below: a *held* patch is one whose SUSTAIN is above 0, so it sounds until it is released;
 the *live values* are four numbers of a player that bend a sound while it plays; an *audio block* is the run of

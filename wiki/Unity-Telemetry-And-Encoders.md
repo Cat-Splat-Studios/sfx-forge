@@ -61,8 +61,8 @@ The pads send notes 36 – 51 on the sound pages, MASTER and LINK; they arrive a
 WAITING FOR A GAME until a telemetry CC or a SysEx message of the link arrives, then LINKED in green. A text the
 game sent replaces the line under it.*
 
-The line under WAITING FOR A GAME names CC 20 – 23. Encoders A and B send too, as CC 24 and 25: on this page A is
-not the output volume.
+The line under WAITING FOR A GAME names CC 20-25: encoders 1 – 4 send CC 20 – 23, and A and B send too, as CC 24
+and 25. On this page A is not the output volume.
 
 ## Telemetry: the game drives the device
 
@@ -156,8 +156,7 @@ public class TuneJumpHeight : MonoBehaviour
 ```
 
 `SendText` sends up to 24 ASCII characters. The device shows them on its LINK page, in the line under LINKED (mark
-**3** above): the page you are on while you turn the encoders. The package's comments call that "the top line";
-the firmware draws the text on the LINK page only.
+**3** above): the page you are on while you turn the encoders. On any other page you do not see the text.
 
 In the editor, the window's **FROM THE DEVICE** bars show the same six values without Play mode.
 

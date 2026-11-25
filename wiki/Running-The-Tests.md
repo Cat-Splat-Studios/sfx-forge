@@ -18,7 +18,7 @@ flowchart TB
   t1["sh build.sh<br/>vibe-check, then 23 checks:<br/>24 lines PASSED"]
   t2["sh tests/stress-song-way.sh<br/>two real threads"]
   t3["tests/dotnet<br/>205 checks"]
-  t4["tests/unity-inspectors<br/>169 EditMode tests"]
+  t4["tests/unity-inspectors<br/>171 EditMode tests"]
   t5["Verify: 32 editor checks<br/>PlayMode: 41 tests"]
   t1 --> fw
   t2 --> way
@@ -34,7 +34,7 @@ flowchart TB
 | the firmware | `sh build.sh` | about 30 s | exit code 0; 24 lines say `PASSED`, the last is `store PASSED` |
 | the two-thread test alone | `sh tests/stress-song-way.sh` | about 12 s | the last line is `song way stress PASSED` |
 | the package's core, without Unity | `dotnet run -c Release --project tests/dotnet -- .` | about 30 s | 205 lines `  ok    ...`; the last line is `PASSED` |
-| the editor UI (EditMode) | Unity on `tests/unity-inspectors`, below | not recorded | `total="169" passed="169" failed="0"` |
+| the editor UI (EditMode) | Unity on `tests/unity-inspectors`, below | not recorded | `total="171" passed="171" failed="0"` |
 | the showcase's editor checks | Unity on `unity/Demo`, `ShowcaseBuilder.Verify`, below | 1 to 3 minutes | 32 lines `SHOWCASE: ok`, then `SHOWCASE: PASSED` |
 | PlayMode | Unity on `unity/Demo`, below | 1 to 3 minutes | `total="41" passed="26" failed="0" skipped="15"` |
 

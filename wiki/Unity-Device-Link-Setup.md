@@ -123,9 +123,9 @@ that names the device is absent under LINKED.*
 
 The pads, SHOW ON DEVICE and FETCH SONG need the port TO DEVICE and are dark without it.
 
-> **Where the text shows.** The window's tooltips and the package's comments say "the device's top line". The
-> firmware draws the text in one place only: on its LINK page (K6), in the line under LINKED
-> (`draw_link` in [fw_draw_pages.h](../sfx-forge/fw_draw_pages.h)). On any other page you do not see it.
+> **Where the text shows.** The firmware draws the text in one place only: on its LINK page (K6), in the bottom
+> line, under LINKED (`draw_link` in [fw_draw_pages.h](../sfx-forge/fw_draw_pages.h)). On any other page you do
+> not see it.
 
 What arrives and where it is saved is on [Unity Send And Receive](Unity-Send-And-Receive).
 

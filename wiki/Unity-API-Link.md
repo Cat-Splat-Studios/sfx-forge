@@ -79,7 +79,7 @@ File: [SfxLink.cs](../unity/com.catsplat.sfxforge/Runtime/Core/SfxLink.cs).
 | `bool RequestSong()` | asks for the device's song and 16 sounds; the answer comes as `SongReceived` |
 | `bool SendTelemetry(SfxTelemetry channel, float value01)` | a game value 0..1. Sent only when its 7-bit value changes, so calling it every frame is fine |
 | `bool SendIntensity(float value01)` · `bool CuePattern(int pattern)` | the music on the device: intensity · this pattern (0..7) from the next bar line |
-| `bool SendText(string text)` | text for the device's top line: 24 ASCII characters |
+| `bool SendText(string text)` | text for the bottom line of the device's LINK page: 24 ASCII characters |
 | `bool PlayPad(int slot, float velocity = 0.8f)` · `bool ReleasePad(int slot)` | a note on · a note off for a pad |
 | `bool SendSysEx(byte[] message)` | one SysEx message as it is (F0 ... F7) |
 | `static string Describe(byte[] m)` | a message's first 24 bytes as hex, for a log |
@@ -96,11 +96,11 @@ scripts. File: [SfxForgeLink.cs](../unity/com.catsplat.sfxforge/Runtime/SfxForge
 |---|---|
 | `const string InputPref = "SfxForge.Input"` · `OutputPref = "SfxForge.Output"` | the PlayerPrefs keys of the ports chosen in **Window > SFX Forge** |
 | `string inputPort = ""` · `string outputPort = ""` | part of a port's name. Empty: the port chosen in the window |
-| `string textOnStart = ""` | shown on the device's top line when the game starts |
+| `string textOnStart = ""` | shown in the bottom line of the device's LINK page when the game starts |
 | `PadEvent onPad` | `UnityEvent<int, float>`: pad 0..15, velocity 0..1 |
 | `EncoderEvent onEncoder` | `UnityEvent<int, float>`: encoder 0..5, value 0..1 |
 | `static SfxLink Link` | `SfxLink.Shared` |
-| `void SendText(string text)` | text for the device's top line |
+| `void SendText(string text)` | text for the bottom line of the device's LINK page |
 
 It closes the ports on disable only if it opened them itself.
 
@@ -166,7 +166,7 @@ File: [SfxProtocol.cs](../unity/com.catsplat.sfxforge/Runtime/Core/SfxProtocol.c
 | `static byte[] BuildLoad(int slot, SfxPatch patch)` · `BuildDump(int slot, SfxPatch patch)` | a patch into a pad · what the device sends on EXPORT |
 | `static byte[] BuildLoadSongSound(int sound, SfxPatch patch)` | one of a song's 16 sounds (slot 16 + sound) |
 | `static byte[] BuildRequest(int slot)` · `BuildRequestSong()` · `BuildRequestIdentity()` | the three requests |
-| `static byte[] BuildText(string text)` | text for the top line |
+| `static byte[] BuildText(string text)` | text for the bottom line of the device's LINK page |
 | `static bool TryParsePatch(byte[] m, out int slot, out SfxPatch patch)` | a dump or a load with a valid patch |
 | `static byte[][] BuildSongPieces(byte[] song)` | a song as the messages firmware 1.6.0 on takes (pieces of up to 240 bytes). Throws `ArgumentException` when the bytes are not a packed song |
 | `static byte[][] BuildSong(byte[] song)` | a format-5 song (7699 bytes) as the 39 messages a firmware up to 1.5.0 takes. Throws `ArgumentException` for any other length |

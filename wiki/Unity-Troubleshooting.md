@@ -50,7 +50,7 @@ flowchart TD
     B{"Does the player have a song,<br/>and does the song have data?"}
     B1["Assign an SfxSong made on the device,<br/>for example DemoSong.asset"]
     R{"Was the song assigned in code,<br/>after the player was enabled?"}
-    R1["Call Reload(), then Play()"]
+    R1["Call Play(): it takes the song<br/>that was assigned and starts it"]
     C{"Is playOnEnable off?"}
     C1["Call Play()"]
     D{"Is intensity 0 or low?"}
@@ -70,7 +70,9 @@ flowchart TD
 
 An empty `SfxSong` asset plays nothing and logs nothing. A song's notes are written on the device, not in Unity:
 [Unity Music First Song](Unity-Music-First-Song) shows where to get one. A player takes its song when it is enabled.
-If you assign `song` from code later, call `Reload()` and then `Play()`.
+If you assign another song asset to `song` from code later, call `Play()`: it takes the asset that was assigned and
+starts it (`Reload()` takes it without starting again). Assigning alone does nothing. When the contents of the
+same asset changed, only `Reload()` takes them.
 
 ## The Console says
 
@@ -79,7 +81,7 @@ as a message, a warning or an error.
 
 | Message | Cause | Fix |
 |---|---|---|
-| `SFX Forge: the native library (sfxforge) is not available on this platform – SfxPlayer stays silent. Bake presets to clips instead.` | `sfxforge.dll` did not load: the platform is not Windows x64. Logged once for all `SfxPlayer`s | Run on Windows x64. Elsewhere, play clips that were baked to WAV files in the editor ([Unity Baking And WAV](Unity-Baking-And-WAV)) |
+| `SFX Forge: the native library (sfxforge) is not available on this platform – SfxPlayer stays silent. Only clips and WAV files baked beforehand, in the editor on Windows x64, play here: baking needs the library too.` | `sfxforge.dll` did not load: the platform is not Windows x64. Logged once for all `SfxPlayer`s | Run on Windows x64. Elsewhere, play clips that were baked to WAV files in the editor ([Unity Baking And WAV](Unity-Baking-And-WAV)) |
 | `SFX Forge: the native library (sfxforge) is not available on this platform – SfxMusicPlayer stays silent.` | the same, for the music. Logged once | the same; there is no baked form of a song |
 | `SFX Forge: '…' is not a valid song.` | the engine refused the song's data: a value in it is out of range | fetch the song again from the device ([Unity Send And Receive](Unity-Send-And-Receive)) |
 | `SFX Forge: '…' holds a song in format …, this version of SFX Forge knows up to 6: it does not play here. Update the package to play it.` | the song was made by a newer firmware than this package reads | update the package |

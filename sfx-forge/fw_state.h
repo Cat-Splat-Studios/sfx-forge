@@ -343,7 +343,8 @@ static float acc[VE_COUNT];
 /* the random numbers of MUTATE and RANDOM */
 static uint32_t rng = 0x5F3759DFu;
 
-/* LINK: what the game sent last, CC 10..17 (10-15 do something, fw_protocol.h; 16 and 17 are only kept and shown) */
+/* LINK: what the game sent last, CC 10..17 (10-15 do something, fw_protocol.h; 16 and 17 are only kept: the page
+   shows 10-15, and any of the eight switches the link's light on) */
 static uint8_t telemetry[8];
 /* LINK: what the encoders sent to the game (CC 20..25) */
 static uint8_t cc_out[6] = {64, 64, 64, 64, 64, 64};

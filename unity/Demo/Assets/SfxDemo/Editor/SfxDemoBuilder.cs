@@ -254,7 +254,7 @@ namespace SfxDemo.Editor
             cam.transform.position = new Vector3(0f, 9f, -12f);
             cam.AddComponent<FollowCamera>().target = craftGo.transform;
 
-            // the device: its top line says where the game is, its encoder 1 is the engine's power
+            // the device: the bottom line of its LINK page says where the game is, its encoder 1 is the engine's power
             var linkGo = new GameObject("SFX Forge Link");
             linkGo.AddComponent<SfxForgeLink>().textOnStart = "HOVER DEMO";
             var binding = linkGo.AddComponent<SfxEncoderBinding>();

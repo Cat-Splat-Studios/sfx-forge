@@ -119,15 +119,16 @@ When it is right:
   the readability pass was proved.
 
 **A hash belongs to one state of the source.** It says nothing about a version: any change to the code gives
-another. Compare a hash only with one you took yourself, just before your change. The three that were written down:
+another. Compare a hash only with one you took yourself, just before your change. The four that were written down:
 
 | Firmware | State of the source | sha256 of `build/sfx-forge.wasm` |
 |---|---|---|
 | 1.6.0 | after the readability pass; the pass left it as it was before | `9f777350b8433e09c644a41817b34dfc7fda255e3917aa6d906f9a4bcce74bb4` |
 | 1.7.0 | with the PERFORM page | `4e59a51fc0257c96a9f43172952d0bb61bc03e3f9f15bf95c988c239c81f27e7` |
 | 1.7.0 | with the PERFORM page and the beat (`meter.bin`, `tests/check-meter.mjs`) | `177d05b39109508ff69db11f3acfeb826e407bc0ec2d0f176a83fe3ddad42da3` |
+| 1.7.0 | the same, with the LINK page's footer corrected (`the knobs send CC 20-25 to it`): one text of the display | `f52354354399d9a6a4d886c1e1b9c22f11ac85d94faa4276a98a7bd0fb78df6e` |
 
-Two rows say 1.7.0: the version was not released between them, so its number stayed, and the hash changed with the
+Three rows say 1.7.0: the version was not released between them, so its number stayed, and the hash changed with the
 code. Each hash of 1.7.0 came out the same with the SDK in `.tools` and with SDK 28. Another SDK, or another Zig,
 may give another hash for the same source.
 
@@ -175,7 +176,7 @@ Three rules first.
 
    | Project | Runs | Result when right |
    |---|---|---|
-   | `tests/unity-inspectors` | EditMode: the package's inspectors, windows and tools | `total="169" passed="169" failed="0"` |
+   | `tests/unity-inspectors` | EditMode: the package's inspectors, windows and tools | `total="171" passed="171" failed="0"` |
    | `unity/Demo` | the showcase's editor checks (`ShowcaseBuilder.Verify`) | 32 lines `SHOWCASE: ok`, then `SHOWCASE: PASSED` |
    | `unity/Demo` | PlayMode: the showcase's and the first demo's tests | `total="41" passed="26" failed="0" skipped="15"` |
 
@@ -241,7 +242,10 @@ python docs/figures.py       # the manual's pictures into docs/img (needs Pillow
 ```
 
 Run both and `git diff --stat docs/img` is empty when nothing visible changed. `docs/unity_figures.py` and the
-video scripts need recorded takes; [the videos' README](../videos/README.md) says which.
+video scripts need recorded takes; [the videos' README](../videos/README.md) says which. A chart of
+`unity_figures.py` is drawn from the takes that are in `out/unity-video` now: with other takes than the ones the
+committed pictures were drawn from, `unity-held`, `unity-intensity`, `unity-level-strip` and
+`unity-showcase-routes` come out different. `SFXFORGE_FIGURES=link,routes` draws only the figures named.
 
 ### The wiki
 
@@ -586,9 +590,9 @@ finds it.
    `PageTitles`, `PageParams`. The header of `sfx-forge.c` and of each part you touched lists pages and
    functions: update them.
 9. **Walk through every script that counts presses of that K key.** This is the lesson of PERFORM. A script that
-   pressed K5 three times to come back from AUTO to SEQ landed on PERFORM, where F3 mutes and F2 makes the pads
-   the kit. Nothing stops the build for it: the check fails later with a wrong song, or a picture shows another
-   page. `grep -n K5` over these, and read every hit:
+   pressed K5 three times to come back from AUTO to SEQ landed on PERFORM, where F3 makes the pads mutes and F2
+   makes them the kit. Nothing stops the build for it: the check fails later with a wrong song, or a picture shows
+   another page. `grep -n K5` over these, and read every hit:
    - `tests/*.json`: the scenes. With 1.7.0 six changed: `edit.json`, `grid.json`, `regrid.json`,
      `retake.json`, `take64.json`, `undo.json`;
    - `tests/make-grid-scenes.mjs`, which writes `grid.json`, `regrid.json` and `take64.json`: change the script
@@ -609,17 +613,21 @@ engine 5** (`sfx_patch_unpack`), so a sound that uses it cannot go to an older f
    in the comment over the `SFX_P_*` list. `sfx_patch_init`, `sfx_patch_pack`, `sfx_patch_unpack` and
    `sfx_patch_random` follow `SFX_ENGINE_COUNT` by themselves.
 2. Same file, `sfx__control`: a branch of its own in the chain of `if`s over the engines, and look at the
-   modulator line and the drive under it. `sfx_voice_render`: its branch in the chain that makes the source, and
-   look at the filter's output. **In both chains the last `else` is IMPACT and SCI-FI FM**: an engine without a
-   branch lands there and becomes an FM engine without a word.
+   modulator line and the filter under it. `sfx_voice_render`: its branch in the chain that makes the source, the
+   `drive` line over the loop (an engine it does not name gets 1.3), and look at the filter's output. **In both
+   chains the last `else` is IMPACT and SCI-FI FM**: an engine without a branch lands there and becomes an FM engine
+   without a word.
 3. The prose that says "five": the header of `sfx_core.h`, the comment over `sfx_engine`, "0..4" in section 6.
-4. Firmware: every part that names `SFX_ENGINE_…`: `fw_sounds.h` (`ENGINE_NAME`, `ENGINE_RGB`, a factory sound
-   that uses it), `fw_draw_parts.h` (`param_name`, `param_text`), `fw_draw_sound.h` (the picture), `fw_pages.h`
-   and `fw_softkeys.h` (the WAVE page is for a wavetable only), `fw_draw.h`, `fw_events.h`, `fw_link.h`,
+4. Firmware: every part that names `SFX_ENGINE_…`: `fw_sounds.h` (`ENGINE_NAME`, `ENGINE_SHORT`, `ENGINE_RGB`, a
+   factory sound that uses it), `fw_draw_parts.h` (`param_name`, `param_text`), `fw_draw_sound.h` (the picture),
+   `fw_pages.h` and `fw_softkeys.h` (the WAVE page is for a wavetable only), `fw_draw.h`, `fw_events.h`, `fw_link.h`,
    `fw_stage_draw.h`, `fw_stage_input.h`. `grep -n SFX_ENGINE_ sfx-forge/*.h` lists them.
-5. C#: `SfxPatch.cs` (`SfxEngine`), `SfxGenerator.cs` (`Recipes`), `SfxProfile.cs` (the profile's count of
-   engines, and a profile for the firmware before), `Editor/UI/SfxUnits.cs` (`EngineNames`, the knobs' names),
-   `Editor/UI/SfxKit.cs` (its colour).
+5. C#: `SfxPatch.cs` (`SfxEngine`, `EngineCount`, `EngineNames`, `Label` for what A and B are called),
+   `SfxGenerator.cs` (`Recipes`), `SfxProfile.cs` (the profile's count of engines, and a profile for the firmware
+   before), `Editor/UI/SfxUnits.cs` (`EngineNames`, the knobs' names), `Editor/UI/SfxKit.cs` (its colour).
+   If the engine also brings a new kind of sound to make (an eleventh in `SfxGenerator`: `Count`, `Names`,
+   `SfxCategory`): `Editor/SfxPresetPanel.cs` fills the row of kinds with two `kinds.AddBlank()`, which is right
+   for ten kinds; an eleventh needs one blank, not two.
 6. `sh native/build.sh`, the tests, and the docs: README, `docs/MANUAL.md`, the cheat sheet.
 
 ### Add a field to the song (a new song format)
@@ -777,7 +785,9 @@ To find a new one: `grep -n "% 4\|/ 4\|\* 4" sfx-forge/*.h` and read every hit.
    (`SfxProfile.cs`).
 7. C#: the constant and `Build…` / `TryParse…` in `SfxProtocol.cs`; in `SfxLink.cs` the branch in `Take` (`Poll`
    only hands it every message that came), and an event or a `Send…` method.
-8. Tests: `tests/check-identity.mjs` has the part "the other messages beside it": add yours (`d.sysex(…)`,
+8. Tests: `tests/check-identity.mjs`, in its last block, sends the other messages – REQUEST 04, LOAD 02, REQUEST
+   SONG 06 in the function `script`, which runs on two devices and compares them (the comment over it begins
+   "every other message"), then SONG 05 and TEXT 03 after it. Add yours there (`d.sysex(…)`,
    `d.take()` of `tests/host.mjs`). `tests/dotnet/ProtocolTests.cs` for the C# side.
 9. README, "The link": a row in the table. `tools/make_unity_package.py` copies that whole section into the
    package as `LINK-PROTOCOL.md`, so the README is the one place to write it.
@@ -794,8 +804,9 @@ To find a new one: `grep -n "% 4\|/ 4\|\* 4" sfx-forge/*.h` and read every hit.
   `BuildIdentity`, keep `IdentityBytes` at 18 (it is the least a reader needs), add the field to `SfxDeviceInfo` or
   `SfxProfile`.
 - Tests: `WANT` and the hex string under it in `tests/check-identity.mjs`; the same bytes in
-  `tests/dotnet/IdentityTests.cs` (which also checks that a longer identity is still read) and in
-  `tests/unity-inspectors/…/SfxSongGridTests.cs`.
+  `tests/dotnet/IdentityTests.cs` (which also checks that a longer identity is still read). The Unity tests hold
+  no identity bytes: `SfxSongGridTests.cs` and `SfxForgeViewTests.cs` in `tests/unity-inspectors` build an
+  `SfxDeviceInfo` field by field, so they change only with a new field they should show.
 - README: the table "Identity bytes" and the line with the whole answer.
 
 ### Add a Unity component
@@ -991,8 +1002,11 @@ In C# and the scripts:
 - **The videos are not a test.** They are made by scripts from the firmware and the game.
   [The videos' README](../videos/README.md) says for each what it was made from; a video made before a page
   existed does not show it.
-- **The link with PERFORM open, or with another beat.** The six link tests passed against the emulator on
-  24 Nov 2026 with 1.7.0 as it is now (the build `177d05b3…`), in one run (`docs/UNITY.md`, section 6). The recorded
+- **The link with PERFORM open, or with another beat, or with the build as it is now.** The six link tests passed
+  against the emulator on 24 Nov 2026 with the 1.7.0 build `177d05b3…`, in one run (`docs/UNITY.md`, section 6).
+  The build as it is now (`f5235435…`) differs from that one in one text of the display, the LINK page's footer
+  (`CC 20-23` became `CC 20-25`), and the link was not run again with it: on the evening of 24 Nov 2026 loopMIDI
+  was started, but its two ports did not appear, so the emulator's page had no port to send on. The recorded
   session passed on 23 Nov 2026 with the build of that day (`4e59a51f…`, before the beat) and was not run again:
   the link video is that recording. PERFORM was not open in any of them, and the beat was a quarter. 1.7.0
   changed no message; its identity says 1.7.0.

@@ -387,7 +387,7 @@ static void draw_link(void) {
     vg_rect(24, y + 17, telemetry[k] * 208 / 127, 5, YELLOW);
   }
   footer(linked ? "LINKED" : "WAITING FOR A GAME", linked ? GREEN : DIM,
-         link_text[0] ? link_text : "the knobs send CC 20-23 to it");
+         link_text[0] ? link_text : "the knobs send CC 20-25 to it");
 }
 
 /* ---- MIX and MASTER: their four values as text ----------------------------------------------------------------- */

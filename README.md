@@ -33,8 +33,9 @@ instruments in that style, not recordings of an orchestra. The wavetables are co
 Built with the VIBE FM SDK. Status: v1.0, firmware 1.7.0. The synth, the device UI and the device side of the link are
 tested in the SDK's tools; the Unity package is tested in Unity 6.3 with the demo project's editor and Play mode tests.
 Not tried yet: the hardware and the plugin. The link was run against the SDK's emulator over a virtual MIDI cable, last
-with firmware 1.7.0 on 24 Nov 2026 (the six link tests, once; the recorded session once the day before, with the
-1.7.0 build of that day, before the beat was added; PERFORM was not open in them).
+with firmware 1.7.0 on 24 Nov 2026 (the six link tests, once, with the build before one text of the LINK page's
+footer was corrected; the recorded session once the day before, with the 1.7.0 build of that day, before the beat
+was added; PERFORM was not open in them).
 
 **New in firmware 1.7.0: PERFORM.** A fourth page of K5: K5 now walks SEQ, SONG, AUTO, PERFORM and SEQ again. The
 display shows the whole pattern as a grid, as a drum machine shows it: a row a sound, a cell a step, the playhead a
@@ -98,7 +99,7 @@ song's pages; F4 held erases during a take; the keys that throw a whole song or 
 | `unity/Demo/` | a Unity 6.3 project using the package: a hovercraft whose every sound is synthesized live |
 | `tests/` | a scripted performance (`tour.json`) and its checks (`check.mjs`); more scripts of key presses, each with its check (`loop`, `modes`, `take`, `edit`, `undo`, `retake` for the sequencer, `grid`, `regrid`, `take64` for the finer grid, `song-export` for what SEND gives: the list is under "Build"); seven checks on a small host of their own, `host.mjs`, which hands the built firmware keys, SysEx and a store (`check-identity.mjs`, `check-grid-keys.mjs`, `check-perform.mjs`, `check-meter.mjs`, `check-atomic.mjs`, `check-wire.mjs`, `check-store.mjs`); `stress-song-way.c`, two threads over the song's way from the controls to the audio; `make-grid-scenes.mjs` writes the three grid performances; `dotnet/` tests the Unity package's core without Unity |
 | `tests/mix-report.mjs` | measures the demo song's mix: every instrument soloed in turn – its level, its peak, how much of it is high |
-| `tests/unity-inspectors/` | a small Unity project that tests the package's editor UI (the sound inspector with its tools, the song inspector, the variation set's inspector, the SFX Forge window and the bake window; 169 EditMode tests) and writes pictures of it to `out/inspector-shots/`. The pictures are the Inspector's element tree and stylesheet rendered in a panel to a texture, not photographs of the Inspector. Its README has the command |
+| `tests/unity-inspectors/` | a small Unity project that tests the package's editor UI (the sound inspector with its tools, the song inspector, the variation set's inspector, the SFX Forge window and the bake window; 171 EditMode tests, two of them of `SfxMusicPlayer.Play()` with a song assigned from a script) and writes pictures of it to `out/inspector-shots/`. The pictures are the Inspector's element tree and stylesheet rendered in a panel to a texture, not photographs of the Inspector. Its README has the command |
 | `docs/` | the manual, and `figures.py`, which builds its pictures from the firmware's own screenshots |
 | `docs/UNITY.md` | the Unity manual: the package and the showcase, with its own figures (`docs/img/unity-*.png`, built by `docs/unity_figures.py` from the song file and the recorded takes in `out/unity-video/`; its pictures of the editor UI, `unity-inspector-*.png`, are copied by the same script from `out/inspector-shots/`: `SFXFORGE_FIGURES=inspectors python docs/unity_figures.py` after the inspectors' tests ran) |
 | `docs/MAINTAINING.md` | [the maintainer's guide](docs/MAINTAINING.md): the map of the code, how to build and test everything, what to read first, recipes for common changes, what must never break |
@@ -369,9 +370,9 @@ Plain MIDI, so it works over USB, the plugin's MIDI ports and Web MIDI. SysEx us
 | game → device | CC 10–13, ch 2 | telemetry: pitch (0…+24 st), cutoff (64 = none, ±4 oct), timbre (FM depth, wavetable position), level |
 | game → device | CC 14, ch 2 | music: intensity 0…127 (layers come in) |
 | game → device | CC 15, ch 2 | music: pattern A…H (value / 16), from the next bar line |
-| game → device | CC 16–17, ch 2 | shown on the LINK page, not mapped |
+| game → device | CC 16–17, ch 2 | not mapped: kept, and like any telemetry they switch the link light on. The LINK page draws CC 10–15 only |
 | game → device | `F0 7D 56 42 02 <slot> <28 patch bytes> F7` | load a patch into a pad. Slot 16–31 (firmware 1.3.1): pad 1–16 of the MUSIC kit whichever kit is shown – how a song's sounds are sent |
-| game → device | `F0 7D 56 42 03 <ASCII, ≤ 24> F7` | text for the top line |
+| game → device | `F0 7D 56 42 03 <ASCII, ≤ 24> F7` | text for the bottom line of the LINK page: it shows only while that page is open |
 | game → device | `F0 7D 56 42 04 <slot> F7` | request a dump of a pad |
 | both ways | `F0 7D 56 42 05 <piece lo> <piece hi> <format> <pieces lo> <pieces hi> <1–240 bytes> F7` | the song with its mix (`sfx_song_pack`), from firmware 1.6.0 on: the piece's number and the count of pieces in 14 bits each, the song's format in every piece, at most 251 bytes a message and 160 pieces. Every piece but the last has 240 bytes. The factory song, 2487 bytes of format 6, is 11 pieces. A receiver puts each piece where it belongs and takes the song when all are there: in any order, twins ignored. It forgets a transfer that stops for two seconds; a *different* song of as many pieces sent sooner than that after one that broke off can be mixed with it. A second whole song sent straight after the first is taken when any of its pieces differs; the same song again loads nothing. A first piece that does not begin with the format it names is ignored |
 | both ways up to firmware 1.5.0, then game → device | `F0 7D 56 42 05 <piece> 39 <200 bytes, the last 99> F7` | the song message up to firmware 1.5.0, which sends it and takes it: a format-5 song of 7699 bytes in 39 pieces. Firmware 1.6.0 still takes it and no longer sends it; the Unity package takes it from an older device. A firmware up to 1.5.0 knows this one only, and drops the message above without a word |
@@ -472,7 +473,7 @@ opened yet. [The manual](docs/UNITY.md#the-inspectors-look-like-the-device) has 
 
 | | |
 |---|---|
-| **Window > SFX Forge** | the device's LINK page in Unity: choose the MIDI ports, CONNECT, see what the device's knobs send, play its 16 pads or fetch their patches, write a text on its top line. EXPORT on the device arrives here as a tile with the sound's waveform and is saved as a preset asset |
+| **Window > SFX Forge** | the device's LINK page in Unity: choose the MIDI ports, CONNECT, see what the device's knobs send, play its 16 pads or fetch their patches, write a text into the bottom line of its LINK page. EXPORT on the device arrives here as a tile with the sound's waveform and is saved as a preset asset |
 | `SfxPreset` | a patch as an asset (Create > SFX Forge > Preset). Its Inspector has the device's pages OSC TONE FILTER WAVE ENV LFO FX, each with up to four knobs and the values in the device's units, the sound's waveform, and the soft keys PLAY, MUTATE, UNDO, RANDOM, BAKE WAV (stereo, with its effects), SEND to a pad |
 | `SfxPlayer` | plays a preset in the game with the device's own engine and effects, live – its Pitch / Cutoff / Timbre / Level move the sound as telemetry does on the device. No device needed |
 | `SfxSong` | a song and its 16 sounds as an asset: SEND on the device's SONG page (or FETCH SONG in the window) creates one. Its Inspector shows the song: patterns, each in its own grid of 16, 32 or 64 steps, arrangement, mix, master, automation. TEMPO, SWING and a sound's LAYER, VOLUME and PAN can be changed there; everything else only shows and is made on the device |
@@ -523,14 +524,16 @@ listened to a finer pattern in Unity, and the demo song and the showcase use six
 The numbers, as last run, all with firmware 1.7.0 as it is now (with PERFORM and the beat) on 24 Nov 2026:
 `sh build.sh` 24 lines `PASSED`, none failing;
 `tests/dotnet` 205 checks, all passing with the
-package's own `sfxforge.dll`; `tests/unity-inspectors` 169 of 169 EditMode tests; the demo project, headless on a
+package's own `sfxforge.dll`; `tests/unity-inspectors` 171 of 171 EditMode tests; the demo project, headless on a
 copy, the showcase's 32 editor checks and 41 Play mode tests, of which 26 passed and 15 were skipped (the takes that
 need a device or the emulator or that record, and only run when asked for by name). The showcase's standalone build
 and its probe were last run before the tools, `loopPattern` and the firmwares 1.5, 1.6 and 1.7, and not again.
 
 The link is tested end to end against the SDK's emulator over a virtual MIDI cable, last with firmware 1.7.0 on
 24 Nov 2026: the six link tests passed, in one run, with the build that has PERFORM and the beat (on 23 Nov they
-passed with the 1.7.0 build of that day, before the beat; with 1.6.0 on 22 Nov). Firmware 1.7.0 changed
+passed with the 1.7.0 build of that day, before the beat; with 1.6.0 on 22 Nov). After that run one text of the
+display was corrected, the LINK page's footer (`CC 20-23` became `CC 20-25`): the link was not run again with the
+build as it is now. Firmware 1.7.0 changed
 no message but the version in the identity. What was run: a patch and the song from the device, the identity, a song
 and its sounds to the device, the game's messages leaving for the device. Every pattern in those songs has 16 steps: a song with
 a pattern at 1/32 or 1/64 was only handed to the built firmware and to the package's receiver by tests, not sent

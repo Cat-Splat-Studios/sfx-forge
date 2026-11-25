@@ -179,7 +179,7 @@ namespace Inspector.Harness
             root.Add(lockedRow);
 
             var footer = new SfxFooter();
-            footer.Set("WAITING FOR A GAME", SfxColors.Dim, "the knobs send CC 20-23 to it");
+            footer.Set("WAITING FOR A GAME", SfxColors.Dim, "the knobs send CC 20-25 to it");
             root.Add(footer);
 
             var keys = new SoftKeyRow();

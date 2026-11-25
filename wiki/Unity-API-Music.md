@@ -33,7 +33,7 @@ File: [SfxMusicPlayer.cs](../unity/com.catsplat.sfxforge/Runtime/SfxMusicPlayer.
 
 | Member | What it is |
 |---|---|
-| `SfxSong song` | the song it plays |
+| `SfxSong song` | the song it plays. Read when the player is enabled, by `Reload()`, and by `Play()` when another asset was assigned since |
 | `float volume = 0.6f` | 0..1. Not smoothed: ramp it yourself |
 | `bool playOnEnable = true` | start when the component is enabled |
 | `int startPattern` | 0..7: the pattern `Play` starts on, 0 = A |
@@ -45,7 +45,7 @@ File: [SfxMusicPlayer.cs](../unity/com.catsplat.sfxforge/Runtime/SfxMusicPlayer.
 | `int StepsPerSixteenth` | 1, 2 or 4: the grid of the pattern that plays |
 | `int Pattern` | the pattern it is on, 0 = A |
 | `int Bar` | bars since `Play` |
-| `void Play()` | starts the song on `startPattern` |
+| `void Play()` | starts the song on `startPattern`. When another song asset was assigned to `song` since the player took its song, it takes that one first |
 | `void Stop()` | stops the song |
 | `void Reload()` | takes the song asset again (after it changed) without stopping. It puts the song's own mix back |
 | `void CuePattern(int index)` | change to pattern 0..7 on the next bar line |

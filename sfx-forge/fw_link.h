@@ -102,26 +102,28 @@ static void export_pump(void) {
    the same block, a song going out) waits, and goes with the next draw or event. ident_due: the answers still owed. */
 static int ident_due;
 
+/* (the numbers beside the bytes count the 18 of the identity from 0, as README.md's table does: byte 0 is the sixth of
+   the message) */
 static void ident_pump(void) {
   // clang-format off
   static const uint8_t b[6 + 18] = {
     SX_HEAD, SX_IDENT,
-    ID_HARDWARE,                     /*  1  the hardware */
-    FW_MAJOR, FW_MINOR, FW_PATCH,    /*  2-4  the firmware's version */
-    ID_PROFILE,                      /*  5 */
-    SFX_PATCH_VERSION,               /*  6  the format of a patch */
-    SFX_SONG_VERSION,                /*  7  the format of a song */
-    SLOTS,                           /*  8  the sounds of a kit */
-    2,                               /*  9  kits */
-    SFX_PATTERNS,                    /* 10 */
-    SFX_STEPS,                       /* 11  the most steps a pattern holds */
-    SFX_LANES,                       /* 12 */
-    SFX_ARR_MAX,                     /* 13  the bars of an arrangement */
-    SFX_PLAYER_VOICES,               /* 14 */
-    SFX_ENGINE_COUNT,                /* 15 */
-    SFX_WT_TABLES,                   /* 16 */
-    SFX_P_COUNT,                     /* 17  the values of a sound */
-    ID_FLAGS,                        /* 18 */
+    ID_HARDWARE,                     /*  0  the hardware */
+    FW_MAJOR, FW_MINOR, FW_PATCH,    /*  1-3  the firmware's version */
+    ID_PROFILE,                      /*  4 */
+    SFX_PATCH_VERSION,               /*  5  the format of a patch */
+    SFX_SONG_VERSION,                /*  6  the format of a song */
+    SLOTS,                           /*  7  the sounds of a kit */
+    2,                               /*  8  kits */
+    SFX_PATTERNS,                    /*  9 */
+    SFX_STEPS,                       /* 10  the most steps a pattern holds */
+    SFX_LANES,                       /* 11 */
+    SFX_ARR_MAX,                     /* 12  the bars of an arrangement */
+    SFX_PLAYER_VOICES,               /* 13 */
+    SFX_ENGINE_COUNT,                /* 14 */
+    SFX_WT_TABLES,                   /* 15 */
+    SFX_P_COUNT,                     /* 16  the values of a sound */
+    ID_FLAGS,                        /* 17 */
     0xF7 };
   // clang-format on
   while (ident_due > 0 && !vibe_midi_send_sysex(b, sizeof b)) {
