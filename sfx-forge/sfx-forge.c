@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT
+/* SPDX-License-Identifier: GPL-3.0-or-later
  * SFX FORGE – sound effects, instruments and adaptive music for games, on VIBE FM.
  *
  * WHAT THE INSTRUMENT IS

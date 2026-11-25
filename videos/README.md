@@ -17,6 +17,10 @@ SFX FORGE produced, on the device or in Unity. There is no voice-over; the capti
 The device in the two device videos and in the link video is drawn by the VIBE FM SDK's emulator
 (github.com/Vibe-FM-SDK/vibe-fm-sdk, Apache-2.0).
 
+The two device videos and the two Unity videos end with the words "Open source, GPL-3.0-or-later": SFX FORGE is
+under the GNU General Public License, version 3 or any later version ([LICENSE](../LICENSE),
+[ADDITIONAL-PERMISSIONS.md](../ADDITIONAL-PERMISSIONS.md)). The link video has no such caption.
+
 ## Making them again
 
 Run from the repository's root. Each script writes its videos into this folder; what it makes on the way (the

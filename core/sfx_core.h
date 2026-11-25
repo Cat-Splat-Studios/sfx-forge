@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT
+/* SPDX-License-Identifier: GPL-3.0-or-later
  * sfx_core.h – the SFX FORGE engine: a game-audio synth in portable C.
  *
  * No heap, no libc. The same files build for

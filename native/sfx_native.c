@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT
+/* SPDX-License-Identifier: GPL-3.0-or-later
  * sfx_native.c – the SFX FORGE engine as a native library, for game engines (Unity: P/Invoke).
  * The caller owns all memory: a voice is sfxn_voice_size() zeroed bytes, a player sfxn_player_size() bytes. Nothing
  * here allocates. A patch is the 28 bytes of core/sfx_core.h. Rendering functions may be called from an audio thread.

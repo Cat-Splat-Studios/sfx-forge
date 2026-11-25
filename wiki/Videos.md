@@ -36,7 +36,7 @@ All five in this order take under thirteen minutes.
 |---|---|---|---|
 | [The link](../videos/sfx-forge-unity-link.mp4) | 0:31 | SFX FORGE in the emulator beside the game in Unity. SEND is pressed on the device and the song arrives in the running game; a sound is mutated, EXPORT is pressed, and the game plays the patch | [Unity Device Link Setup](Unity-Device-Link-Setup), [Unity Send And Receive](Unity-Send-And-Receive) |
 
-## Three things to know
+## Four things to know
 
 - **A video is not a test.** It shows what a script made the firmware or the game do. Nobody has listened to all
   of them: [What Is Tested](What-Is-Tested).
@@ -44,6 +44,9 @@ All five in this order take under thirteen minutes.
   video is one recorded session, made with the firmware 1.7.0 build of 23 Nov 2026, before the beat was added.
 - **The device you see is drawn by the VIBE FM SDK's emulator** (Apache-2.0), in the two device videos and in the
   link video.
+- **The licence in the last caption.** The two device videos and the two Unity videos end with "Open source,
+  GPL-3.0-or-later": the GNU General Public License, version 3 or any later version
+  ([FAQ, Shipping](FAQ#shipping)).
 
 ## Making them again
 

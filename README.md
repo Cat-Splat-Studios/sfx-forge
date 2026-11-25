@@ -589,4 +589,32 @@ the native library against the Vibe's own rendering.
 
 ## Licence
 
-MIT. The VIBE FM SDK is Apache-2.0 (Sven Trogus / zvenson); "VIBE FM" is its owner's trademark.
+SFX FORGE is free software under the **GNU General Public License, version 3 or (at your option) any later version**
+(SPDX: `GPL-3.0-or-later`). The text is in [LICENSE](LICENSE). It covers everything here that is Cat Splat Studios'
+own: the firmware, the engine in `core/`, the native library, the Unity package, the showcase, the tests, the tools,
+the documents, the wiki and the figures. It comes without warranty (sections 15 and 16 of the licence).
+
+Copyright (c) 2026 Cat Splat Studios.
+
+**Two additional permissions** under section 7 of the licence, in full in
+[ADDITIONAL-PERMISSIONS.md](ADDITIONAL-PERMISSIONS.md):
+
+- **The Unity engine.** You may convey SFX FORGE linked or combined with the Unity engine and its runtime and editor
+  libraries, which are not free software. It is for the engine only, not for your own code or other libraries.
+- **Hosts of VIBE FM firmwares.** You may convey SFX FORGE combined with a host that loads VIBE FM firmwares: the
+  Playground, the plugin, the device's own software or the SDK's emulator.
+
+**What it means for a game**, as a summary; the licence text decides. A project that is itself offered under the GPL,
+with its source, can use SFX FORGE at no cost. A game that is not offered under the GPL needs another licence from
+the copyright holder.
+
+**Other terms.** The copyright holder can grant them. Ask Cat Splat Studios through the repository's issue tracker.
+
+**Contributions.** A contribution is accepted under the same licence. So that the copyright holder can go on offering
+other terms, contributors are asked to agree to that in the pull request: [CONTRIBUTING.md](CONTRIBUTING.md) has the
+sentence to add.
+
+**Other people's parts** stay under their own licences. The VIBE FM SDK is Apache-2.0 (Sven Trogus / zvenson); its
+runtime and its display fonts (SIL OFL 1.1) are compiled into the firmware. `sfxforge.dll` holds start-up code of the
+mingw-w64 C runtime, linked by Zig. The generated Unity package names them in its `Third Party Notices.md` and ships
+their licence and notice texts unchanged (`Documentation~/licenses`). "VIBE FM" is its owner's trademark.

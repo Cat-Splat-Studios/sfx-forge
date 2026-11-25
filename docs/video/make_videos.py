@@ -595,7 +595,7 @@ def tour():
         v.wait(0.16)
     v.wait(2.0)
     v.btn("STOP", "STOP", gap=1.0)
-    v.say("SFX FORGE", "Open source, MIT. The manual and a one-page cheat sheet are in the repository.")
+    v.say("SFX FORGE", "Open source, GPL-3.0-or-later. The manual and a one-page cheat sheet are in the repository.")
     v.wait(4.0)
     return v
 
@@ -913,7 +913,7 @@ def song():
     )
     v.wait(14.0)
     v.btn("STOP", "STOP", gap=1.0)
-    v.say("SFX FORGE", "Open source, MIT. The manual and a one-page cheat sheet are in the repository.")
+    v.say("SFX FORGE", "Open source, GPL-3.0-or-later. The manual and a one-page cheat sheet are in the repository.")
     v.wait(4.0)
     return v
 

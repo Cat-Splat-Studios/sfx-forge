@@ -126,17 +126,39 @@ Start at the two charts on [Unity Troubleshooting](Unity-Troubleshooting).
 
 ### What is the licence?
 
-MIT, for the code, the showcase, the manuals and their pictures: [LICENSE](../LICENSE). The VIBE FM SDK, which the
-firmware is built with, is Apache-2.0; "VIBE FM" is its owner's trademark. See
-[README, Licence](../README.md#licence).
+The GNU General Public License, version 3 or any later version (`GPL-3.0-or-later`), for the firmware, the engine,
+the Unity package, the showcase, the manuals and their pictures: [LICENSE](../LICENSE). Two additional permissions
+go with it, one for the Unity engine and one for the hosts that load VIBE FM firmwares:
+[ADDITIONAL-PERMISSIONS.md](../ADDITIONAL-PERMISSIONS.md). The VIBE FM SDK, which the firmware is built with, is
+Apache-2.0; "VIBE FM" is its owner's trademark. See [README, Licence](../README.md#licence).
 
 ### Can I ship a game with it?
 
-The MIT licence allows it; keep its copyright notice. A game built with the package ships `sfxforge.dll`, and the
-compiler links start-up code of the mingw-w64 C runtime into that file. The generated package names this, and
-everything else in it that comes from someone else, in its `Third Party Notices.md`, with the licence texts beside
-it. Read that file before you ship. No source file of the VIBE FM SDK is in the package, and its Unity code does
-not use the SDK.
+That depends on the game's own licence. This is a summary; the licence text decides.
+
+- **A game that is itself offered under the GPL**, with its source: yes, at no cost. The additional permission for
+  the Unity engine is what lets such a game be built with Unity at all; it covers the engine, not your own code or
+  other libraries.
+- **A game that is not offered under the GPL**, a closed-source game for one: not under this licence. It needs
+  another licence from the copyright holder. Ask Cat Splat Studios through the repository's issue tracker.
+
+A game built with the package ships `sfxforge.dll`, and the compiler links start-up code of the mingw-w64 C runtime
+into that file. The generated package names this, and everything else in it that comes from someone else, in its
+`Third Party Notices.md`, with the licence texts beside it. Read that file before you ship. No source file of the
+VIBE FM SDK is in the package, and its Unity code does not use the SDK.
+
+### May I copy code from the showcase into my game?
+
+Under the same licence, yes: the showcase is part of SFX FORGE, and what you copy from it stays under the GPL. For
+a game that is not offered under the GPL, see the answer above.
+
+### Can I change the firmware and pass it on?
+
+Yes, under the same licence: whoever gets your version must be able to get its source. The second additional
+permission lets it run in the hosts of VIBE FM firmwares. The names "SFX FORGE" and "Cat Splat Studios" are not
+for a changed version that could be taken for the original
+([ADDITIONAL-PERMISSIONS.md](../ADDITIONAL-PERMISSIONS.md), "Other terms"). This is a summary; the licence text
+decides.
 
 ### How finished is it?
 
@@ -159,4 +181,5 @@ firmware 1.6.0 does not read one. See [Unity Send And Receive](Unity-Send-And-Re
 - [README](../README.md): everything in short, and [its Licence section](../README.md#licence)
 - [The manual, 19. What it does not do](../docs/MANUAL.md#19-what-it-does-not-do)
 - [The Unity manual, Limits](../docs/UNITY.md#limits)
-- [LICENSE](../LICENSE)
+- [LICENSE](../LICENSE) and [ADDITIONAL-PERMISSIONS.md](../ADDITIONAL-PERMISSIONS.md)
+- [CONTRIBUTING.md](../CONTRIBUTING.md): the licence of a contribution

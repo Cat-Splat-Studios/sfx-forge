@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: GPL-3.0-or-later
 """The pictures of the wiki's Unity music pages (prefix um-). Run from the repository root:
 
     python wiki/figures/um_figures.py

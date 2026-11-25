@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT
+/* SPDX-License-Identifier: GPL-3.0-or-later
  * stress-song-way.c – two real threads over sfx-forge/song_way.h, the very code the firmware uses.
  *
  * The test hosts call the firmware in one flow, so they can never show what two flows do to a song. This does:

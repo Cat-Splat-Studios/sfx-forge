@@ -4,6 +4,9 @@ How to give your own game the showcase's audio structure: one seam of events, on
 scripts and one music script. You can take the showcase's folder and rename, or build the same shape from nothing.
 Read [Unity Showcase Walkthrough](Unity-Showcase-Walkthrough) first if you have not seen the structure.
 
+The showcase's code is under the same licence as the package, the GNU General Public License, version 3 or any
+later version. What you copy from it stays under that licence: [FAQ, Shipping](FAQ#shipping).
+
 ![What to take from the showcase and where it goes in your game](img/unity-copy.png)
 
 *Left: the showcase's folder. Orange is copied, blue is copied or replaced with your own, grey is left. Right: where

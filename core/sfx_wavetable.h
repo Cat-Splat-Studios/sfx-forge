@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT
+/* SPDX-License-Identifier: GPL-3.0-or-later
  * sfx_wavetable.h – the wavetables of SFX FORGE's WAVETABLE engine.
  *
  * Six tables of eight frames each, every frame one cycle of 256 samples. All of them are computed here from sums of

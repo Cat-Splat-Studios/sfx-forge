@@ -85,6 +85,13 @@ Five videos, made by scripts from the firmware and the game themselves: [Videos]
 Tested by scripts and against the SDK's emulator; not yet run on the hardware or in the VIBE FM plugin, and the
 Unity package runs on Windows x64 only: [What Is Tested](What-Is-Tested) says exactly how far.
 
+## Licence
+
+SFX FORGE is free software under the GNU General Public License, version 3 or any later version
+([LICENSE](../LICENSE)), with an additional permission for the Unity engine and one for the hosts of VIBE FM
+firmwares ([ADDITIONAL-PERMISSIONS.md](../ADDITIONAL-PERMISSIONS.md)). A game that is not offered under the GPL
+needs another licence from the copyright holder: [FAQ, Shipping](FAQ#shipping).
+
 ## More
 
 - [Glossary](Glossary): every word this wiki uses.

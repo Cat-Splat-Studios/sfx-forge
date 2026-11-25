@@ -5,5 +5,5 @@
   "description": "Links Unity to SFX FORGE (a procedural game-audio synth for VIBE FM): capture patches from the device as assets, play them in the game with the device's own engine, bake them to WAV, and stream game values to the device as it plays.",
   "unity": "2022.3",
   "author": { "name": "Cat Splat Studios" },
-  "license": "MIT"
+  "license": "GPL-3.0-or-later"
 }

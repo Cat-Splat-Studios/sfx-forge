@@ -101,7 +101,9 @@ The Unity package has its own version: `VERSION` and `RELEASED` in `tools/make_u
 
 4. It stops with a named error when something is missing or a check fails, and then the target is as it was. The
    checks it makes itself: every file has a `.meta` and no two share a GUID; no e-mail address and no machine path
-   in any file or zip; every relative link in every Markdown file resolves.
+   in any file or zip; every relative link in every Markdown file resolves. It also stops when `LICENSE` is not the
+   text of the GNU General Public License, version 3: it copies that file as `LICENSE.md`, and
+   `ADDITIONAL-PERMISSIONS.md` beside it.
 5. Nothing in the target is edited by hand. To change it, change the source here, or the script, and run again.
 
 ## Before you hand it over
@@ -112,6 +114,11 @@ The Unity package has its own version: `VERSION` and `RELEASED` in `tools/make_u
       you.
 - [ ] No file that has a `.meta` was renamed or moved: scenes and assets name it by GUID.
 - [ ] The header comments of the files you touched still say what is true.
+- [ ] The licence is named the same everywhere: `GPL-3.0-or-later` in the SPDX line of the source files that have
+      one, in `sfx-forge/firmware.json`, in both `package.json` files and in the README's Licence section. A new
+      file among siblings that carry the SPDX line gets it too.
+- [ ] Nothing was added that came from somewhere else without its licence being one the GPL version 3 can take
+      in, and without a line in the package's `Third Party Notices.md` (its text is in the package script).
 - [ ] The formatters are clean ([the maintainer's guide](../docs/MAINTAINING.md#the-formatters)).
 
 ## Next

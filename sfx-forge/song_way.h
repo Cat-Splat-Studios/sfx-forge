@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT
+/* SPDX-License-Identifier: GPL-3.0-or-later
  * song_way.h – a song from the flow that edits it to the flow that plays it, whole.
  *
  * WHAT IT IS FOR

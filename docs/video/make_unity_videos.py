@@ -915,11 +915,11 @@ def showcase():
         Slide(
             7.5,
             "WHERE TO FIND IT",
-            "Open source, MIT. Open unity/Demo in Unity 6000.3, open the scene Showcase.unity and press Play.",
+            "Open source, GPL-3.0-or-later. Open unity/Demo in Unity 6000.3, open the scene Showcase.unity and press Play.",
             table(
                 [
                     ("The game", "one level, start to goal", "unity/Demo/Assets/Showcase"),
-                    ("Its sound", "sixteen short files", "unity/Demo/Assets/Showcase/Scripts/Audio"),
+                    ("Its sound", "seventeen short files", "unity/Demo/Assets/Showcase/Scripts/Audio"),
                     ("The manual", "every value, recipes, the API", "docs/UNITY.md"),
                     ("The package", "Windows x64", "unity/com.catsplat.sfxforge"),
                 ]
@@ -1282,11 +1282,11 @@ def how():
         Slide(
             6.0,
             "WHERE TO FIND IT",
-            "Open source, MIT. The Unity manual has every value, thirteen recipes and the API.",
+            "Open source, GPL-3.0-or-later. The Unity manual has every value, thirteen recipes and the API.",
             table(
                 [
                     ("The game", "one level, start to goal", "unity/Demo/Assets/Showcase"),
-                    ("Its sound", "sixteen short files", "unity/Demo/Assets/Showcase/Scripts/Audio"),
+                    ("Its sound", "seventeen short files", "unity/Demo/Assets/Showcase/Scripts/Audio"),
                     ("The manual", "every value, recipes, the API", "docs/UNITY.md"),
                     ("The package", "Windows x64", "unity/com.catsplat.sfxforge"),
                 ]

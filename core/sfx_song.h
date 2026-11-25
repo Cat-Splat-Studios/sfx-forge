@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT
+/* SPDX-License-Identifier: GPL-3.0-or-later
  * sfx_song.h – music for SFX FORGE: a song of 8 patterns over the 16 sounds, and the player that makes it sound.
  * A pattern is a bar of up to 16 sixteenths; its grid cuts each in 1, 2 or 4 steps (16, 32, 64 steps a pattern).
  *

@@ -17,6 +17,7 @@ flowchart LR
 | **Windows x64** | the engine is a native library, `sfxforge.dll`, built for Windows x64 only. On any other platform the package compiles, but nothing is synthesized ([What Is Tested](What-Is-Tested)) |
 | **Unity 6000.3** | the generated package's `package.json` asks for `6000.3`. It is developed and tested with Unity 6.3 (6000.3.8f1) only |
 | **No device** | sounds, presets, players and baking work on their own. The device and MIDI are only for [the link](Unity-Device-Link-Setup) |
+| **A licence that fits** | the package is under the GNU General Public License, version 3 or any later version, with an additional permission for the Unity engine itself ([ADDITIONAL-PERMISSIONS.md](../ADDITIONAL-PERMISSIONS.md)). A game that is itself offered under the GPL, with its source, can use it at no cost; a game that is not needs another licence from the copyright holder. This is a summary, the licence text decides: [FAQ, Shipping](FAQ#shipping) |
 
 ## 1. Get the package folder
 

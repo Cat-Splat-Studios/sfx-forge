@@ -37,6 +37,7 @@ It describes the repository at firmware 1.7.0, song format 6, patch format 2.
 | `build/` | The built firmware: `sfx-forge.wasm`, `.json`, `.zip`. Git-ignored |
 | `out/` | Everything the tests and scripts write. Git-ignored. Safe to delete; `out/unity-work` then has to be made again (below) |
 | `.tools/` | The VIBE FM SDK and Zig. Git-ignored. Not ours: never edit it |
+| `LICENSE`, `ADDITIONAL-PERMISSIONS.md`, `CONTRIBUTING.md` | The GNU General Public License, version 3 (the project is under version 3 or any later one: `GPL-3.0-or-later`); the two additional permissions under its section 7; what a contributor agrees to. Source files name the licence in one SPDX line, not in a block |
 
 How the pieces depend on each other:
 
@@ -131,6 +132,10 @@ another. Compare a hash only with one you took yourself, just before your change
 Three rows say 1.7.0: the version was not released between them, so its number stayed, and the hash changed with the
 code. Each hash of 1.7.0 came out the same with the SDK in `.tools` and with SDK 28. Another SDK, or another Zig,
 may give another hash for the same source.
+
+The manifest is not in the `.wasm`. When the `license` of `sfx-forge/firmware.json` became `GPL-3.0-or-later`
+(24 Nov 2026), the hash stayed `f5235435…`, with the SDK in `.tools` and with the one in `out/sdk-latest`, and
+all 24 lines said `PASSED` both times. `build/sfx-forge.zip` holds the manifest and did become another file.
 
 Each check is a scene `tests/<name>.json` played by the SDK's `wasmtest` into `out/<name>`, then judged by
 `tests/check-<name>.mjs`. A check says at its top what it proves and how to run it alone. Seven checks have no scene:
@@ -873,6 +878,10 @@ What it demands, and stops with a named error when it is missing:
 - `build/sfx-forge.zip` exists (`sh build.sh`), has no debug sections and no machine path, and its version is
   `FIRMWARE_VERSION`.
 - ffmpeg and ffprobe on the PATH; the SDK and Zig in `.tools` (their licence texts are copied).
+- `LICENSE` is the text of the GNU General Public License, version 3, and `ADDITIONAL-PERMISSIONS.md` still names
+  the copyright holder, section 7 and the Unity engine. The script copies both: `LICENSE.md` and
+  `ADDITIONAL-PERMISSIONS.md`, whose link to the licence then names `LICENSE.md`. The package's `license` is
+  `LICENCE_ID` in the script.
 - The five videos are in `videos/`, and **each is as long as `VIDEOS` in the script says, within 2 seconds**. A
   video made again with another length stops the run: look at it and choose its preview's place (`clip`, `poster`,
   `seconds`) again.
@@ -913,6 +922,8 @@ version they name are prose in the script. Update them when a count or the versi
 | let the firmware's two versions differ | the identity would lie | `check-identity.mjs`, its first line |
 | leave a machine path or an e-mail address in a tracked file | the repository and the package are public | `build.sh` strips the `.wasm`. `make_unity_package.py` checks the package. For this repository's own files: nothing. Look before you commit |
 | edit `.tools/`, or the generated package by hand | the next run overwrites it | nothing |
+| add code, a font, a sample or a picture from somewhere else without looking at its licence | the whole is passed on under `GPL-3.0-or-later` ([README, Licence](../README.md#licence)), and what is in it must allow that | nothing. Name it in the package's `Third Party Notices.md` (the text is in `make_unity_package.py`) and ship its licence text |
+| name another licence in one place only | the SPDX lines, `firmware.json`, the two `package.json` files, `LICENSE` and the documents must say the same | `make_unity_package.py` checks `LICENSE` and `ADDITIONAL-PERMISSIONS.md`; `vibe-check` prints the manifest. For the rest: nothing |
 | rename or move a Unity file that has a `.meta` | scenes and assets name it by GUID | the showcase's `Verify`, the package script's GUID check |
 
 Smaller house rules of the SDK that the firmware keeps and `vibe-check` looks at: HOME shows the page's controls;
@@ -1005,8 +1016,10 @@ In C# and the scripts:
 - **The link with PERFORM open, or with another beat, or with the build as it is now.** The six link tests passed
   against the emulator on 24 Nov 2026 with the 1.7.0 build `177d05b3…`, in one run (`docs/UNITY.md`, section 6).
   The build as it is now (`f5235435…`) differs from that one in one text of the display, the LINK page's footer
-  (`CC 20-23` became `CC 20-25`), and the link was not run again with it: on the evening of 24 Nov 2026 loopMIDI
-  was started, but its two ports did not appear, so the emulator's page had no port to send on. The recorded
+  (`CC 20-23` became `CC 20-25`), and the link was not run again with it: on the evening of
+  24 Nov 2026 loopMIDI was started, but its two ports did not appear, so the emulator's page had no port to send on.
+  (Since then the manifest's `license` field changed too. It is in the zip and not in the `.wasm`: the hash is the
+  same, and nothing in the code changed.) The recorded
   session passed on 23 Nov 2026 with the build of that day (`4e59a51f…`, before the beat) and was not run again:
   the link video is that recording. PERFORM was not open in any of them, and the beat was a quarter. 1.7.0
   changed no message; its identity says 1.7.0.

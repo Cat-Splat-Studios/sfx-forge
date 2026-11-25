@@ -59,6 +59,8 @@ AUTHOR = {"name": "Cat Splat Studios", "url": "https://github.com/hisham-CSS"}
 # a file name cannot hold into "_": a colon here gave the folder "Showcase_ Brio - First Harmonic". Keep it plain.
 SAMPLE_NAME = "Showcase"
 SDK_URL = "https://github.com/Vibe-FM-SDK/vibe-fm-sdk"
+# The licence of everything that is Cat Splat Studios' own, as an SPDX id (LICENSE, ADDITIONAL-PERMISSIONS.md).
+LICENCE_ID = "GPL-3.0-or-later"
 
 SRC_PACKAGE = "unity/com.catsplat.sfxforge"
 SRC_SHOWCASE = "unity/Demo/Assets/Showcase"
@@ -69,9 +71,9 @@ SRC_OLD_SONG = "unity/Demo/Assets/SfxDemo/DemoSong.bytes"
 # fmt: off
 OWNED = [
     "package.json", "package.json.meta", "README.md", "README.md.meta", "CHANGELOG.md", "CHANGELOG.md.meta",
-    "LICENSE.md", "LICENSE.md.meta", "Third Party Notices.md", "Third Party Notices.md.meta", "Runtime",
-    "Runtime.meta", "Editor", "Editor.meta", "Samples~", "Documentation~", "Firmware~", ".gitignore",
-    ".gitattributes",
+    "LICENSE.md", "LICENSE.md.meta", "ADDITIONAL-PERMISSIONS.md", "ADDITIONAL-PERMISSIONS.md.meta",
+    "Third Party Notices.md", "Third Party Notices.md.meta", "Runtime", "Runtime.meta", "Editor", "Editor.meta",
+    "Samples~", "Documentation~", "Firmware~", ".gitignore", ".gitattributes",
 ]
 # fmt: on
 
@@ -295,7 +297,7 @@ def make_package_json(target):
             "audio", "synthesizer", "sound effects", "procedural audio", "adaptive music", "midi", "sysex", "vibe fm",
         ],
         "author": AUTHOR,
-        "license": "MIT",
+        "license": LICENCE_ID,
         # The built-in modules the code uses: AudioSource and AudioMixer, the telemetry sender's Rigidbody,
         # Rigidbody2D and Animator sources, UI Toolkit (UIElements) for the Inspectors and the editor window, and
         # IMGUI, which UI Toolkit itself needs. Two are for the sample only: Screen Capture (the build probe's
@@ -480,6 +482,30 @@ def make_sample(target):
 # ---------------------------------------------------------------- documentation
 
 
+# The licence paragraph of each manual: as it stands in the repository, and as the package has it (the package's
+# names for the licence file and for the front page's section).
+UNITY_LICENCE_NOTE = (
+    "**Licence.** The package is under the GNU General Public License, version 3 or any later version, with an\n"
+    "additional permission for the Unity engine: [LICENSE](../LICENSE),\n"
+    "[ADDITIONAL-PERMISSIONS.md](../ADDITIONAL-PERMISSIONS.md). A game that is not offered under the GPL needs another\n"
+    "licence from the copyright holder ([README, Licence](../README.md#licence)). This is a summary; the licence text\n"
+    "decides.\n",
+    "**Licence.** The package is under the GNU General Public License, version 3 or any later version, with an\n"
+    "additional permission for the Unity engine: [LICENSE.md](../LICENSE.md),\n"
+    "[ADDITIONAL-PERMISSIONS.md](../ADDITIONAL-PERMISSIONS.md). A game that is not offered under the GPL needs another\n"
+    "licence from the copyright holder ([README, License](../README.md#license)). This is a summary; the licence text\n"
+    "decides.\n",
+)
+MANUAL_LICENCE_NOTE = (
+    "**Licence.** SFX FORGE is free software under the GNU General Public License, version 3 or any later version:\n"
+    "[LICENSE](../LICENSE), with the additional permissions of [ADDITIONAL-PERMISSIONS.md](../ADDITIONAL-PERMISSIONS.md)\n"
+    "(one of them is for the hosts that load VIBE FM firmwares). See [README, Licence](../README.md#licence).\n",
+    "**Licence.** SFX FORGE is free software under the GNU General Public License, version 3 or any later version:\n"
+    "`LICENSE.md` at the top of the package, with the additional permissions of `ADDITIONAL-PERMISSIONS.md` beside it\n"
+    "(one of them is for the hosts that load VIBE FM firmwares). See the package's README, \"License\".\n",
+)
+
+
 def make_manuals(target):
     # The long strings below are each ONE line of a manual, exactly as it stands there: replace_once must find it.
     # They are left as long as the line is, so that a line of the manual can be searched for here.
@@ -521,6 +547,7 @@ def make_manuals(target):
         "| [`sfx-forge-unity-link.mp4`](video/sfx-forge-unity-link.mp4) | the device (in the emulator) and the game, linked: the song and a patch arrive in the running game ([section 6](#6-from-the-device-to-the-game)) |\n",
         where,
     )
+    text = replace_once(text, UNITY_LICENCE_NOTE[0], UNITY_LICENCE_NOTE[1], where)
     text = replace_once(
         text,
         "**The pictures** in this manual are built by `docs/unity_figures.py`.",
@@ -683,6 +710,7 @@ def make_manuals(target):
         "[the Unity manual](UNITY.md) explains it, and its sample, the showcase game, shows all of it in one level.",
         where,
     )
+    text = replace_once(text, MANUAL_LICENCE_NOTE[0], MANUAL_LICENCE_NOTE[1], where)
     if "](../" in text:
         fail(where + ": a link still leaves the documentation folder")
     write_text(os.path.join(docs, "MANUAL.md"), text)
@@ -798,6 +826,9 @@ def make_videos(target):
         "Five videos, made by scripts from the firmware and the game themselves: nobody held a controller or a camera.\n"
         "The sound in them is what SFX FORGE produced, on the device or in Unity; there is no voice-over, the captions\n"
         "say what happens. Nobody has listened to them: their levels were measured, not judged.\n\n"
+        "The two device videos and the two Unity videos end with the words \"Open source, GPL-3.0-or-later\":\n"
+        "SFX FORGE is under the GNU General Public License, version 3 or any later version\n"
+        "([LICENSE.md](../../LICENSE.md)).\n\n"
         "The device in the two device videos and in the link video is drawn by the VIBE FM SDK's emulator\n"
         "(see [Third Party Notices](../../Third%20Party%20Notices.md)).\n\n"
         + RECORDED_ELSEWHERE.format(
@@ -894,6 +925,10 @@ def make_firmware(target):
         "New in 1.5.0, on the sequencer pages: LOOP and SONG (F1: a pattern repeats, or the song plays in order), a\n"
         "pattern strip that shows which pattern plays, which is shown and which waits, REC that plays the pads as the\n"
         "kit and loops the pattern, ERASE while recording (F4), and UNDO (F2, one step, again for redo).\n\n"
+        "Licence: the firmware is under the GNU General Public License, version 3 or any later version\n"
+        "(" + LICENCE_ID + "), as its manifest says: [LICENSE.md](../LICENSE.md). An additional permission allows\n"
+        "combining it with the hosts of VIBE FM firmwares, which are not free software:\n"
+        "[ADDITIONAL-PERMISSIONS.md](../ADDITIONAL-PERMISSIONS.md).\n\n"
         "The `.wasm` is SFX FORGE's code compiled together with the VIBE FM SDK's runtime and its display fonts\n"
         "(Apache-2.0 and SIL OFL 1.1): see [Third Party Notices](../Third%20Party%20Notices.md) and the licence texts in\n"
         "[`Documentation~/licenses`](../Documentation~/licenses). It carries no debug information.\n",
@@ -980,6 +1015,14 @@ they arrive in Unity as assets, and the game synthesizes them while it runs. The
 
 The documentation and the videos are the main thing here. Start with the videos, then
 [the Unity manual](Documentation~/UNITY.md).
+
+**The licence, before you build on it.** SFX Forge is free software under the GNU General Public License, version 3
+or any later version ({licence_id}): [LICENSE.md](LICENSE.md). In short: you may use it at no cost in a project that
+is itself offered under the GPL, with its source. A game that is not offered under the GPL, a closed-source game for
+one, needs another licence from the copyright holder: ask Cat Splat Studios, through the issue tracker of the
+repository you got this package from. An additional permission covers the Unity engine itself, which is not free
+software ([ADDITIONAL-PERMISSIONS.md](ADDITIONAL-PERMISSIONS.md)); it does not cover your own code. This is a
+summary; the licence text decides. More under [License](#license).
 
 ## Watch
 
@@ -1389,7 +1432,22 @@ Not tested:
 
 ## License
 
-MIT, see [LICENSE.md](LICENSE.md). Two binaries in the package hold other people's code in compiled form: the
+Copyright (c) 2026 Cat Splat Studios. The package (its code, the native library, the firmware, the showcase, the
+manuals and their figures) is under the GNU General Public License, version 3 or (at your option) any later version
+({licence_id}): [LICENSE.md](LICENSE.md) is its text. It comes without warranty (sections 15 and 16).
+
+- **What that means for a Unity project**, as a summary; the licence text decides. The package costs nothing in a
+  project that is itself offered under the GPL: whoever gets the game can get its source under the same licence. A
+  game that is not offered under the GPL needs another licence from the copyright holder.
+- **The Unity engine.** The engine is not free software, and a game links with it. An additional permission under
+  section 7 of the licence allows conveying SFX Forge combined with the Unity engine and its runtime and editor
+  libraries. It is for the engine only, not for your own code or for other libraries:
+  [ADDITIONAL-PERMISSIONS.md](ADDITIONAL-PERMISSIONS.md). A second permission there does the same for the hosts that
+  load VIBE FM firmwares.
+- **Other terms.** The copyright holder can offer SFX Forge under other terms. Ask Cat Splat Studios, through the
+  issue tracker of the repository you got this package from.
+
+Two binaries in the package hold other people's code in compiled form: the
 firmware holds the VIBE FM SDK's runtime and display fonts (Apache-2.0, SIL OFL 1.1), and `sfxforge.dll` holds
 start-up code of the mingw-w64 runtime. The device shown in the videos is drawn by the SDK's emulator. All of it is
 in [Third Party Notices](Third%20Party%20Notices.md), with the licence texts in
@@ -1430,6 +1488,7 @@ affiliated with it.
         version=VERSION,
         unity_tested=UNITY_TESTED,
         package_id=PACKAGE_ID,
+        licence_id=LICENCE_ID,
         sample=SAMPLE_NAME,
         unity_toc=unity_toc,
         device_toc=device_toc,
@@ -1447,6 +1506,10 @@ def make_companions(target, counts):
 
 The first version of the standalone package. It is generated from the SFX FORGE repository (the firmware, the engine
 and the Unity code live there) by `tools/make_unity_package.py`; nothing in it is edited by hand.
+
+Licence: the GNU General Public License, version 3 or any later version ({licence_id}), with two additional
+permissions under its section 7 (the Unity engine; the hosts of VIBE FM firmwares): `LICENSE.md`,
+`ADDITIONAL-PERMISSIONS.md`. No version of this package was published under another licence.
 
 ### In it
 
@@ -1574,20 +1637,41 @@ version are new; namespaces, assembly names and asset GUIDs are unchanged.
             firmware=FIRMWARE_VERSION,
             old_id=OLD_PACKAGE_ID,
             unity_tested=UNITY_TESTED,
+            licence_id=LICENCE_ID,
         ),
     )
 
     licence = read_text(need(src("LICENSE"), "the repository's LICENSE"))
-    if "MIT License" not in licence or "Cat Splat Studios" not in licence:
-        fail("LICENSE is not the MIT licence of Cat Splat Studios any more")
+    if "GNU GENERAL PUBLIC LICENSE" not in licence or "Version 3, 29 June 2007" not in licence:
+        fail("LICENSE is not the text of the GNU General Public License, version 3, any more")
+    if "GNU AFFERO GENERAL PUBLIC LICENSE\n" in licence or "GNU LESSER GENERAL PUBLIC LICENSE\n" in licence:
+        fail("LICENSE is the Affero or the Lesser licence, not the GNU General Public License")
     write_text(os.path.join(target, "LICENSE.md"), licence)
+
+    # the two additional permissions (GPL version 3, section 7), the same text: only its link to the licence is the
+    # package's name for that file
+    permissions = read_text(need(src("ADDITIONAL-PERMISSIONS.md"), "the repository's ADDITIONAL-PERMISSIONS.md"))
+    for must_say in (
+        "Cat Splat Studios",
+        "section 7",
+        "version 3 or (at your option) any later version",
+        "the Unity engine",
+    ):
+        if must_say not in permissions:
+            fail("ADDITIONAL-PERMISSIONS.md does not say %r any more" % must_say)
+    permissions = replace_once(
+        permissions, "[LICENSE](LICENSE)", "[LICENSE.md](LICENSE.md)", "ADDITIONAL-PERMISSIONS.md"
+    )
+    write_text(os.path.join(target, "ADDITIONAL-PERMISSIONS.md"), permissions)
 
     write_text(
         os.path.join(target, "Third Party Notices.md"),
         """# Third Party Notices
 
-The package's code, the showcase, the manuals and their figures are Cat Splat Studios' own work under the MIT
-licence ([LICENSE.md](LICENSE.md)). Everything you hear is synthesized by that code: there are no samples or
+The package's code, the showcase, the manuals and their figures are Cat Splat Studios' own work under the GNU
+General Public License, version 3 or any later version ({licence_id}: [LICENSE.md](LICENSE.md), with the additional
+permissions of [ADDITIONAL-PERMISSIONS.md](ADDITIONAL-PERMISSIONS.md)). The parts below are other people's and stay
+under their own licences. Everything you hear is synthesized by that code: there are no samples or
 recordings. Three things come from, or depend on, someone else's work: the VIBE FM SDK (in the firmware and in the
 videos), the fonts of the device's display (in the firmware and in the videos), and the C runtime that the compiler
 links into the native library. Their licence and notice texts are in
@@ -1646,11 +1730,12 @@ No source file of the SDK is in this package, and the Unity code does not use it
 - loopMIDI (Tobias Erichsen) is named as an example of a virtual MIDI cable. It is not part of the package.
 - The showcase is an original game. Its character, level, art and song are Cat Splat Studios' own.
 """.format(
-            sdk=SDK_URL
+            sdk=SDK_URL,
+            licence_id=LICENCE_ID,
         ),
     )
 
-    for name in ("README.md", "CHANGELOG.md", "LICENSE.md", "Third Party Notices.md"):
+    for name in ("README.md", "CHANGELOG.md", "LICENSE.md", "ADDITIONAL-PERMISSIONS.md", "Third Party Notices.md"):
         write_meta(target, name, "TextScriptImporter")
 
     write_text(
