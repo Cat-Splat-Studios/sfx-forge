@@ -33,8 +33,7 @@ instruments in that style, not recordings of an orchestra. The wavetables are co
 
 ![SFX FORGE](sfx-forge/icon.png)
 
-Built with the VIBE FM SDK. Status: v1.0, firmware 1.7.2 (1.7.1 is the last one released, on 25 Nov 2026; 1.7.2 is
-not released). The synth, the device UI and the device side of the link are
+Built with the VIBE FM SDK. Status: v1.0, firmware 1.7.2 (released on 25 Nov 2026, the GitHub release `v1.7.2`). The synth, the device UI and the device side of the link are
 tested in the SDK's tools; the Unity package is tested in Unity 6.3 with the demo project's editor and Play mode tests.
 Not tried yet: the hardware, the plugin and a mixer controller. The link was run against the SDK's emulator over a
 virtual MIDI cable, last

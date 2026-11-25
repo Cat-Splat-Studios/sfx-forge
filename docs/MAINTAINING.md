@@ -138,7 +138,7 @@ Three rows say 1.7.0: the version was not released between them, so its number s
 code. 1.7.0 was then released (25 Nov 2026, the GitHub release `v1.7.0`), so the next change got a number of its
 own: 1.7.1, the mixer and one fix of the tour that came with it ([section 4](#4-the-two-flows)). 1.7.1 was
 released the same day, so the hardening that the stress tests asked for is 1.7.2
-([Stress tests](#stress-tests)). 1.7.2 is not released. Each hash of 1.7.0 came out the same with the SDK in
+([Stress tests](#stress-tests)). 1.7.2 was released that day too (the GitHub release `v1.7.2`). Each hash of 1.7.0 came out the same with the SDK in
 `.tools` and with SDK 28. So did that of 1.7.1 (25 Nov 2026: the SDK in `.tools`, SDK 27, and the one in
 `out/sdk-latest`, SDK 28; 25 lines `PASSED` and 266 `ok` lines with each; the file is 283439 bytes) and that of
 1.7.2 (25 Nov 2026, the same two SDKs; 26 lines `PASSED` and 274 `ok` lines with each; the file is 285292 bytes).

@@ -37,7 +37,7 @@ flowchart LR
 ## The numbers, as last run
 
 `sh build.sh` was run on 25 Nov 2026 with firmware 1.7.2, the firmware as it is now: 1.7.1 made hard against a host
-that sends what it should not ([Hard and wrong use](#hard-and-wrong-use)). 1.7.2 is not released; 1.7.1 is. It was
+that sends what it should not ([Hard and wrong use](#hard-and-wrong-use)). 1.7.2 is released (25 Nov 2026). It was
 run with the SDK in `.tools` (SDK 27) and with a newer one (SDK 28), with the same result; the built `.wasm` was the
 same file both times (285292 bytes). `tests/dotnet` was run the same day with 1.7.2: its identity checks expect the
 identity of 1.7.2. The other three rows are as the reference documents record their last run, made with firmware
