@@ -1,0 +1,8 @@
+{
+  "what": "Sound effects, instruments and adaptive music for games: five synth engines with wavetables and effects, 16 sounds on the pads, a pattern sequencer with loop recording, automation and intensity layers, and a live MIDI link to a game engine such as Unity.",
+  "author": "Cat Splat Studios",
+  "kinds": ["groove"],
+  "cheat": "https://github.com/Cat-Splat-Studios/sfx-forge/wiki/Device-Cheat-Sheet",
+  "image": "docs/card.png",
+  "color": "#36C5FF"
+}

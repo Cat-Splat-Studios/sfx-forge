@@ -32,6 +32,7 @@ It describes the repository at firmware 1.7.2, song format 6, patch format 2.
 | `unity/Demo/` | A Unity 6.3 project that uses the package. `Assets/SfxDemo`: the first demo. `Assets/Showcase`: the game *Brio: First Harmonic*, with its own README |
 | `tests/` | `*.json` + `check-*.mjs`: scenes of key presses and their checks, run by `build.sh`. `host.mjs`, `song-read.mjs`: what the checks share. `stress-song-way.c`: two threads over `song_way.h`. `dotnet/`: the package's `Runtime/Core` tested without Unity. `unity-inspectors/`: a Unity project that tests the editor UI. `data/`: a format-5 song kept as a fixture |
 | `docs/` | The manuals, their pictures (`img/`), the scripts that draw the pictures (`shots.mjs`, `figures.py`, `unity_figures.py`) and make the videos (`video/`) |
+| `fmhub.json` | The firmware's card on The Firmware Hub: its text, its kind, its colour and its picture, `docs/card.png` (480 x 480, the pads of `sfx-forge/icon.png`). The hub reads it from the default branch |
 | `tools/` | `strip_wasm_debug.py` (called by `build.sh`) and `make_unity_package.py` (writes the package repository) |
 | `videos/` | The five finished videos, committed. Its README says how each is made |
 | `build/` | The built firmware: `sfx-forge.wasm`, `.json`, `.zip`. Git-ignored |
