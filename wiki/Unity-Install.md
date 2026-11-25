@@ -28,9 +28,9 @@ You add a folder from your disk. Which one depends on what you have:
 | the package repository [`sfx-forge-unity`](https://github.com/Cat-Splat-Studios/sfx-forge-unity), cloned or downloaded | its top folder, the one with `package.json` in it | "SFX Forge" |
 | only this source repository | [`unity/com.catsplat.sfxforge`](../unity/com.catsplat.sfxforge/package.json) | "SFX Forge Bridge" |
 
-At the time of writing the package repository is not published, so this page has no URL for it. If nobody gave
-it to you, clone this source repository and use the second row: the code, the namespace `CatSplat.SfxForge` and
-the native library are the same, and nothing has to be built first. What differs is in
+The package repository is the usual way: clone it, or download it as a zip and unpack it. If you already have
+this source repository, the second row works too: the code, the namespace `CatSplat.SfxForge` and the native
+library are the same, and nothing has to be built first. What differs is in
 [the table further down](#the-two-forms-of-the-package).
 
 ## 2. Add it to your project
