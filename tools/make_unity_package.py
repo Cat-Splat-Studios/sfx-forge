@@ -54,7 +54,7 @@ DISPLAY_NAME = "SFX Forge"
 UNITY = "6000.3"
 UNITY_TESTED = "6000.3.8f1"
 FIRMWARE_VERSION = "1.7.0"
-AUTHOR = {"name": "Cat Splat Studios", "url": "https://github.com/hisham-CSS"}
+AUTHOR = {"name": "Cat Splat Studios", "url": "https://github.com/Cat-Splat-Studios"}
 # Unity names the imported folder after this (Assets/Samples/<package name>/<version>/<this>) and turns characters
 # a file name cannot hold into "_": a colon here gave the folder "Showcase_ Brio - First Harmonic". Keep it plain.
 SAMPLE_NAME = "Showcase"
@@ -1019,8 +1019,8 @@ The documentation and the videos are the main thing here. Start with the videos,
 **The licence, before you build on it.** SFX Forge is free software under the GNU General Public License, version 3
 or any later version ({licence_id}): [LICENSE.md](LICENSE.md). In short: you may use it at no cost in a project that
 is itself offered under the GPL, with its source. A game that is not offered under the GPL, a closed-source game for
-one, needs another licence from the copyright holder: ask Cat Splat Studios, through the issue tracker of the
-repository you got this package from. An additional permission covers the Unity engine itself, which is not free
+one, needs another licence from the copyright holder: ask Cat Splat Studios, through
+[the issue tracker](https://github.com/Cat-Splat-Studios/sfx-forge/issues). An additional permission covers the Unity engine itself, which is not free
 software ([ADDITIONAL-PERMISSIONS.md](ADDITIONAL-PERMISSIONS.md)); it does not cover your own code. This is a
 summary; the licence text decides. More under [License](#license).
 
@@ -1444,8 +1444,8 @@ manuals and their figures) is under the GNU General Public License, version 3 or
   libraries. It is for the engine only, not for your own code or for other libraries:
   [ADDITIONAL-PERMISSIONS.md](ADDITIONAL-PERMISSIONS.md). A second permission there does the same for the hosts that
   load VIBE FM firmwares.
-- **Other terms.** The copyright holder can offer SFX Forge under other terms. Ask Cat Splat Studios, through the
-  issue tracker of the repository you got this package from.
+- **Other terms.** The copyright holder can offer SFX Forge under other terms. Ask Cat Splat Studios, through
+  [the issue tracker](https://github.com/Cat-Splat-Studios/sfx-forge/issues).
 
 Two binaries in the package hold other people's code in compiled form: the
 firmware holds the VIBE FM SDK's runtime and display fonts (Apache-2.0, SIL OFL 1.1), and `sfxforge.dll` holds

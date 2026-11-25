@@ -140,7 +140,8 @@ That depends on the game's own licence. This is a summary; the licence text deci
   the Unity engine is what lets such a game be built with Unity at all; it covers the engine, not your own code or
   other libraries.
 - **A game that is not offered under the GPL**, a closed-source game for one: not under this licence. It needs
-  another licence from the copyright holder. Ask Cat Splat Studios through the repository's issue tracker.
+  another licence from the copyright holder. Ask Cat Splat Studios through
+  [the repository's issue tracker](https://github.com/Cat-Splat-Studios/sfx-forge/issues).
 
 A game built with the package ships `sfxforge.dll`, and the compiler links start-up code of the mingw-w64 C runtime
 into that file. The generated package names this, and everything else in it that comes from someone else, in its

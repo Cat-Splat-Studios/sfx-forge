@@ -25,7 +25,7 @@ You add a folder from your disk. Which one depends on what you have:
 
 | You have | The folder to add | The Package Manager then lists |
 |---|---|---|
-| the package repository `unity-sfx-forge`, cloned or downloaded | its top folder, the one with `package.json` in it | "SFX Forge" |
+| the package repository [`sfx-forge-unity`](https://github.com/Cat-Splat-Studios/sfx-forge-unity), cloned or downloaded | its top folder, the one with `package.json` in it | "SFX Forge" |
 | only this source repository | [`unity/com.catsplat.sfxforge`](../unity/com.catsplat.sfxforge/package.json) | "SFX Forge Bridge" |
 
 At the time of writing the package repository is not published, so this page has no URL for it. If nobody gave
@@ -64,7 +64,7 @@ There is one package in two forms. Read this only if the names confuse you, or i
 
 | | The package repository | This source repository |
 |---|---|---|
-| Where | the generated repository `unity-sfx-forge` | the folder `unity/com.catsplat.sfxforge` |
+| Where | the generated repository `sfx-forge-unity` (written to `../unity-sfx-forge`) | the folder `unity/com.catsplat.sfxforge` |
 | Package id | `com.catsplatstudios.sfxforge` | `com.catsplat.sfxforge` |
 | Name in the Package Manager | "SFX Forge" | "SFX Forge Bridge" |
 | Unity version in its manifest | `6000.3` | `2022.3`; it is developed and tested with 6000.3.8f1 only |

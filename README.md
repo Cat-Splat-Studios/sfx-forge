@@ -21,6 +21,9 @@ step-by-step paths for the device, for Unity and for the code. Its pages are in 
 GitHub wiki by `tools/publish_wiki.py`; `tools/check_wiki.py` checks every link, picture and diagram
 ([wiki/README.md](wiki/README.md)).
 
+**Online:** this repository is <https://github.com/Cat-Splat-Studios/sfx-forge>, with [the wiki](https://github.com/Cat-Splat-Studios/sfx-forge/wiki) beside it. The
+Unity package alone, ready for the Package Manager, is <https://github.com/Cat-Splat-Studios/sfx-forge-unity>.
+
 **[The videos](videos/README.md)** are in `videos/`: five of them, the current ones, made by scripts from the firmware
 and the game themselves. Start with [the tour of the device](videos/sfx-forge-tour.mp4).
 
@@ -608,7 +611,8 @@ Copyright (c) 2026 Cat Splat Studios.
 with its source, can use SFX FORGE at no cost. A game that is not offered under the GPL needs another licence from
 the copyright holder.
 
-**Other terms.** The copyright holder can grant them. Ask Cat Splat Studios through the repository's issue tracker.
+**Other terms.** The copyright holder can grant them. Ask Cat Splat Studios through
+[the repository's issue tracker](https://github.com/Cat-Splat-Studios/sfx-forge/issues).
 
 **Contributions.** A contribution is accepted under the same licence. So that the copyright holder can go on offering
 other terms, contributors are asked to agree to that in the pull request: [CONTRIBUTING.md](CONTRIBUTING.md) has the
