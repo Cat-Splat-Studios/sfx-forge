@@ -7,7 +7,7 @@
 #
 # How it reads: 1. where things are, 2. the build, 3. the checks - each a scene (tests/<name>.json) that the SDK's
 # wasmtest plays into out/<name>, and a check (tests/check-<name>.mjs) that judges what came out. A check says at its
-# top what it proves. The run ends at the first check that fails (set -e); when all pass, 25 lines say PASSED.
+# top what it proves. The run ends at the first check that fails (set -e); when all pass, 26 lines say PASSED.
 set -e
 
 # ---- 1. where things are ------------------------------------------------------------------------------------------
@@ -134,6 +134,11 @@ node "$ROOT/tests/check-meter.mjs" "$WASM"
 # the mixer as the host's parameters (1.7.1, the SDK's mixer convention): level, pan, mute and solo of the 16 sounds
 # and the selected sound, from the host and to it
 node "$ROOT/tests/check-mixer.mjs" "$WASM"
+
+# hard and wrong use (1.7.2): a seeded fuzzer as the host - every event, the parameters, the transport, SysEx, the
+# store, restarts, blocks of 1 to 256 frames at six sample rates - with values that are no numbers too. A short run
+# here; tests/stress-fuzz.mjs says at its top how to run it long, and tests/stress-flows.sh is its two-thread twin
+node "$ROOT/tests/stress-fuzz.mjs" "$WASM" --seeds 8 --minutes 1 --jobs 4
 
 # a whole pattern or song rewritten while it plays (a grid change, COPY, UNDO, CLR PAT, a song over SysEx) reaches the
 # player whole, in time, with the playhead where it was; edits with no block between them. Then the same hand-over

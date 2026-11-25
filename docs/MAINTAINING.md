@@ -4,7 +4,7 @@
 [the Unity manual](UNITY.md) what the package does. This page says where each thing is made, how to build and test
 it, and what must change together.
 
-It describes the repository at firmware 1.7.1, song format 6, patch format 2.
+It describes the repository at firmware 1.7.2, song format 6, patch format 2.
 
 | I want to … | Go to |
 |---|---|
@@ -110,19 +110,20 @@ copies out again. Then it strips the debug sections from the `.wasm`: they hold 
 
 When it is right:
 
-- It ends with exit code 0, and 25 lines of the output say `PASSED`. The first is `vibe-check`'s, the last is
+- It ends with exit code 0, and 26 lines of the output say `PASSED`. The first is `vibe-check`'s, the last is
   `store PASSED`. Count them: `sh build.sh | grep -c PASSED`. In order: `vibe-check`'s line, then `tour`, `daw`,
   `guide`, `reset`, `metronome`, `loop`, `modes`, `take`, `edit`, `undo`, `retake`, `grid`, `regrid`, `take64`,
-  `grid keys`, `perform`, `meter`, `mixer`, `atomic`, `song way stress`, `song export`, `identity`, `wire`, `store`.
-  (1.7.0 had 24: `mixer` came with 1.7.1.)
-- Every check prints `  ok    …` lines: 266 in a whole run of 1.7.1 (`sh build.sh | grep -c "  ok  "`); `meter`
-  prints 21 of them and `mixer` 27. A whole run of 1.7.0 had 239. A failure prints `  FAIL  …` and the run stops
-  there.
+  `grid keys`, `perform`, `meter`, `mixer`, `stress-fuzz`, `atomic`, `song way stress`, `song export`, `identity`,
+  `wire`, `store`. That is `vibe-check`, 24 checks, and the short run of the fuzzer
+  ([Stress tests](#stress-tests)). (1.7.0 had 24 lines: `mixer` came with 1.7.1, `stress-fuzz` with 1.7.2.)
+- Every check prints `  ok    …` lines: 274 in a whole run of 1.7.2 (`sh build.sh | grep -c "  ok  "`); `meter`
+  prints 21 of them, `mixer` 27 and `stress-fuzz` 8, one a seed. A whole run of 1.7.1 had 266, one of 1.7.0 had
+  239. A failure prints `  FAIL  …` and the run stops there.
 - `sha256sum build/sfx-forge.wasm` gives the same hash before and after a change that only moves text. This is how
   the readability pass was proved.
 
 **A hash belongs to one state of the source.** It says nothing about a version: any change to the code gives
-another. Compare a hash only with one you took yourself, just before your change. The five that were written down:
+another. Compare a hash only with one you took yourself, just before your change. The six that were written down:
 
 | Firmware | State of the source | sha256 of `build/sfx-forge.wasm` |
 |---|---|---|
@@ -130,15 +131,18 @@ another. Compare a hash only with one you took yourself, just before your change
 | 1.7.0 | with the PERFORM page | `4e59a51fc0257c96a9f43172952d0bb61bc03e3f9f15bf95c988c239c81f27e7` |
 | 1.7.0 | with the PERFORM page and the beat (`meter.bin`, `tests/check-meter.mjs`) | `177d05b39109508ff69db11f3acfeb826e407bc0ec2d0f176a83fe3ddad42da3` |
 | 1.7.0 | the same, with the LINK page's footer corrected (`the knobs send CC 20-25 to it`): one text of the display | `f52354354399d9a6a4d886c1e1b9c22f11ac85d94faa4276a98a7bd0fb78df6e` |
-| 1.7.1 | the mixer as the host's parameters (`tests/check-mixer.mjs`) | `f6469a3600a967374fcbc832434ae1c84a184f452c6ab7ac12141cb5f90f4df8` |
+| 1.7.1 | the mixer as the host's parameters (`tests/check-mixer.mjs`): 1.7.1 as it was released | `f6469a3600a967374fcbc832434ae1c84a184f452c6ab7ac12141cb5f90f4df8` |
+| 1.7.2 | what the host hands over is looked at first, and the output is clamped (`tests/stress-fuzz.mjs`) | `e06896756c24c573e3e261c24bad32dd2f19191c2b14df57fb64486bc5f45b8c` |
 
 Three rows say 1.7.0: the version was not released between them, so its number stayed, and the hash changed with the
 code. 1.7.0 was then released (25 Nov 2026, the GitHub release `v1.7.0`), so the next change got a number of its
-own: 1.7.1, the mixer and one fix of the tour that came with it ([section 4](#4-the-two-flows)). 1.7.1 is not
-released. Each hash of 1.7.0 came out the same with the SDK in
+own: 1.7.1, the mixer and one fix of the tour that came with it ([section 4](#4-the-two-flows)). 1.7.1 was
+released the same day, so the hardening that the stress tests asked for is 1.7.2
+([Stress tests](#stress-tests)). 1.7.2 is not released. Each hash of 1.7.0 came out the same with the SDK in
 `.tools` and with SDK 28. So did that of 1.7.1 (25 Nov 2026: the SDK in `.tools`, SDK 27, and the one in
-`out/sdk-latest`, SDK 28; 25 lines `PASSED` and 266 `ok` lines with each; the file is 283439 bytes). Another SDK,
-or another Zig, may give another hash for the same source.
+`out/sdk-latest`, SDK 28; 25 lines `PASSED` and 266 `ok` lines with each; the file is 283439 bytes) and that of
+1.7.2 (25 Nov 2026, the same two SDKs; 26 lines `PASSED` and 274 `ok` lines with each; the file is 285292 bytes).
+Another SDK, or another Zig, may give another hash for the same source.
 
 The manifest is not in the `.wasm`. When the `license` of `sfx-forge/firmware.json` became `GPL-3.0-or-later`
 (24 Nov 2026), the hash stayed `f5235435…`, with the SDK in `.tools` and with the one in `out/sdk-latest`, and
@@ -148,6 +152,7 @@ Each check is a scene `tests/<name>.json` played by the SDK's `wasmtest` into `o
 `tests/check-<name>.mjs`. A check says at its top what it proves and how to run it alone. Eight checks have no scene:
 they load the `.wasm` themselves through `tests/host.mjs` (`check-identity.mjs`, `check-grid-keys.mjs`,
 `check-perform.mjs`, `check-meter.mjs`, `check-mixer.mjs`, `check-atomic.mjs`, `check-wire.mjs`, `check-store.mjs`).
+The fuzzer, `tests/stress-fuzz.mjs`, has no scene either and is a host of its own.
 The README's table "Build" lists what each one checks.
 
 `tests/host.mjs` also plays the host's side of the parameters, with the SDK's own functions in the `.wasm`:
@@ -175,8 +180,8 @@ dotnet run -c Release --project tests/dotnet -- .      # after sh build.sh. Abou
 It compiles `Runtime/Core/*.cs` with the tests and loads the committed `sfxforge.dll`. It reads `out/midi.json` and
 `out/audio.wav`, which `sh build.sh` wrote, so run that first. When it is right: 205 lines `  ok    …`, and the last
 line is `PASSED` (a failure: `FAILED (n)`, exit code 1). `Program.cs` says which file holds which section. It was
-run with firmware 1.7.1 on 25 Nov 2026 and passed, with 205 `ok` lines; `IdentityTests.cs` expects the identity of
-1.7.1.
+run with firmware 1.7.2 on 25 Nov 2026 and passed, with 205 `ok` lines; `IdentityTests.cs` expects the identity of
+1.7.2.
 
 ### The two-thread test alone
 
@@ -184,8 +189,54 @@ run with firmware 1.7.1 on 25 Nov 2026 and passed, with 205 `ok` lines; `Identit
 sh tests/stress-song-way.sh        # about 12 seconds; build.sh runs it too
 ```
 
-Last line: `song way stress PASSED`. Run it after any change to `sfx-forge/song_way.h`: no other test runs the two
-flows in two threads.
+Last line: `song way stress PASSED`. Run it after any change to `sfx-forge/song_way.h`: it is the one test of that
+hand-over alone on two threads. `tests/stress-flows.sh` (below) runs the whole firmware on two.
+
+### Stress tests
+
+Three tests of hard and wrong use, new with 1.7.2. Each says at its top what it shows and what it cannot see.
+
+```sh
+node tests/stress-fuzz.mjs build/sfx-forge.wasm --seeds 40 --jobs 8    # after sh build.sh: seeds 1..40, 2 device-minutes each
+sh tests/stress-flows.sh                                               # five seeds of 20 seconds. Not part of build.sh
+dotnet run -c Release --project tests/midi-torture -- --list           # the MIDI ports, and no more
+dotnet run -c Release --project tests/midi-torture -- --port "name" [--minutes 5] [--seed N] [--level 1..3]
+```
+
+| Test | What it is | Sees | Cannot see |
+|---|---|---|---|
+| `tests/stress-fuzz.mjs` | a seeded fuzzer as the host of the built `.wasm`, in one flow: every event, the parameters, the transport, SysEx, the store, restarts, blocks of 1 to 256 frames at six sample rates. `--level 0` is a correct host, `1` adds values out of range and a store that lies, `2` (the default) adds NaN and the infinities. The same seed gives the same run. `sh build.sh` runs it short: 8 seeds of 1 device-minute, level 2 | a trap, a sample that is not written, is no number or is over full scale, a memory that grew, a seed that stands still (a watchdog) | two flows; an index that stays inside the firmware's own memory; whether it sounds right; the plugin |
+| `tests/stress-flows.sh`, `stress-flows.c` | the whole firmware built for this computer with the SDK's own runtime and the undefined-behaviour sanitizer: the audio in one real thread, the controls in another. The word `hostile` adds parameters that are no numbers, `wild` adds such values in events, `one` runs both flows in one thread. Last line: `flows stress PASSED` | a sanitizer's hit, a crash, a hang, a sample that is no number or beyond -1 … 1 | a write past a buffer, and a race that does no harm that shows: the run has no address and no thread sanitizer. The `.wasm`. A NaN parameter as the `.wasm` treats it. Run on Windows only, in Git Bash |
+| `tests/midi-torture/` | a .NET tool that sends heavy and hostile MIDI to a MIDI port, for the real plugin while it plays SFX FORGE. Five phases: notes, controllers, valid SysEx, hostile SysEx, all at once. Last line: `midi-torture PASSED` | with `--in`, whether the plugin still answers the identity request. Without it, only that the port took every message | a crash, a NaN, wrong sound: you watch and listen. What the cable dropped |
+
+**What they found, fixed in 1.7.2.** A host's tempo or song position that was an infinity while the song played
+made the player read past the song: a trap. A parameter set to NaN made the sound NaN until a restart. A velocity
+that was an infinity gave NaN in the sound. And with a correct host too, single samples of a loud mix were one float step
+over full scale (1.0000001): the limiter's `tanh` rounds a hair over 1. [Section 4](#4-the-two-flows) has the rule
+that came of it.
+
+**What was run** (25 Nov 2026). The fuzzer, on the build before the version number was set (the same code): 40
+seeds of 2 device-minutes at each of the levels 0, 1 and 2, and all 120 passed (level 2: 80.7 device-minutes, 2.7
+million blocks, 1.9 million events, 537 restarts); 8 seeds of 30 device-minutes at level 2, all passed. Before the
+fixes level 0 failed 5 of 40 seeds and level 1 all 40, both by the overshoot only, and level 2 all 40 (NaN, 6
+traps, hangs). `stress-flows` on the same code: seeds 1 – 5 of 20 seconds passed; seed 7 for 120 seconds passed
+(about 760 thousand events, 130 thousand draws); seeds 1 – 5 of 20 seconds with `hostile wild` passed. It had found
+nothing in its default mode before the fixes either. With the final 1.7.2 build the short run in `sh build.sh`
+passed. **`midi-torture` was built and asked for `--list`, no more: it has never sent a byte to a port, and the
+plugin was never under it.** It is the owner's tool to run.
+
+**Two known matters, not fixed.**
+
+- **A loop in the SDK, not in the firmware.** With SHIFT held, DATA turned by more than about 16 million detents,
+  or by NaN, never returns: a loop in the SDK's own runtime (`vibe_sdk.c`, `sk_take`:
+  `while (sk_acc >= 1) sk_acc -= 1`) runs before the firmware sees the event. No real control sends such a turn.
+  `stress-fuzz` and `stress-flows` cut that one input to a million; `stress-fuzz.mjs --sdk-loop` sends it as it
+  is. It is worth reporting to the SDK's author.
+- **A song's pieces do not say which song they belong to.** If one stray piece of another song with the same count
+  of pieces arrives and a whole song follows within 2 seconds, the device can take a song made of both. It was
+  found in the MIDI torture tool's stream and reproduced on the `.wasm`; nothing was sent to a port. It needs a
+  broken or interleaved transfer. It is not changed, because the protocol allows the pieces in any order:
+  `tests/check-identity.mjs` sends them in reverse.
 
 ### Unity
 
@@ -449,8 +500,8 @@ two real threads.
    together.
 4. **Single values, controls → audio.** Two kinds. The host's parameters: the controls call `vibe_param_set`
    (the output volume, the intensity, the telemetry a game sends) and `vibe_on_audio` reads them with
-   `vibe_param_get` in its parts 2 and 6. And three values the controls write and the audio only reads: `metro`
-   (the metronome is on), `rec_on` (the audio's copy of `rec`) and `beat_len` (the beat in sixteenths, from
+   `param_in` in its parts 2 and 6 (`vibe_param_get`, looked at first: below). And three values the controls
+   write and the audio only reads: `metro` (the metronome is on), `rec_on` (the audio's copy of `rec`) and `beat_len` (the beat in sixteenths, from
    firmware 1.7.0), `volatile` in `fw_state.h`. The audio reads `beat_len` through `beat()`, once for a click, and
    takes a quarter for any value that is none of the four.
 
@@ -527,6 +578,20 @@ and 127 are exactly -1, 0 and +1.
 
 No undo step is made for a value from the host. The MIX page's own faders and mutes make none either.
 
+**A value from the host is looked at before it is used** (firmware 1.7.2). A host may hand over a value that is no
+number (NaN) or an infinity. In the sound it stays for good; as a song position it reads past the song. The SDK's
+clamp of a parameter lets NaN through, and the build's fast maths may drop a test such as `v != v`, so the helpers
+in `fw_audio.h` look at the float's bits:
+
+| Helper | What it gives | Where it is used |
+|---|---|---|
+| `is_number(v)`, `is_number_d(v)` | whether a float, or a double, is neither NaN nor an infinity | the transport in `vibe_on_audio`: the host's tempo and position are followed only if both are numbers, the tempo above 0 and at most 2000, the position within a thousand million beats either way. Else the player's own clock runs. And a SysEx event's length (`fw_events.h`): it must be 2 … 4096, the SDK's buffer |
+| `number_in(v, lo, hi, else_)` | `v` kept within `lo` … `hi`, or `else_` if it is no number | `send()`: a velocity is 0 … 1. The top of `on_event` (`fw_events.h`, the copy `tamed`): an event's value that is no number is 0 and none is beyond a million; an encoder's turn is at most 100 detents. `encoder()` in `fw_pages.h` does the same to a turn. Not for `VIBE_EV_PARAM` and `VIBE_EV_SYSEX`: those are looked at where they are taken |
+| `param_in(i)` | host parameter `i` within its range, or its start value (`PARAMS[i].def`) if it is no number | every read of a host parameter, in the audio and in the controls. Use it and not `vibe_param_get` |
+
+`mix_from_host` (above) has looked at the bits of the mixer's values since 1.7.1. And at the end every output
+sample is clamped to -1 … +1, in part 6 of `vibe_on_audio`, with the click or without it.
+
 What follows from the rule when you write code:
 
 - In the control flow, never touch `P`. To change what plays, `send()`. To change the song, change `SONG`; it
@@ -539,8 +604,8 @@ What follows from the rule when you write code:
   is chosen** (`patches` is a macro for `kits[kit]`). To reach the other kit, set `kit` first and put it back, as
   `factory_reset` (`fw_events.h`), `sysex_in` (`fw_link.h`) and `factory` (`fw_factory.h`) do.
 
-The tests' hosts call both flows from one thread. Only `tests/stress-song-way.c` sets two real threads on
-`song_way.h`.
+The tests' hosts call both flows from one thread. Two do not: `tests/stress-song-way.c` sets two real threads on
+`song_way.h`, and `tests/stress-flows.c` on the whole firmware, built natively ([Stress tests](#stress-tests)).
 
 In Unity the same split exists: `OnAudioFilterRead` in `SfxPlayer.cs` and `SfxMusicPlayer.cs` runs on Unity's audio
 thread and calls `SfxNative`; the fields the game sets are read there.
@@ -701,7 +766,7 @@ finds it.
 
 ### Add an engine
 
-A sixth engine changes no format by itself: the engine is one byte of the patch. But **a device up to 1.7.1 refuses
+A sixth engine changes no format by itself: the engine is one byte of the patch. But **a device up to 1.7.2 refuses
 engine 5** (`sfx_patch_unpack`), so a sound that uses it cannot go to an older firmware.
 
 1. `core/sfx_core.h`, section 2: the entry in `sfx_engine` before `SFX_ENGINE_COUNT`, and what its knobs A and B do
@@ -981,18 +1046,19 @@ Then:
 5. `tests/check-identity.mjs`: the hex string of the whole answer names the version's three bytes. Same in
    `tests/dotnet/IdentityTests.cs`.
 6. `sh build.sh`. The line to look for is
-   `ok    the firmware's defines (1.7.1) and firmware.json ("1.7.1") say the same version`, and `vibe-check`'s
-   `Manifest    SFX FORGE 1.7.1`. Then 25 lines `PASSED`. Write down the new hash (section 2): it is another one
+   `ok    the firmware's defines (1.7.2) and firmware.json ("1.7.2") say the same version`, and `vibe-check`'s
+   `Manifest    SFX FORGE 1.7.2`. Then 26 lines `PASSED`. Write down the new hash (section 2): it is another one
    with every version, because the version is in the code.
-7. `dotnet run -c Release --project tests/dotnet -- .`, and the Unity tests. (With 1.7.1 the .NET run was made,
-   on 25 Nov 2026: `PASSED`, 205 `ok` lines. The Unity tests were not.)
+7. `dotnet run -c Release --project tests/dotnet -- .`, and the Unity tests. (With 1.7.1 and with 1.7.2 the
+   .NET run was made, on 25 Nov 2026: `PASSED`, 205 `ok` lines. The Unity tests were not.)
 8. If pages or sound changed: the screenshots and figures (`docs/shots.mjs`, `docs/figures.py`) and the two device
    videos (`docs/video/make_videos.py`). If a K key got another page: step 9 of the page recipe first.
 9. Say what was run with the new version and what was not. A test made with the version before (the link tests,
    the Unity runs) keeps its version in the documents until it is run again. 1.7.1 is the example: its build,
    its 25 lines and `tests/dotnet` were run, and the link tests, the Unity runs and the videos still say 1.7.0.
+   The same holds for 1.7.2, with its 26 lines.
 10. A version that is released (a GitHub release, as `v1.7.0` on 25 Nov 2026) is closed: the next change to the
-    code gets the next number, as the mixer got 1.7.1.
+    code gets the next number, as the mixer got 1.7.1 and the hardening 1.7.2.
 
 The Unity package has its own version: `VERSION` and `RELEASED` in `tools/make_unity_package.py`. The
 `package.json` in this repository (0.1.0, `com.catsplat.sfxforge`) is the source's and is rewritten by the script.
@@ -1129,8 +1195,15 @@ In C# and the scripts:
 
 ### Never tested
 
-- **The hardware and the plugin.** Everything ran in the SDK's `wasmtest`, on `tests/host.mjs`, or in the SDK's
-  emulator. Nobody has held a VIBE with this firmware.
+- **The hardware and the plugin.** Everything ran in the SDK's `wasmtest`, on `tests/host.mjs`, on the stress
+  tests' own hosts, or in the SDK's emulator. Nobody has held a VIBE with this firmware, and nobody has run 1.7.2
+  in the plugin, in a DAW or in the Playground.
+- **The MIDI torture tool** (`tests/midi-torture`, firmware 1.7.2). It was built and it listed the ports. It has
+  never sent a byte to a port, and the plugin was never under it. So the plugin's own MIDI input and its queue
+  into the firmware, under load, are untested: no other test reaches them.
+- **The hardening of 1.7.2 in a real host.** The fuzzer runs the `.wasm` in Node, in one flow; `stress-flows` is a
+  native build, run on Windows only, without an address or a thread sanitizer. Whether the plugin or a DAW ever
+  hands over a NaN or an infinity is not known.
 - **PERFORM by hand** (firmware 1.7.0). `tests/check-perform.mjs` presses its keys on the built firmware and
   reads the song and the sound. Nobody has played the page, looked at it while it plays, or listened to it; it was
   never on hardware or in the plugin. The check does not see the display, the stage's REC button, or solo.
@@ -1170,11 +1243,14 @@ In C# and the scripts:
   same, and nothing in the code changed.) The recorded
   session passed on 23 Nov 2026 with the build of that day (`4e59a51f…`, before the beat) and was not run again:
   the link video is that recording. PERFORM was not open in any of them, and the beat was a quarter. 1.7.0
-  changed no message; its identity says 1.7.0. The build as it is now, 1.7.1 (`f6469a36…`), was never on the link:
-  not against the emulator, not in a Unity run, not in a video. It changed no SysEx message either, and its
-  identity says 1.7.1 (`check-identity.mjs` reads that from the built firmware).
-- **Two real flows inside the firmware.** Only `song_way.h` was run on two threads. The queue and the `volatile`
-  values are correct by reading.
+  changed no message; its identity says 1.7.0. 1.7.1 (`f6469a36…`) and the build as it is now, 1.7.2
+  (`e0689675…`), were never on the link: not against the emulator, not in a Unity run, not in a video. Neither
+  changed a SysEx message, and the identity of now says 1.7.2 (`check-identity.mjs` reads that from the built
+  firmware).
+- **Two real flows inside the plugin.** `song_way.h` was run on two threads, and with 1.7.2 the whole firmware in
+  a native build (`tests/stress-flows.sh`), which found nothing. That run has no thread sanitizer: it sees a race
+  only by the harm it does. So the queue and the `volatile` values are still correct by reading. The `.wasm`
+  itself was never run on two threads.
 - **A pattern at 1/32 or 1/64 over a MIDI port.** The link tests used songs of sixteenths.
 - **A firmware up to 1.5.0** against any of this. What is said of it is read from its code.
 - **The real Inspector and windows.** Their tests build the same elements in a test panel and press keys by code.
@@ -1193,7 +1269,7 @@ In C# and the scripts:
   update changes the number, the kit changes there instead. `tests/check-grid-keys.mjs` watches exactly this case:
   if it fails after an SDK update, look here first.
 - **The SDK moves.** The firmware's comments already describe SDK 28 (SHIFT + K1 – K6). Build with
-  `VIBE_SDK=…` against a new checkout before you replace the one in `.tools`, and compare the 25 lines.
+  `VIBE_SDK=…` against a new checkout before you replace the one in `.tools`, and compare the 26 lines.
 - **One SysEx a block.** Anything sent out of turn is lost without an error. Everything goes through `out_pump`.
 - **A full queue drops the message** (`send`, `QN` 64). A burst of more than 64 notes and edits between two blocks
   loses the rest.

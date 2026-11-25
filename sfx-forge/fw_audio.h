@@ -34,6 +34,34 @@ typedef struct {
   sfx_patch patch;
 } msg;
 
+/* ---- what the host hands over, looked at before it is used -------------------------------------------------------
+   A host may hand over a value that is no number (NaN) or without end (an infinity): a parameter, a velocity, a turn,
+   the song position. One of them in the sound stays there for good, and as a position it reads past the song. The
+   SDK's build uses fast maths, which lets the compiler drop a test such as v != v: so the bits are looked at. */
+static int is_number(float v) {
+  union {
+    float f;
+    uint32_t u;
+  } b = {v};
+  return (b.u & 0x7F800000u) != 0x7F800000u;
+}
+static int is_number_d(double v) {
+  union {
+    double f;
+    uint64_t u;
+  } b = {v};
+  return (b.u & 0x7FF0000000000000ull) != 0x7FF0000000000000ull;
+}
+/* v within lo..hi, or `else_` if it is no number */
+static float number_in(float v, float lo, float hi, float else_) {
+  return !is_number(v) ? else_ : v < lo ? lo : v > hi ? hi : v;
+}
+/* host parameter i, for the audio and for the controls: as it is, or where it starts if the host set it to no number
+   (the SDK's own clamp lets such a value through) */
+static float param_in(int i) {
+  return number_in(vibe_param_get(i), PARAMS[i].min, PARAMS[i].max, PARAMS[i].def);
+}
+
 /* what starts or changes what plays: it must find the song as it was when this was sent */
 static int msg_song(int type) {
   return type == M_START || type == M_STOP || type == M_CUE || type == M_LOOP;
@@ -59,7 +87,8 @@ static void send(int type, int slot, int key, float vel, int note) {
   m->type = (uint8_t)type;
   m->slot = (uint8_t)slot;
   m->key = (int16_t)key;
-  m->vel = vel;
+  /* (a velocity is 0..1) */
+  m->vel = number_in(vel, 0.0f, 1.0f, 0.8f);
   m->note = (uint8_t)note;
   m->need = need;
   m->patch = patches[slot & 15];
@@ -136,16 +165,18 @@ void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames) {
   /* 2. the telemetry glides: 30 ms, no steps. The host's parameters are the second way from the controls to the
      audio beside the queue: the controls set them (vibe_param_set), the audio reads them here and in part 6. */
   float glide = vd_coef(0.03f, SR / (float)frames);
-  mods.pitch_st = vibe_param_get(P_MOD_PITCH) + (mods.pitch_st - vibe_param_get(P_MOD_PITCH)) * glide;
-  mods.cutoff_oct = vibe_param_get(P_MOD_CUTOFF) + (mods.cutoff_oct - vibe_param_get(P_MOD_CUTOFF)) * glide;
-  mods.fm = vibe_param_get(P_MOD_FM) + (mods.fm - vibe_param_get(P_MOD_FM)) * glide;
-  mods.level = vibe_param_get(P_MOD_LEVEL) + (mods.level - vibe_param_get(P_MOD_LEVEL)) * glide;
+  mods.pitch_st = param_in(P_MOD_PITCH) + (mods.pitch_st - param_in(P_MOD_PITCH)) * glide;
+  mods.cutoff_oct = param_in(P_MOD_CUTOFF) + (mods.cutoff_oct - param_in(P_MOD_CUTOFF)) * glide;
+  mods.fm = param_in(P_MOD_FM) + (mods.fm - param_in(P_MOD_FM)) * glide;
+  mods.level = param_in(P_MOD_LEVEL) + (mods.level - param_in(P_MOD_LEVEL)) * glide;
   P.mods = mods;
-  P.intensity = vibe_param_get(P_INTENSITY);
+  P.intensity = param_in(P_INTENSITY);
 
   /* 3. the player renders. The DAW's song position while it plays, else the player's own clock */
   const vibe_transport_info *tp = vibe_transport();
-  int host = tp->has && tp->playing && tp->bpm > 0.0f;
+  /* (a tempo and a position that are numbers, and not beyond what a song can be: else the player's own clock) */
+  int host = tp->has && tp->playing && is_number(tp->bpm) && tp->bpm > 0.0f && tp->bpm <= 2000.0f &&
+             is_number_d(tp->beat) && tp->beat > -1.0e9 && tp->beat < 1.0e9;
   for (int n = 0; n < frames; n++) {
     mixr[n] = 0.0f;
     mixl[n] = 0.0f;
@@ -188,7 +219,7 @@ void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames) {
 
   /* 6. the output, a frame at a time. vol_glide: the volume follows its knob in 10 ms. click_fade: the click dies
      away in 12 ms */
-  float vol = vibe_param_get(P_VOLUME);
+  float vol = param_in(P_VOLUME);
   float vol_glide = vd_coef(0.01f, SR);
   float click_fade = vd_coef(0.012f, SR);
   for (int n = 0; n < frames; n++) {
@@ -203,12 +234,13 @@ void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames) {
         click_ph -= 1.0f;
       }
       click_env *= click_fade;
-      /* (the click on top of a full mix stays under full scale) */
-      l = vd_clamp(l + click, -1.0f, 1.0f);
-      r = vd_clamp(r + click, -1.0f, 1.0f);
+      l += click;
+      r += click;
     }
-    out_l[n] = l;
-    out_r[n] = r;
+    /* never over full scale: the click on top of a full mix, and the limit itself, which rounds a hair over 1 for
+       some inputs */
+    out_l[n] = vd_clamp(l, -1.0f, 1.0f);
+    out_r[n] = vd_clamp(r, -1.0f, 1.0f);
 
     /* the scope: the lowest and the highest of every 48 frames */
     if (o < sc_lo) {

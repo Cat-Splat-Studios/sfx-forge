@@ -33,14 +33,47 @@ instruments in that style, not recordings of an orchestra. The wavetables are co
 
 ![SFX FORGE](sfx-forge/icon.png)
 
-Built with the VIBE FM SDK. Status: v1.0, firmware 1.7.1 (1.7.0 is the last one released, on 25 Nov 2026; 1.7.1 is
+Built with the VIBE FM SDK. Status: v1.0, firmware 1.7.2 (1.7.1 is the last one released, on 25 Nov 2026; 1.7.2 is
 not released). The synth, the device UI and the device side of the link are
 tested in the SDK's tools; the Unity package is tested in Unity 6.3 with the demo project's editor and Play mode tests.
 Not tried yet: the hardware, the plugin and a mixer controller. The link was run against the SDK's emulator over a
 virtual MIDI cable, last
 with firmware 1.7.0 on 24 Nov 2026 (the six link tests, once, with the build before one text of the LINK page's
 footer was corrected; the recorded session once the day before, with the 1.7.0 build of that day, before the beat
-was added; PERFORM was not open in them). It was not run with 1.7.1.
+was added; PERFORM was not open in them). It was not run with 1.7.1 or 1.7.2.
+
+**New in firmware 1.7.2: hardening.** No new feature. Three new stress tests came with it. Two of them gave the
+firmware what no correct host sends, and this was found and fixed:
+
+- A host's tempo or song position that was an infinity while the song played made the audio read past the song: a
+  crash (a WebAssembly trap). A tempo or a position that is no number, or beyond what a song can be, is no longer
+  followed: the player's own clock runs.
+- A host parameter set to NaN (`volume`, `mod_pitch`, `mod_cutoff`, `mod_fm`, `mod_level`) made the sound NaN until
+  a restart: the SDK's clamp lets NaN through. Every read of a host parameter, in the audio and in the controls, now
+  gives the parameter's start value instead.
+- A pad, a key or a note with a velocity that was an infinity gave NaN in the sound. A velocity is now kept within
+  0 to 1.
+- The output could be one float step over full scale (1.0000001) on single samples of a loud mix, with a correct
+  host too: the limiter's `tanh` rounds a hair over 1. The output is now always clamped to -1..+1.
+- An event's value that is no number is taken as 0, and none is beyond a million; an encoder's turn is at most 100
+  detents; a SysEx event's length must be within the SDK's buffer of 4096 bytes.
+
+Nothing else changed: the song is format 6 and the patch format 2, every SysEx message is the same, the Unity
+package's code is the same, and the identity says 1.7.2.
+
+Two things are known and not fixed. The first is the SDK's, not the firmware's: with SHIFT held, DATA turned by more
+than about 16 million detents (or by NaN) never returns. It is a loop in the SDK's own runtime (`vibe_sdk.c`,
+`sk_take`), which runs before the firmware sees the event. No real control sends such a turn; the two stress tests
+cut that one input to a million. The second: a song's pieces carry no sign of which song they belong to. If one
+stray piece of another song with the same count of pieces arrives and a whole song follows within 2 seconds, the
+device can take a song made of both. It needs a broken or interleaved transfer. It is not changed, because the
+protocol allows the pieces in any order.
+
+The tests are under [Build](#build): `tests/stress-fuzz.mjs` (a short run of it is now part of `sh build.sh`),
+`tests/stress-flows.sh` and `tests/midi-torture`. The last one was built and its ports listed, and no more: nothing
+was sent to a port and the plugin was never under it. `sh build.sh` and `tests/dotnet` were run with 1.7.2 and pass.
+The link tests against the emulator, the Unity runs and the videos were not run again, and nobody has run 1.7.2 in
+the plugin, a DAW, the Playground or on the hardware.
 
 **New in firmware 1.7.1: the mixer for the host.** The firmware now reports its mixer to the host as parameters, as
 the VIBE FM SDK's mixer convention asks of a firmware with tracks (SDK 11): for each of the song's 16 sounds
@@ -170,6 +203,7 @@ sent. Each writes into its own folder in `out/` and ends with a line `… PASSED
 | – | `check-perform.mjs` | the PERFORM page (firmware 1.7.0): the pads as STEPS, SOUNDS, MUTES and PATTERN after F1 to F4; REC makes them the kit and a take is recorded; F5 FILL and F6 UNDO; with SHIFT: LOOP or SONG, CLEAR, ALL ON, COPY, the grid; the four encoders, A and B; K5 once more is SEQ again |
 | – | `check-meter.mjs` | the beat and the time signature (firmware 1.7.0): SHIFT + B walks the four beats and stops at the ends on PERFORM, and is the beat on SEQ too (one click); FILL begins with the beat, also at 32 steps; in a bar of 12 sixteenths the click is a quarter apart (3/4) or a dotted quarter apart (6/8), with the bar line's click told apart; SHIFT + B changes no byte of the song, B only the bar's length; the display of that bar differs with the beat; SAVE keeps the beat in `meter.bin` (one byte) and removes the file with a quarter; a `meter.bin` with 2, 3 or 5; NEW leaves the beat, the factory reset puts the quarter back |
 | – | `check-mixer.mjs` | the mixer as the host's parameters (firmware 1.7.1): the list is the six of before, then `mix_<n>_level`, `_pan`, `_mute`, `_solo` for 16 sounds and `mix_select`, 71 with the convention's ids, ranges and steps, no id twice; at the start the host is told all 65 of the mixer, and nothing more while nothing is touched; a level, a pan, a mute, a solo and the selected sound set by the host land where MIX has them (the next click of an encoder goes on from there) and are not said back; a fader and a pan turned on MIX, a pad that mutes, SHIFT + pad, DATA, F4 ALL ON, NEW and F2 after it are each told, and nothing else is; with every sound muted by the host, or every fader down, the song is silent; a value that is no number is not taken and the host is told the real one; the tour, left alone and with `mix_select` from the host and DATA turned while it runs, leaves every sound as it was, and after it the host has the selected sound |
+| – | `stress-fuzz.mjs` | hard and wrong use (firmware 1.7.2): a seeded fuzzer as the host, in one flow. Every event type with ids and values in range and out of it, the parameters, the transport, SysEx whole and broken, the store, restarts, blocks of 1 to 256 frames at six sample rates, with NaN and the infinities too (level 2). After every block: no trap, every sample written, a number and within -1..+1, the memory not grown; a watchdog catches a hang. Here 8 seeds of one device-minute each |
 | – | `check-atomic.mjs` | a pattern or a song rewritten while it plays reaches the player whole: the grid changed, F2, COPY and a song over SysEx leave every sample as it was |
 | – | `stress-song-way.sh` | two real threads over `sfx-forge/song_way.h`, built natively: the player never gets half a song. It prints no `ok` lines, only its last one |
 | `song-export.json` | `check-song-export.mjs` | the factory sounds and song as SEND gives them are, byte for byte, the file the Unity demo's song was built from: 16 sounds, then 2487 bytes of format 6 in 11 pieces |
@@ -177,12 +211,23 @@ sent. Each writes into its own folder in `out/` and ends with a line `… PASSED
 | – | `check-wire.mjs` | the song on the wire: both shapes of the song message, pieces out of order and doubled, one song straight after another, the longest song |
 | – | `check-store.mjs` | what the device stores: `song6.bin` is written, `song.bin` is read and never written, a `song.bin` saved later by an older firmware wins and F2 brings the other back, a full store is not called SAVED |
 
-All 25 pass on firmware 1.7.1 (`vibe-check` and the 24 above): the output of `sh build.sh` has 25 lines that say
-`PASSED`. The 23 checks that print `ok` lines print 266 of them, counted in the output of the last run (15, 1, 4, 1,
-1, 7, 6, 8, 11, 7, 7, 7, 8, 7, 20, 26, 21, 27, 23, 1, 27, 15 and 16, in the order of the table, which is the order
-they run in); the stress test prints none and `vibe-check` prints marks of its own. They hear the output
-and read the song the device sends. Eight checks have no performance and run the firmware on `tests/host.mjs`; some
-of them also compare the display's pixels, to tell that it changed or that the LINK light is on. None of the 25
+Two more stress tools are not part of `sh build.sh`; each says at its top what it shows and what it cannot see.
+`sh tests/stress-flows.sh` (with `tests/stress-flows.c`) builds the whole firmware for this computer with the SDK's
+own runtime and the undefined-behaviour sanitizer, and runs the audio in one real thread and the controls in
+another; `hostile` and `wild` are its rougher modes. It was run on Windows only (Git Bash), and its main run has no
+address or thread sanitizer. `tests/midi-torture` sends heavy and hostile MIDI to a MIDI port, for the real plugin:
+`dotnet run -c Release --project tests/midi-torture -- --list`, then `-- --port "name" [--minutes 5] [--seed N]
+[--level 1..3]`. It sends and does not hear: you watch the plugin. It was built and its ports were listed; nothing
+was ever sent with it.
+
+All 26 pass on firmware 1.7.2 (`vibe-check`, the 24 checks and the short run of `stress-fuzz.mjs`): the output of
+`sh build.sh` has 26 lines that say `PASSED`. The 24 rows that print `ok` lines print 274 of them, counted in the
+output of the last run (15, 1, 4, 1, 1, 7, 6, 8, 11, 7, 7, 7, 8, 7, 20, 26, 21, 27, 8, 23, 1, 27, 15 and 16, in the
+order of the table, which is the order they run in; the 8 are the fuzz run's seeds); `stress-song-way.sh` prints
+none and `vibe-check` prints marks of its own. They hear the output
+and read the song the device sends. Eight checks have no performance and run the firmware on `tests/host.mjs`
+(`stress-fuzz.mjs` has a host of its own); some
+of them also compare the display's pixels, to tell that it changed or that the LINK light is on. None of the 26
 reads what a page or a toast says, and none sees how PERFORM's grid is drawn. Of the beat the checks see what FILL
 writes, where the click falls, the song's bytes, the store, and that the display's picture changes with it. They do
 not read the words (`BAR 6/8`, `BEAT 3/8: BAR 6/8`) or see the shades and the bar strip's lines, and they try
@@ -598,15 +643,22 @@ device. Tested in `tests/dotnet` (a format-5 song renders bit for bit as before;
 same samples; both shapes of the song message) and by eight EditMode tests of the song's Inspector. Nobody has
 listened to a finer pattern in Unity, and the demo song and the showcase use sixteenths only.
 
-The numbers, as last run. With firmware 1.7.1 as it is now, on 25 Nov 2026, the firmware's own and the checks
+The numbers, as last run. With firmware 1.7.2 as it is now, on 25 Nov 2026, the firmware's own and the checks
 without Unity:
-`sh build.sh` 25 lines `PASSED`, none failing, with 266 lines of `ok` (1.7.0 had 239; `check-mixer.mjs` prints the
-27 more), the same with the SDK in `.tools` (SDK 27) and
-with SDK 28; `build/sfx-forge.wasm` is 283439 bytes, sha256
-`f6469a3600a967374fcbc832434ae1c84a184f452c6ab7ac12141cb5f90f4df8`, the same with both SDKs;
+`sh build.sh` 26 lines `PASSED`, none failing, with 274 lines of `ok` (1.7.1 had 25 and 266; the 8 more are the
+seeds of the fuzz run), the same with the SDK in `.tools` (SDK 27) and
+with SDK 28; `build/sfx-forge.wasm` is 285292 bytes, sha256
+`e06896756c24c573e3e261c24bad32dd2f19191c2b14df57fb64486bc5f45b8c`, the same with both SDKs;
 `tests/dotnet` (`dotnet run -c Release --project tests/dotnet -- .`) `PASSED` with 205 lines of `ok`, with the
-package's own `sfxforge.dll` and the identity of 1.7.1. The rest was last run
-with firmware 1.7.0 (with PERFORM and the beat) on 24 Nov 2026, and not again with 1.7.1:
+package's own `sfxforge.dll` and the identity of 1.7.2. The long stress runs were made the same day on the build
+before the version number was set, the same code. `stress-fuzz.mjs`: 40 seeds of 2 device-minutes at each of the
+levels 0, 1 and 2, all 120 passed (level 2: 80.7 device-minutes, 2.7 million blocks, 1.9 million events, 537
+restarts), and 8 seeds of 30 device-minutes at level 2, all passed. Before the fixes level 0 failed 5 of 40 seeds
+and level 1 all 40 (the sample over full scale only), and level 2 all 40 (NaN, 6 traps, hangs). `stress-flows.sh`:
+seeds 1 to 5 of 20 s passed, seed 7 of 120 s passed (about 760 thousand events and 130 thousand draws), seeds 1 to
+5 of 20 s with `hostile wild` passed; in its default mode it found nothing before the fixes either.
+`tests/midi-torture` sent nothing. The rest was last run
+with firmware 1.7.0 (with PERFORM and the beat) on 24 Nov 2026, and not again with 1.7.1 or 1.7.2:
 `tests/unity-inspectors` 171 of 171 EditMode tests; the demo project, headless on a
 copy, the showcase's 32 editor checks and 41 Play mode tests, of which 26 passed and 15 were skipped (the takes that
 need a device or the emulator or that record, and only run when asked for by name). The showcase's standalone build
@@ -616,8 +668,8 @@ The link is tested end to end against the SDK's emulator over a virtual MIDI cab
 24 Nov 2026: the six link tests passed, in one run, with the build that has PERFORM and the beat (on 23 Nov they
 passed with the 1.7.0 build of that day, before the beat; with 1.6.0 on 22 Nov). After that run one text of the
 display was corrected, the LINK page's footer (`CC 20-23` became `CC 20-25`): the link was not run again, neither
-with that corrected 1.7.0 build nor with firmware 1.7.1. Firmware 1.7.0 changed
-no message but the version in the identity, and neither did 1.7.1. What was run: a patch and the song from the device, the identity, a song
+with that corrected 1.7.0 build nor with firmware 1.7.1 or 1.7.2. Firmware 1.7.0 changed
+no message but the version in the identity, and neither did 1.7.1 or 1.7.2. What was run: a patch and the song from the device, the identity, a song
 and its sounds to the device, the game's messages leaving for the device. Every pattern in those songs has 16 steps: a song with
 a pattern at 1/32 or 1/64 was only handed to the built firmware and to the package's receiver by tests, not sent
 through a MIDI port. The recorded session, with SEND and EXPORT pressed on the device, was run once, on 23 Nov 2026,

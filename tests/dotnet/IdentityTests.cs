@@ -72,15 +72,15 @@ static partial class Tests
             0xF0, 0x7D, 0x56, 0x42, 0x08, 1, 1, 6, 0, 1, 2, 6, 16, 2, 8, 64, 24, 32, 16, 5, 6, 25, 15, 0xF7,
         };
 
-        // firmware 1.7.1, the one built from this source today: the same answer but for the version's second and
+        // firmware 1.7.2, the one built from this source today: the same answer but for the version's second and
         // third byte (tests/check-identity.mjs reads these bytes off the built firmware)
         var fm17 = fm16;
         fm17.minor = 7;
-        fm17.patch = 1;
+        fm17.patch = 2;
         var id17 = SfxProtocol.BuildIdentity(fm17);
         var want17 = (byte[])want16.Clone();
         want17[7] = 7;
-        want17[8] = 1;
+        want17[8] = 2;
         Ok(
             id16.SequenceEqual(want16)
                 && SfxProtocol.TryParseIdentity(id16, out var got16)
@@ -95,10 +95,10 @@ static partial class Tests
                 && got17.Equals(fm17)
                 && got17.profile == got16.profile
                 && got17.flags == got16.flags
-                && got17.IsAtLeast(1, 7, 1)
-                && !got17.IsAtLeast(1, 7, 2)
-                && got17.ToString() == "VIBE FM, firmware 1.7.1, profile 1",
-            "IDENTITY of firmware 1.6.0 says song format 6 and 64 steps, and survives build -> parse; that of 1.7.1 "
+                && got17.IsAtLeast(1, 7, 2)
+                && !got17.IsAtLeast(1, 7, 3)
+                && got17.ToString() == "VIBE FM, firmware 1.7.2, profile 1",
+            "IDENTITY of firmware 1.6.0 says song format 6 and 64 steps, and survives build -> parse; that of 1.7.2 "
                 + "is the same but for the version: "
                 + SfxLink.Describe(id17)
         );

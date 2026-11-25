@@ -180,7 +180,7 @@ static void stage_event(const vibe_event *e) {
     } else if (inside(stage_x, stage_y, TB_TEMPO_X, TB_Y, 104, 36)) {
       SONG.bpm = (uint16_t)clampi(SONG.bpm + d, 40, 240);
     } else if (inside(stage_x, stage_y, SG_X, SI_Y, SG_W, 18)) {
-      intensity_set(vibe_param_get(P_INTENSITY) + (float)d * 0.02f);
+      intensity_set(param_in(P_INTENSITY) + (float)d * 0.02f);
     } else if (inside(stage_x, stage_y, SG_X, SL_Y, SG_W, 18)) {
       SONG.level[sel] = (uint8_t)clampi(SONG.level[sel] + d * 2, 0, 127);
     } else if (spage == PG_AUTO) {

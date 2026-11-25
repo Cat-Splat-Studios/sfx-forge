@@ -404,7 +404,7 @@ static const char *mix_text(int pg, int i, const char **name, char *buf, float *
   *centre = 0;
   /* (no byte behind it: the output volume, a host parameter) */
   if (!v) {
-    *bar = vibe_param_get(P_VOLUME);
+    *bar = param_in(P_VOLUME);
     return percent((int)(*bar * 127.0f + 0.5f), buf);
   }
   *bar = (float)*v / (float)hi;

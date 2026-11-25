@@ -61,6 +61,9 @@ tests/
   make-grid-scenes.mjs     writes grid.json, regrid.json and take64.json
   make-demo-song.mjs       writes the demo song's files from what the firmware sends
   stress-song-way.c / .sh  two real threads over song_way.h
+  stress-fuzz.mjs          a seeded fuzzer as the host of the built .wasm (a short run is in build.sh)
+  stress-flows.c / .sh     the whole firmware built natively, on two real threads (not part of any build)
+  midi-torture/            sends heavy and hostile MIDI to a port, for the real plugin (not part of any build)
   emulator-link.mjs        the device's end of the link test (not part of any build)
   mix-report.mjs           measures the demo song's mix
   dotnet/                  the package's Runtime/Core tested without Unity
@@ -97,7 +100,7 @@ At the root there are also the formatters' settings: `.clang-format`, `.prettier
 
 | Folder | Tested by | Page |
 |---|---|---|
-| `sfx-forge/`, `core/` (as built into the `.wasm`) | `sh build.sh`: scene checks, host checks, `vibe-check`, the two-thread stress test | [Running The Tests](Running-The-Tests) |
+| `sfx-forge/`, `core/` (as built into the `.wasm`) | `sh build.sh`: scene checks, host checks, `vibe-check`, a short fuzz run, the two-thread stress test | [Running The Tests](Running-The-Tests) |
 | `Runtime/Core` and `sfxforge.dll` | `tests/dotnet` | [Running The Tests](Running-The-Tests) |
 | the package's `Editor` code | `tests/unity-inspectors` (EditMode) | [Running The Tests](Running-The-Tests) |
 | `unity/Demo` | the showcase's editor checks and PlayMode tests | [Running The Tests](Running-The-Tests) |

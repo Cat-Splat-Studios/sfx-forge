@@ -15,7 +15,7 @@ then a failure later is yours.
 - **No format changes.** The engine is one byte of the patch (byte 1), so a patch stays 28 bytes and the patch
   format stays 2.
 - **But older devices refuse it.** `sfx_patch_unpack` refuses an engine number it does not know. A firmware up to
-  1.7.1 refuses engine 5, so a sound that uses it cannot go to an older firmware.
+  1.7.2 refuses engine 5, so a sound that uses it cannot go to an older firmware.
 - **The identity changes by itself.** Byte 14 of the identity's 18 bytes, counted from 0 as the table on
   [Link Protocol](Link-Protocol#ask-first-the-identity) counts them, is `SFX_ENGINE_COUNT` (`ident_pump` in
   `fw_link.h`). It will say 6, and the tests that hold the identity's bytes must follow. That byte is also how a game
@@ -132,7 +132,7 @@ other change: C# asks the DLL for the sizes (`sfxn_voice_size`, `sfxn_player_siz
 |---|---|---|
 | the firmware builds and nothing else broke | `sh build.sh` | lines that say `PASSED`; the identity check fails until you update its expected bytes |
 | the identity's bytes | in `tests/check-identity.mjs`: the `5` after the `16` in `WANT`, and `05` in the hex string under it | `identity PASSED` |
-| the identities in C# | `tests/dotnet/IdentityTests.cs` holds the answers of firmware 1.4.0 and 1.6.0 as bytes, with 5 engines (1.7.1 is made from the second). They stay as they are; give those devices the profile for the firmware before, and add the new firmware's answer | its `ok` lines about the identity |
+| the identities in C# | `tests/dotnet/IdentityTests.cs` holds the answers of firmware 1.4.0 and 1.6.0 as bytes, with 5 engines (1.7.2 is made from the second). They stay as they are; give those devices the profile for the firmware before, and add the new firmware's answer | its `ok` lines about the identity |
 | the engine through the DLL | `dotnet run -c Release --project tests/dotnet -- .` | the last line is `PASSED` |
 | the inspectors | the EditMode tests of `tests/unity-inspectors` | all tests pass |
 

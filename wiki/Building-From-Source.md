@@ -11,10 +11,10 @@ All commands run from the repository's root. On Windows use Git Bash for every `
 |---|---|---|
 | Git Bash | any | every `sh` command (on Windows) |
 | VIBE FM SDK | a clone in `.tools/vibe-fm-sdk` | builds the firmware; its `wasmtest` and `vibe-check` run the checks |
-| Zig | 0.13.0, in `.tools/zig-*`, on the PATH, or named in `ZIG=` | the C compiler: the firmware, the DLL, the stress test |
+| Zig | 0.13.0, in `.tools/zig-*`, on the PATH, or named in `ZIG=` | the C compiler: the firmware, the DLL, the two-thread tests |
 | Node | 18 or later (22.14 here) | the checks, `docs/shots.mjs` |
 | Python | 3 (3.13 here) | strips the `.wasm`; with Pillow: the figures |
-| .NET SDK | one that builds `net9.0` (10.0 here) | `tests/dotnet` |
+| .NET SDK | one that builds `net9.0` (10.0 here) | `tests/dotnet`; `tests/midi-torture` (built for `net8.0`) |
 | Unity | 6000.3.8f1, the only version ever run | the two Unity test projects |
 | ffmpeg, numpy | on the PATH | only the videos and the package script |
 
@@ -81,7 +81,7 @@ What `build.sh` does, in order:
 5. With `quick` it stops here. Otherwise it runs `vibe-check` and every check
    ([Running The Tests](Running-The-Tests)).
 
-**What you see when it is right:** exit code 0, and 25 lines of the output say `PASSED`.
+**What you see when it is right:** exit code 0, and 26 lines of the output say `PASSED`.
 
 **What you get:** `build/sfx-forge.wasm`, which you drop onto the SDK's emulator in a browser
 (<https://play.thefirmwarehub.com/>), and `build/sfx-forge.zip`, which you drop onto the VIBE FM plugin's window.

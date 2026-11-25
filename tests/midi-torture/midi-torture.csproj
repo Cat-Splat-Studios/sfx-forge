@@ -1,0 +1,27 @@
+<Project>
+  <!-- The MIDI torture tool: heavy and hostile MIDI to a port the VIBE FM plugin listens on. Program.cs says what it
+       does and how to run it. Windows only (winmm.dll). No package, and nothing of the Unity package: it stands alone.
+       What a build makes goes to out/midi-torture (out/ is not tracked), so this folder keeps its two files. That is
+       why the SDK is imported in two halves below: the two paths must be set before its first half is read. -->
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>..\..\out\midi-torture\obj\</BaseIntermediateOutputPath>
+    <BaseOutputPath>..\..\out\midi-torture\bin\</BaseOutputPath>
+  </PropertyGroup>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+  <!-- RollForward: built for .NET 8, it also runs where only a later runtime is installed. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RollForward>Major</RollForward>
+    <AssemblyName>midi-torture</AssemblyName>
+    <RootNamespace>MidiTorture</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+  </ItemGroup>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+</Project>

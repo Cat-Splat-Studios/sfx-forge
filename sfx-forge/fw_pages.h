@@ -281,7 +281,7 @@ static void param_nudge(int pg, int i, int d) {
     if (v) {
       *v = (uint8_t)clampi(*v + d, 0, hi);
     } else if (i == 3) {
-      vibe_param_set(P_VOLUME, vd_clamp(vibe_param_get(P_VOLUME) + (float)d * 0.02f, 0.0f, 1.0f));
+      vibe_param_set(P_VOLUME, vd_clamp(param_in(P_VOLUME) + (float)d * 0.02f, 0.0f, 1.0f));
     }
     if (v) {
       last_sel = sel;
@@ -400,6 +400,8 @@ static void bar_turn(int d) {
    tempo on the song's pages and the output volume elsewhere; then one block for each of LINK, AUTO, SEQ, SONG and
    PERFORM; any other page's four values go to param_nudge. */
 static void encoder(int id, float turn) {
+  /* (a turn is a few detents: one that is no number is none, and none is more than a hundred) */
+  turn = number_in(turn, -100.0f, 100.0f, 0.0f);
   acc[id] += turn * (shift ? 8.0f : 1.0f);
   int d = (int)acc[id];
   if (!d) {
@@ -432,7 +434,7 @@ static void encoder(int id, float turn) {
   }
   /* every other page but LINK: A is the output volume */
   if (id == VE_A && page != PG_LINK) {
-    vibe_param_set(P_VOLUME, vd_clamp(vibe_param_get(P_VOLUME) + (float)d * 0.02f, 0.0f, 1.0f));
+    vibe_param_set(P_VOLUME, vd_clamp(param_in(P_VOLUME) + (float)d * 0.02f, 0.0f, 1.0f));
     return;
   }
 
@@ -508,7 +510,7 @@ static void encoder(int id, float turn) {
       }
     }
     if (id == VE_3) {
-      intensity_set(vibe_param_get(P_INTENSITY) + (float)d * 0.02f);
+      intensity_set(param_in(P_INTENSITY) + (float)d * 0.02f);
     }
     if (id == VE_4) {
       SONG.level[sel] = (uint8_t)clampi(SONG.level[sel] + d * 2, 0, 127);
@@ -526,7 +528,7 @@ static void encoder(int id, float turn) {
       param_nudge(PG_MIX, id, d);
     }
     if (id == VE_3) {
-      intensity_set(vibe_param_get(P_INTENSITY) + (float)d * 0.02f);
+      intensity_set(param_in(P_INTENSITY) + (float)d * 0.02f);
     }
     if (id == VE_4) {
       SONG.level[sel] = (uint8_t)clampi(SONG.level[sel] + d * 2, 0, 127);

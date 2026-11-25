@@ -151,7 +151,7 @@ static const char *percent(int v127, char *buf) {
 
 /* the intensity is at or above this sound's layer: it plays in the song now */
 static int layer_on(int slot) {
-  return (int)(vibe_param_get(P_INTENSITY) * 127.0f + 0.5f) >= SONG.level[slot];
+  return (int)(param_in(P_INTENSITY) * 127.0f + 0.5f) >= SONG.level[slot];
 }
 
 /* ---- the pieces a page is drawn from --------------------------------------------------------------------------- */

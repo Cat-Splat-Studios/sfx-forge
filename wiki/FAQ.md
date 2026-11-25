@@ -170,9 +170,10 @@ decides.
 
 ### How finished is it?
 
-Version 1.0. The firmware in this repository is 1.7.1; the last one released is 1.7.0 (25 Nov 2026). The firmware
-passes its scripted tests; the Unity suites and the link tests were last run with 1.7.0. It has not been run on the
-hardware or in the VIBE FM plugin, and nobody has listened to the newest features. The whole list is on
+Version 1.0. The firmware in this repository is 1.7.2; the last one released is 1.7.1 (25 Nov 2026). 1.7.2 is
+1.7.1 made hard against a host that sends what it should not: no feature is new. The firmware passes its scripted
+tests; the Unity suites and the link tests were last run with 1.7.0. It has not been run on the hardware or in the
+VIBE FM plugin, and nobody has listened to the newest features. The whole list is on
 [What Is Tested](What-Is-Tested).
 
 ### Do the device and the package have to be the same version?

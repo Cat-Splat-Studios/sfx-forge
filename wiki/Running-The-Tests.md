@@ -15,7 +15,7 @@ flowchart TB
   corecs["Runtime/Core (C#) and sfxforge.dll"]
   editor["the package's Editor code"]
   demo["unity/Demo: the showcase and the first demo"]
-  t1["sh build.sh<br/>vibe-check, then 24 checks:<br/>25 lines PASSED"]
+  t1["sh build.sh<br/>vibe-check, 24 checks<br/>and a short fuzz run:<br/>26 lines PASSED"]
   t2["sh tests/stress-song-way.sh<br/>two real threads"]
   t3["tests/dotnet<br/>205 checks"]
   t4["tests/unity-inspectors<br/>171 EditMode tests"]
@@ -31,7 +31,7 @@ flowchart TB
 
 | Suite | Command | Time | A pass looks like |
 |---|---|---|---|
-| the firmware | `sh build.sh` | about 30 s | exit code 0; 25 lines say `PASSED`, the last is `store PASSED` |
+| the firmware | `sh build.sh` | about 30 s | exit code 0; 26 lines say `PASSED`, the last is `store PASSED` |
 | the two-thread test alone | `sh tests/stress-song-way.sh` | about 12 s | the last line is `song way stress PASSED` |
 | the package's core, without Unity | `dotnet run -c Release --project tests/dotnet -- .` | about 30 s | 205 lines `  ok    ...`; the last line is `PASSED` |
 | the editor UI (EditMode) | Unity on `tests/unity-inspectors`, below | not recorded | `total="171" passed="171" failed="0"` |
@@ -73,18 +73,21 @@ It builds, then runs these in order. Each ends with a line `... PASSED`; the fir
 | 17 | `perform` | the PERFORM page |
 | 18 | `meter` | the beat and the time signature |
 | 19 | `mixer` | the mixer as the host's parameters: level, pan, mute, solo and the selected sound, both ways; what is not taken; the tour leaves every sound as it was |
-| 20 | `atomic` | a pattern or song rewritten while it plays reaches the player whole |
-| 21 | `song way stress` | the same hand-over between two real threads |
-| 22 | `song export` | SEND gives, byte for byte, the Unity demo's song file |
-| 23 | `identity` | the identity and the other messages; the two version numbers agree |
-| 24 | `wire` | the song on the wire: both shapes, pieces out of order and doubled, the longest song |
-| 25 | `store` | what the device stores: `song6.bin`, `song.bin`, a full store |
+| 20 | `stress-fuzz` | hard and wrong use: a short run of the fuzzer, 8 seeds of 1 device-minute each ([Stress tests](#stress-tests)) |
+| 21 | `atomic` | a pattern or song rewritten while it plays reaches the player whole |
+| 22 | `song way stress` | the same hand-over between two real threads |
+| 23 | `song export` | SEND gives, byte for byte, the Unity demo's song file |
+| 24 | `identity` | the identity and the other messages; the two version numbers agree |
+| 25 | `wire` | the song on the wire: both shapes, pieces out of order and doubled, the longest song |
+| 26 | `store` | what the device stores: `song6.bin`, `song.bin`, a full store |
+
+That is `vibe-check`, 24 checks and the fuzz run.
 
 Count them:
 
 ```sh
-sh build.sh | grep -c PASSED        # 25
-sh build.sh | grep -c "  ok  "      # 266 in a whole run of firmware 1.7.1
+sh build.sh | grep -c PASSED        # 26
+sh build.sh | grep -c "  ok  "      # 274 in a whole run of firmware 1.7.2 (8 of them are the fuzz run's seeds)
 ```
 
 Every check prints `  ok    ...` lines. A failure prints `  FAIL  ...`. What each check proves is written at its
@@ -142,6 +145,44 @@ node tests/check-perform.mjs build/sfx-forge.wasm     # ok lines, then: perform 
 ```
 
 Shared by the checks: `tests/song-read.mjs` reads a packed song (`stepList`, `tempo`, `chain`, `same` ...).
+
+## Stress tests
+
+Three tests of hard and wrong use, new with firmware 1.7.2. Each says at the top of its file what it shows and what
+it cannot see. What they found, and what was run: [What Is Tested](What-Is-Tested#hard-and-wrong-use).
+
+```sh
+# 1. a seeded fuzzer as the host of the built .wasm, in one flow. The last line: stress-fuzz PASSED
+node tests/stress-fuzz.mjs build/sfx-forge.wasm                        # 20 seeds, 2 device-minutes each
+node tests/stress-fuzz.mjs build/sfx-forge.wasm --seeds 40 --jobs 8    # seeds 1 to 40, eight at a time
+node tests/stress-fuzz.mjs build/sfx-forge.wasm --seed 7 --minutes 30  # one seed, long
+
+# 2. the whole firmware built for this computer, on two real threads. The last line: flows stress PASSED
+sh tests/stress-flows.sh                    # seeds 1 to 5, 20 seconds each
+sh tests/stress-flows.sh 120 7              # seed 7 for 120 seconds
+sh tests/stress-flows.sh 20 1 hostile wild  # also values no host should send
+
+# 3. heavy and hostile MIDI to a MIDI port, for the real plugin. The last line: midi-torture PASSED
+dotnet run -c Release --project tests/midi-torture -- --list
+dotnet run -c Release --project tests/midi-torture -- --port "name" --minutes 5 --seed 1 --level 1
+```
+
+| Test | What it is | Part of `sh build.sh` |
+|---|---|---|
+| `tests/stress-fuzz.mjs` | The fuzzer sends every event, the parameters, the transport, SysEx, a store and restarts, in blocks of 1 to 256 frames at six sample rates. After every block it looks for a trap, a sample that is no number or over full scale, memory that grew, and a hang. The same seed gives the same run. `--level` says how wrong the host may be: 0 a correct host, 1 values out of range and a store that lies, 2 also NaN and the infinities (the default) | a short run: 8 seeds of 1 device-minute, level 2 |
+| `tests/stress-flows.sh`, `stress-flows.c` | `sfx-forge.c` compiled with the SDK's own runtime and the undefined-behaviour sanitizer. One thread makes the audio, another works the controls and draws, a third watches for a hang. `hostile` adds parameters that are no number, `wild` such values in events, `one` runs both flows in one thread. It needs Zig and the SDK, as `build.sh` | no |
+| `tests/midi-torture/` | It sends notes, controllers, valid and broken SysEx, and all at once, to the port the VIBE FM plugin listens on. `--level` 1 to 3 is the speed. It sends and does not hear: you watch the plugin. With `--in` it asks for the identity after every phase. Windows only | no |
+
+Limits to know before you trust a pass:
+
+- **The fuzzer runs one flow.** A race between the audio and the controls does not show there.
+- **`stress-flows` has no address sanitizer and, on Windows, no thread sanitizer**: Zig 0.13 brings neither. A race
+  shows only when it does harm. It was run on Windows only.
+- **The MIDI torture tool is the owner's to run.** It was built and its `--list` was run. Nothing was ever sent to
+  a port.
+- **One input is cut.** With SHIFT held, a DATA turn of more than about 16 million detents never comes back. The
+  loop is in the SDK's runtime, before the firmware sees the event. The first two tests cut that turn to a million;
+  `--sdk-loop` makes the fuzzer send it as it is.
 
 ## The Unity suites
 
@@ -203,6 +244,8 @@ steps are in [the showcase's README](../unity/Demo/Assets/Showcase/README.md#rec
 - [README, Build](../README.md#build): the table of every check
 - [build.sh](../build.sh), [tests/check.mjs](../tests/check.mjs), [tests/host.mjs](../tests/host.mjs),
   [tests/song-read.mjs](../tests/song-read.mjs), [tests/dotnet/Program.cs](../tests/dotnet/Program.cs)
+- [tests/stress-fuzz.mjs](../tests/stress-fuzz.mjs), [tests/stress-flows.sh](../tests/stress-flows.sh),
+  [tests/stress-flows.c](../tests/stress-flows.c), [tests/midi-torture/Program.cs](../tests/midi-torture/Program.cs)
 - [The inspectors' test project](../tests/unity-inspectors/README.md),
   [the showcase's README](../unity/Demo/Assets/Showcase/README.md#check-it-test-it-rebuild-it)
 - [The Unity manual, 9. Testing, limits, troubleshooting](../docs/UNITY.md#9-testing-limits-troubleshooting)

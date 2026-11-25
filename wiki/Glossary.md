@@ -49,7 +49,7 @@ Words for what a game says when it plays a sound. The Unity pages use them in ev
 | Word | Meaning | Taught on |
 |---|---|---|
 | **the device** | SFX FORGE as a player meets it: the firmware running on a VIBE FM, in its plugin, or in a browser | [Device Quick Start](Device-Quick-Start) |
-| **firmware** | the program that SFX FORGE is on the VIBE FM: `sfx-forge.wasm`, version 1.7.1 | [Building From Source](Building-From-Source) |
+| **firmware** | the program that SFX FORGE is on the VIBE FM: `sfx-forge.wasm`, version 1.7.2 | [Building From Source](Building-From-Source) |
 | **host** | whatever runs the firmware: the hardware, the plugin, the emulator, or a test tool | [Architecture Overview](Architecture-Overview) |
 | **Playground** | a web page that runs a firmware file in the browser | [Device Quick Start](Device-Quick-Start) |
 | **emulator** | the VIBE FM SDK's picture of the device in a browser. The link was tested against it | [What Is Tested](What-Is-Tested) |
@@ -168,8 +168,9 @@ Words for what a game says when it plays a sound. The Unity pages use them in ev
 | **check** | a script that reads what the firmware played, sent or stored and prints `PASSED` | [Running The Tests](Running-The-Tests) |
 | **SDK** | the VIBE FM SDK: what a firmware for the VIBE FM is built with. A clone of it is in `.tools/vibe-fm-sdk` and is never edited | [Building From Source](Building-From-Source#what-must-be-installed) |
 | **`wasmtest`, `vibe-check`** | two tools of the SDK. `wasmtest` plays a scene into a built firmware and writes the sound, the MIDI and pictures. `vibe-check` checks a firmware against its manifest | [Running The Tests](Running-The-Tests#how-a-firmware-check-is-written) |
-| **Zig** | the C compiler used here, version 0.13.0: for the firmware, the DLL and the two-thread test | [Building From Source](Building-From-Source#what-must-be-installed) |
+| **Zig** | the C compiler used here, version 0.13.0: for the firmware, the DLL, the two-thread test and `tests/stress-flows.sh` | [Building From Source](Building-From-Source#what-must-be-installed) |
 | **two-thread test** | `tests/stress-song-way.sh`: two real threads hand a song over through `song_way.h`. Also called the stress test | [Running The Tests](Running-The-Tests#the-suites-at-a-glance) |
+| **stress tests** | three tests of hard and wrong use, from firmware 1.7.2: a fuzzer as the host (`tests/stress-fuzz.mjs`), the whole firmware on two threads (`tests/stress-flows.sh`) and heavy MIDI to the plugin (`tests/midi-torture`) | [Running The Tests](Running-The-Tests#stress-tests) |
 | **reference documents** | the README, the manual, the Unity manual and the maintainer's guide. This wiki links to them for the full detail | [Editing This Wiki](Editing-This-Wiki) |
 
 ## Next

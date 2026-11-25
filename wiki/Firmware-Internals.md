@@ -116,7 +116,7 @@ In include order. That order is also the order of the code in the built `.wasm`.
 | `fw_protocol.h` | the numbers of the link: SysEx messages, the identity, CCs, notes |
 | `fw_sounds.h` | the 71 parameters the host has (`PARAMS`: six of the device's own, then the mixer's 65); the 39 named sounds (`PRESETS`); the engines' names and colours |
 | `fw_state.h` | every variable the parts share, and the smallest helpers |
-| `fw_audio.h` | the queue from the controls to the audio (`send`), and `vibe_on_audio` |
+| `fw_audio.h` | what looks at a value from the host (`is_number`, `number_in`, `param_in`), the queue from the controls to the audio (`send`), and `vibe_on_audio` |
 | `fw_edit.h` | `say` (a word on the display), `changed`, the undo, `confirm` (keys that ask twice) |
 | `fw_factory.h` | the sounds and the song a new device holds (`factory`, `demo_song`), and `step_set` |
 | `fw_store.h` | what is kept on the device: `bank_save`, `bank_load` |
@@ -212,6 +212,32 @@ alone uses them with `mix_from_host`.
 `tests/check-mixer.mjs` checks this on `tests/host.mjs`, the tour and what is not taken included, but not the last
 of the three points and not the four limits. No controller,
 plugin or DAW was tried: [What Is Tested](What-Is-Tested#the-newest-features).
+
+## What the host hands over
+
+From firmware 1.7.2 the rule is: **a value from the host is looked at before it is used.** A host may hand over a
+value that is no number (NaN) or an infinity. In the sound such a value stays until a restart, and as a song position
+it reads past the song.
+
+| What comes in | Where it is looked at | What is done |
+|---|---|---|
+| a host parameter (`volume`, the four `mod_...`, `intensity`) | `param_in` (`fw_audio.h`), for the audio and for the controls | kept within its range; one that is no number gives the parameter's start value |
+| the host's tempo and song position | `vibe_on_audio`, part 3 (`int host = ...`) | followed only when both are numbers, the tempo is above 0 and at most 2000, and the position is within a thousand million beats. Else the player's own clock runs |
+| a velocity | `send` (`fw_audio.h`) | kept within 0 to 1; one that is no number is 0.8 |
+| the value of any event but a parameter or a SysEx | the top of `on_event` (`tamed`) | no number is 0; none is beyond a million; an encoder's turn is at most 100 detents. `encoder` (`fw_pages.h`) holds the turn to 100 again |
+| a SysEx event's length | the `VIBE_EV_SYSEX` case of `on_event` | taken only from 2 to 4096 bytes, the SDK's buffer |
+| one of the mixer's parameters | `mix_from_host` | [not taken](#the-mixer-as-the-hosts-parameters) when it is no number |
+
+Three things to keep:
+
+- **Read a host parameter with `param_in(i)`, not with `vibe_param_get`.** The SDK's own clamp lets NaN through.
+  `param_in` is the one place that calls `vibe_param_get`.
+- **`is_number` looks at the bits.** The SDK's build uses fast maths, which lets the compiler drop a test such as
+  `v != v`.
+- **The output is clamped to -1 to +1 on every frame**, at the end of `vibe_on_audio`. The limit before it rounds a
+  hair over 1 for some inputs, also with a correct host.
+
+What found this, and what is known and not fixed: [What Is Tested](What-Is-Tested#hard-and-wrong-use).
 
 ## The state groups
 

@@ -285,6 +285,16 @@ static void on_event(const vibe_event *e) {
   /* r: what FOCUS made of the event (VF_NO: nothing, it is ours). id: vf_event wants a place for the control it
      means; it is not used here */
   int id;
+  /* An event's value that is no number is 0, and none is beyond a million: a velocity, a place on the stage, a wheel.
+     An encoder's turn is at most a hundred detents (FOCUS counts a turn down detent by detent, and would not come
+     back from one without end). A parameter's value and a SysEx's length are looked at where they are taken. */
+  vibe_event tamed;
+  if (e->type != VIBE_EV_PARAM && e->type != VIBE_EV_SYSEX) {
+    float most = e->type == VIBE_EV_ENCODER ? 100.0f : 1.0e6f;
+    tamed = *e;
+    tamed.value = number_in(e->value, -most, most, 0.0f);
+    e = &tamed;
+  }
   int r = kit_key ? VF_NO : vf_event(e, &id);
 
   /* 2. */
@@ -443,7 +453,10 @@ static void on_event(const vibe_event *e) {
     break;
 
   case VIBE_EV_SYSEX:
-    sysex_in(vibe_sysex_in(), (int)e->value);
+    /* (its length is within the SDK's buffer, vibe.h: 4096) */
+    if (is_number(e->value) && e->value >= 2.0f && e->value <= 4096.0f) {
+      sysex_in(vibe_sysex_in(), (int)e->value);
+    }
     break;
 
   case VIBE_EV_SAVE:

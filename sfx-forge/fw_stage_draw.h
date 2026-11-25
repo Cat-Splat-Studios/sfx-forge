@@ -69,7 +69,7 @@ static void on_stage(uint16_t *fb, int w, int h) {
   dr_read(seq_pos);
   uint32_t step = dr_step;
   /* heat: the intensity 0..127. here: the pattern shown is the one that plays. wt: the sound is a wavetable */
-  int heat = (int)(vibe_param_get(P_INTENSITY) * 127.0f + 0.5f);
+  int heat = (int)(param_in(P_INTENSITY) * 127.0f + 0.5f);
   int here = now == (uint32_t)edit_pat && step != NO_STEP;
   int wt = p->engine == SFX_ENGINE_WAVETABLE;
   /* the rows: all the pattern's steps in the same width. cells: how many. lim: those of the bar. pitch: from one

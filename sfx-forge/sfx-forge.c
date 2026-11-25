@@ -105,7 +105,7 @@ VIBE_PARALLEL_AUDIO
    and compares, so they stay here (the identity that carries them is in fw_protocol.h and fw_link.h). */
 #define FW_MAJOR 1
 #define FW_MINOR 7
-#define FW_PATCH 1
+#define FW_PATCH 2
 
 #include "fw_protocol.h"
 #include "fw_sounds.h"

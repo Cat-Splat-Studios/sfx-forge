@@ -156,7 +156,7 @@ static void tour_start(void) {
     tour_end();
     return;
   }
-  tour_heat0 = vibe_param_get(P_INTENSITY);
+  tour_heat0 = param_in(P_INTENSITY);
   tour_page0 = page;
   tour_sel0 = sel;
   tour_kit0 = kit;
@@ -256,7 +256,7 @@ static void tour_pump(void) {
       intensity_set((float)st->a / 8.0f);
       break;
     case T_RAMP:
-      tour_ramp_from = vibe_param_get(P_INTENSITY);
+      tour_ramp_from = param_in(P_INTENSITY);
       tour_ramp_to = (float)st->a / 8.0f;
       tour_ramp_t0 = t;
       tour_ramp_len = (float)st->b / 4.0f;

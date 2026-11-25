@@ -72,7 +72,7 @@ static void on_draw(uint16_t *fb) {
   int mix = page == PG_MIX;
   int aut = page == PG_AUTO;
   int perf = page == PG_PERFORM;
-  int heat = (int)(vibe_param_get(P_INTENSITY) * 127.0f + 0.5f);
+  int heat = (int)(param_in(P_INTENSITY) * 127.0f + 0.5f);
   int wt = p->engine == SFX_ENGINE_WAVETABLE;
 
   /* 3. the top line */
